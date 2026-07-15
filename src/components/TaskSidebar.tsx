@@ -61,6 +61,7 @@ export function TaskSidebar({
   const [selectedSavedId, setSelectedSavedId] = useState('')
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   const [dropLineIndex, setDropLineIndex] = useState<number | null>(null)
+  const [modal, setModal] = useState<'save' | 'restore' | 'commit' | null>(null)
 
   const listRef = useRef<HTMLUListElement>(null)
   const dropLineIndexRef = useRef<number | null>(null)
@@ -110,6 +111,37 @@ export function TaskSidebar({
     await onCommit(selectedCommitId)
   }
 
+  function handleSaveList(e: React.FormEvent) {
+    e.preventDefault()
+    if (tasks.length === 0) return
+    const saved = saveTaskList(saveName || 'Morning', tasks)
+    setSaveName(saved.name)
+    refreshSavedLists(saved.id)
+    setModal(null)
+  }
+
+  function handleLoadList() {
+    const list =
+      savedLists.find((l) => l.id === selectedSavedId) || savedLists[0]
+    if (!list) return
+    onReplaceTasks(tasksFromSavedList(list))
+    setSaveName(list.name)
+    setSelectedSavedId(list.id)
+    setModal(null)
+  }
+
+  function handleDeleteList() {
+    const id = selectedSavedId || savedLists[0]?.id
+    if (!id) return
+    deleteSavedList(id)
+    refreshSavedLists()
+  }
+
+  function openRestoreModal() {
+    refreshSavedLists()
+    setModal('restore')
+  }
+
   function handleAnchorKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return
     e.preventDefault()
@@ -131,30 +163,6 @@ export function TaskSidebar({
     ) {
       setSelectedSavedId(lists[0]?.id ?? '')
     }
-  }
-
-  function handleSaveList(e: React.FormEvent) {
-    e.preventDefault()
-    if (tasks.length === 0) return
-    const saved = saveTaskList(saveName || 'Morning', tasks)
-    setSaveName(saved.name)
-    refreshSavedLists(saved.id)
-  }
-
-  function handleLoadList() {
-    const list =
-      savedLists.find((l) => l.id === selectedSavedId) || savedLists[0]
-    if (!list) return
-    onReplaceTasks(tasksFromSavedList(list))
-    setSaveName(list.name)
-    setSelectedSavedId(list.id)
-  }
-
-  function handleDeleteList() {
-    const id = selectedSavedId || savedLists[0]?.id
-    if (!id) return
-    deleteSavedList(id)
-    refreshSavedLists()
   }
 
   function handleDropAt(insertAt: number, from: number) {
@@ -471,87 +479,32 @@ export function TaskSidebar({
         </li>
       </ul>
 
-      <section className="saved-lists">
-        <h3>Saved task lists</h3>
-        <form className="saved-lists-save" onSubmit={handleSaveList}>
-          <input
-            value={saveName}
-            onChange={(e) => setSaveName(e.target.value)}
-            placeholder="List name"
-            aria-label="Saved list name"
-          />
-          <button
-            type="submit"
-            className="btn btn-ghost"
-            disabled={busy || tasks.length === 0}
-          >
-            Save
-          </button>
-        </form>
-        {savedLists.length > 0 && (
-          <div className="saved-lists-load">
-            <select
-              value={selectedSavedId || savedLists[0]?.id || ''}
-              onChange={(e) => setSelectedSavedId(e.target.value)}
-              aria-label="Saved list"
-            >
-              {savedLists.map((list) => (
-                <option key={list.id} value={list.id}>
-                  {list.name} ({list.tasks.length})
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              className="btn btn-ghost"
-              onClick={handleLoadList}
-              disabled={busy}
-            >
-              Load
-            </button>
-            <button
-              type="button"
-              className="btn btn-ghost"
-              onClick={handleDeleteList}
-              disabled={busy}
-            >
-              Delete
-            </button>
-          </div>
-        )}
-      </section>
-
-      <div className="finish-panel">
-        <h3>Add to calendar</h3>
-
-        <label>
-          <span>Target calendar</span>
-          <select
-            value={selectedCommitId}
-            onChange={(e) => handleTargetCalendarChange(e.target.value)}
-            disabled={!writableCalendars.length || busy}
-          >
-            {writableCalendars.length === 0 ? (
-              <option value="">Sign in to choose a calendar</option>
-            ) : (
-              writableCalendars.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.summary}
-                </option>
-              ))
-            )}
-          </select>
-        </label>
-
+      <div className="sidebar-actions">
         <button
           type="button"
-          className="btn btn-primary"
-          onClick={() => void handleCommit()}
-          disabled={busy || tasks.length === 0 || !selectedCommitId}
+          className="btn btn-text"
+          onClick={() => setModal('save')}
+          disabled={busy || tasks.length === 0}
         >
-          {busy ? 'Adding…' : 'Add to calendar'}
+          Save task list
         </button>
-        {notice && (
+        <button
+          type="button"
+          className="btn btn-text"
+          onClick={openRestoreModal}
+          disabled={busy}
+        >
+          Restore task list
+        </button>
+        <button
+          type="button"
+          className="btn btn-text"
+          onClick={() => setModal('commit')}
+          disabled={busy || tasks.length === 0}
+        >
+          Add to calendar
+        </button>
+        {notice && !modal && (
           <p
             className={`notice notice-${notice.kind}`}
             role={notice.kind === 'error' ? 'alert' : 'status'}
@@ -560,7 +513,190 @@ export function TaskSidebar({
           </p>
         )}
       </div>
+
+      {modal === 'save' && (
+        <Modal title="Save task list" onClose={() => setModal(null)}>
+          <form className="modal-form" onSubmit={handleSaveList}>
+            <label>
+              <span>List name</span>
+              <input
+                value={saveName}
+                onChange={(e) => setSaveName(e.target.value)}
+                placeholder="Morning"
+                aria-label="Saved list name"
+                autoFocus
+              />
+            </label>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => setModal(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="btn btn-primary btn-sm"
+                disabled={busy || tasks.length === 0}
+              >
+                Save
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {modal === 'restore' && (
+        <Modal title="Restore task list" onClose={() => setModal(null)}>
+          {savedLists.length === 0 ? (
+            <p className="muted">No saved task lists yet.</p>
+          ) : (
+            <div className="modal-form">
+              <label>
+                <span>Saved list</span>
+                <select
+                  value={selectedSavedId || savedLists[0]?.id || ''}
+                  onChange={(e) => setSelectedSavedId(e.target.value)}
+                  aria-label="Saved list"
+                  autoFocus
+                >
+                  {savedLists.map((list) => (
+                    <option key={list.id} value={list.id}>
+                      {list.name} ({list.tasks.length})
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={handleDeleteList}
+                  disabled={busy}
+                >
+                  Delete
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => setModal(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={handleLoadList}
+                  disabled={busy}
+                >
+                  Restore
+                </button>
+              </div>
+            </div>
+          )}
+        </Modal>
+      )}
+
+      {modal === 'commit' && (
+        <Modal title="Add to calendar" onClose={() => setModal(null)}>
+          <div className="modal-form">
+            <label>
+              <span>Target calendar</span>
+              <select
+                value={selectedCommitId}
+                onChange={(e) => handleTargetCalendarChange(e.target.value)}
+                disabled={!writableCalendars.length || busy}
+                autoFocus
+              >
+                {writableCalendars.length === 0 ? (
+                  <option value="">Sign in to choose a calendar</option>
+                ) : (
+                  writableCalendars.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.summary}
+                    </option>
+                  ))
+                )}
+              </select>
+            </label>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => setModal(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={() => void handleCommit()}
+                disabled={busy || tasks.length === 0 || !selectedCommitId}
+              >
+                {busy ? 'Adding…' : 'Add to calendar'}
+              </button>
+            </div>
+            {notice && (
+              <p
+                className={`notice notice-${notice.kind}`}
+                role={notice.kind === 'error' ? 'alert' : 'status'}
+              >
+                {notice.text}
+              </p>
+            )}
+          </div>
+        </Modal>
+      )}
     </aside>
+  )
+}
+
+function Modal({
+  title,
+  onClose,
+  children,
+}: {
+  title: string
+  onClose: () => void
+  children: React.ReactNode
+}) {
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [onClose])
+
+  return (
+    <div
+      className="modal-backdrop"
+      role="presentation"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose()
+      }}
+    >
+      <div
+        className="modal-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+      >
+        <div className="modal-header">
+          <h2>{title}</h2>
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label="Close"
+            onClick={onClose}
+          >
+            ×
+          </button>
+        </div>
+        <div className="modal-body">{children}</div>
+      </div>
+    </div>
   )
 }
 

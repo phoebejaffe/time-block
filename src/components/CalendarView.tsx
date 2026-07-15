@@ -24,22 +24,13 @@ const TASK_COLOR = '#0f6e56'
 const TASK_BORDER = '#0b5341'
 const NARROW_BREAKPOINT = 560
 
-const TITLE_WIDE: FormatterInput = {
+const TITLE_FORMAT: FormatterInput = {
   month: 'long',
   day: 'numeric',
   year: 'numeric',
 }
 
-const TITLE_NARROW: FormatterInput = {
-  month: 'numeric',
-  day: 'numeric',
-  year: '2-digit',
-}
-
-const DAY_HEADER: FormatterInput = {
-  month: 'numeric',
-  day: 'numeric',
-}
+type CalendarViewType = 'timeGridDay' | 'timeGridThreeDay' | 'timeGridWeek'
 
 type CalendarViewProps = {
   googleEvents: CalendarEvent[]
@@ -73,9 +64,15 @@ export function CalendarView({
 }: CalendarViewProps) {
   const calendarRef = useRef<FullCalendar>(null)
   const shellRef = useRef<HTMLDivElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
   const stackDragRef = useRef<StackDragState | null>(null)
   const stackDragRafRef = useRef<number | null>(null)
   const [narrow, setNarrow] = useState(false)
+  const [title, setTitle] = useState('')
+  const [viewType, setViewType] = useState<CalendarViewType>('timeGridDay')
+  const [showAllDay, setShowAllDay] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [isOnToday, setIsOnToday] = useState(true)
 
   function clearStackDragTransforms() {
     shellRef.current
@@ -141,25 +138,50 @@ export function CalendarView({
 
   useEffect(() => {
     if (!narrow) return
+    if (viewType !== 'timeGridWeek') return
     const api = calendarRef.current?.getApi()
-    if (api?.view.type === 'timeGridWeek') {
-      api.changeView('timeGridThreeDay')
+    api?.changeView('timeGridThreeDay')
+    setViewType('timeGridThreeDay')
+  }, [narrow, viewType])
+
+  useEffect(() => {
+    if (!menuOpen) return
+
+    function handlePointerDown(event: MouseEvent) {
+      const menu = menuRef.current
+      if (!menu) return
+      if (event.target instanceof Node && !menu.contains(event.target)) {
+        setMenuOpen(false)
+      }
     }
-  }, [narrow])
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') setMenuOpen(false)
+    }
+
+    document.addEventListener('mousedown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [menuOpen])
 
   const events = useMemo((): EventInput[] => {
-    const google: EventInput[] = googleEvents.map((e) => ({
-      id: e.id,
-      title: e.title,
-      start: e.start,
-      end: e.end,
-      allDay: e.allDay,
-      backgroundColor: e.backgroundColor,
-      borderColor: e.borderColor,
-      editable: false,
-      order: 1,
-      extendedProps: e.extendedProps,
-    }))
+    const google: EventInput[] = googleEvents
+      .filter((e) => showAllDay || !e.allDay)
+      .map((e) => ({
+        id: e.id,
+        title: e.title,
+        start: e.start,
+        end: e.end,
+        allDay: e.allDay,
+        backgroundColor: e.backgroundColor,
+        borderColor: e.borderColor,
+        editable: false,
+        order: 1,
+        extendedProps: e.extendedProps,
+      }))
 
     const local: EventInput[] = resolveStack(tasks, anchor).map((task) => ({
       id: `task:${task.id}`,
@@ -178,10 +200,39 @@ export function CalendarView({
     }))
 
     return [...google, ...local]
-  }, [googleEvents, tasks, anchor])
+  }, [googleEvents, tasks, anchor, showAllDay])
 
   function handleDatesSet(arg: DatesSetArg) {
+    setTitle(arg.view.title)
+    const type = arg.view.type
+    if (
+      type === 'timeGridDay' ||
+      type === 'timeGridThreeDay' ||
+      type === 'timeGridWeek'
+    ) {
+      setViewType(type)
+    }
+    const now = new Date()
+    setIsOnToday(now >= arg.start && now < arg.end)
     onDatesSet(arg.start, arg.end)
+  }
+
+  function changeView(next: CalendarViewType) {
+    calendarRef.current?.getApi().changeView(next)
+    setViewType(next)
+    setMenuOpen(false)
+  }
+
+  function goToday() {
+    calendarRef.current?.getApi().today()
+  }
+
+  function goPrev() {
+    calendarRef.current?.getApi().prev()
+  }
+
+  function goNext() {
+    calendarRef.current?.getApi().next()
   }
 
   function handleEventDragStart(arg: EventDragStartArg) {
@@ -273,65 +324,208 @@ export function CalendarView({
 
   return (
     <div className="calendar-shell" ref={shellRef}>
-      <FullCalendar
-        ref={calendarRef}
-        plugins={[timeGridPlugin, interactionPlugin]}
-        initialView="timeGridDay"
-        headerToolbar={{
-          left: 'prev,next today',
-          center: 'title',
-          right: narrow
-            ? 'timeGridDay,timeGridThreeDay'
-            : 'timeGridDay,timeGridThreeDay,timeGridWeek',
-        }}
-        views={{
-          timeGridThreeDay: {
-            type: 'timeGrid',
-            duration: { days: 3 },
-            buttonText: '3 Day',
-          },
-        }}
-        buttonText={{
-          today: '',
-          day: 'Day',
-          week: 'Week',
-        }}
-        buttonHints={{
-          today: 'Today',
-        }}
-        titleFormat={narrow ? TITLE_NARROW : TITLE_WIDE}
-        dayHeaderFormat={DAY_HEADER}
-        height="100%"
-        nowIndicator
-        editable
-        selectable
-        selectMirror
-        eventStartEditable
-        eventDurationEditable
-        events={events}
-        datesSet={handleDatesSet}
-        eventDragStart={handleEventDragStart}
-        eventDragStop={handleEventDragStop}
-        eventDrop={handleEventDrop}
-        eventResize={handleEventResize}
-        select={handleSelect}
-        eventClick={handleEventClick}
-        eventContent={handleEventContent}
-        slotMinTime="05:00:00"
-        slotMaxTime="24:00:00"
-        scrollTime="06:00:00"
-        slotDuration="00:15:00"
-        slotLabelInterval="01:00:00"
-        snapDuration="00:05:00"
-        eventMinHeight={0}
-        eventShortHeight={0}
-        eventOrder="order,start,-duration,title"
-        eventOrderStrict
-        slotEventOverlap
-        allDaySlot
-        dayMaxEvents={0}
-        moreLinkClick="popover"
-      />
+      <div className="calendar-toolbar">
+        <div className="calendar-toolbar-side calendar-toolbar-left">
+          <div className="calendar-nav">
+            <button
+              type="button"
+              className="btn btn-ghost btn-icon calendar-nav-btn"
+              aria-label="Previous"
+              onClick={goPrev}
+            >
+              <ChevronIcon direction="left" />
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost btn-icon calendar-nav-btn"
+              aria-label="Next"
+              onClick={goNext}
+            >
+              <ChevronIcon direction="right" />
+            </button>
+            {!isOnToday && (
+              <button
+                type="button"
+                className="btn btn-ghost btn-icon calendar-today-btn"
+                aria-label="Today"
+                title="Today"
+                onClick={goToday}
+              >
+                <TodayIcon />
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="calendar-toolbar-center">
+          <h2 className="calendar-title">{title}</h2>
+        </div>
+
+        <div className="calendar-toolbar-side calendar-toolbar-right">
+          <div className="calendar-menu" ref={menuRef}>
+            <button
+              type="button"
+              className="btn btn-text btn-icon"
+              aria-label="Calendar options"
+              aria-expanded={menuOpen}
+              aria-haspopup="true"
+              onClick={() => setMenuOpen((open) => !open)}
+            >
+              ···
+            </button>
+            {menuOpen && (
+              <div className="calendar-menu-dropdown" role="menu">
+                <button
+                  type="button"
+                  role="menuitemcheckbox"
+                  aria-checked={showAllDay}
+                  className="calendar-menu-item"
+                  onClick={() => {
+                    setShowAllDay((v) => !v)
+                    setMenuOpen(false)
+                  }}
+                >
+                  {showAllDay ? 'Hide all-day events' : 'Show all-day events'}
+                </button>
+                <div className="calendar-menu-sep" role="separator" />
+                <button
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={viewType === 'timeGridDay'}
+                  className={[
+                    'calendar-menu-item',
+                    viewType === 'timeGridDay' ? 'is-active' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                  onClick={() => changeView('timeGridDay')}
+                >
+                  Day
+                </button>
+                <button
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={viewType === 'timeGridThreeDay'}
+                  className={[
+                    'calendar-menu-item',
+                    viewType === 'timeGridThreeDay' ? 'is-active' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                  onClick={() => changeView('timeGridThreeDay')}
+                >
+                  3 Day
+                </button>
+                {!narrow && (
+                  <button
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={viewType === 'timeGridWeek'}
+                    className={[
+                      'calendar-menu-item',
+                      viewType === 'timeGridWeek' ? 'is-active' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                    onClick={() => changeView('timeGridWeek')}
+                  >
+                    Week
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="calendar-body">
+        <FullCalendar
+          ref={calendarRef}
+          plugins={[timeGridPlugin, interactionPlugin]}
+          initialView="timeGridDay"
+          headerToolbar={false}
+          views={{
+            timeGridThreeDay: {
+              type: 'timeGrid',
+              duration: { days: 3 },
+            },
+          }}
+          titleFormat={TITLE_FORMAT}
+          dayHeaders={false}
+          height="100%"
+          nowIndicator
+          editable
+          selectable
+          selectMirror
+          eventStartEditable
+          eventDurationEditable
+          events={events}
+          datesSet={handleDatesSet}
+          eventDragStart={handleEventDragStart}
+          eventDragStop={handleEventDragStop}
+          eventDrop={handleEventDrop}
+          eventResize={handleEventResize}
+          select={handleSelect}
+          eventClick={handleEventClick}
+          eventContent={handleEventContent}
+          slotMinTime="05:00:00"
+          slotMaxTime="24:00:00"
+          scrollTime="06:00:00"
+          slotDuration="00:15:00"
+          slotLabelInterval="01:00:00"
+          snapDuration="00:05:00"
+          eventMinHeight={0}
+          eventShortHeight={0}
+          eventOrder="order,start,-duration,title"
+          eventOrderStrict
+          slotEventOverlap
+          allDaySlot={showAllDay}
+          dayMaxEvents={showAllDay ? false : 0}
+          moreLinkClick="popover"
+        />
+      </div>
     </div>
+  )
+}
+
+function ChevronIcon({ direction }: { direction: 'left' | 'right' }) {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      {direction === 'left' ? (
+        <path d="m15 18-6-6 6-6" />
+      ) : (
+        <path d="m9 18 6-6-6-6" />
+      )}
+    </svg>
+  )
+}
+
+function TodayIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <path d="M16 2v4M8 2v4M3 10h18" />
+      <circle cx="12" cy="16" r="1.5" fill="currentColor" stroke="none" />
+    </svg>
   )
 }
