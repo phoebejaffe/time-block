@@ -15,11 +15,13 @@ export function AuthButton({
     return (
       <button
         type="button"
-        className="btn btn-ghost"
+        className="btn btn-text btn-icon"
         onClick={onSignOut}
         disabled={busy}
+        aria-label="Sign out"
+        title="Sign out"
       >
-        Sign out
+        <SignOutIcon />
       </button>
     )
   }
@@ -33,5 +35,24 @@ export function AuthButton({
     >
       {busy ? 'Connecting…' : 'Sign in with Google'}
     </button>
+  )
+}
+
+function SignOutIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M12 2v10" />
+      <path d="M18.4 6.6a8 8 0 1 1-12.8 0" />
+    </svg>
   )
 }

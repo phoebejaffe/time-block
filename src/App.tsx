@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AuthButton } from './components/AuthButton'
 import { CalendarToggles } from './components/CalendarToggles'
 import { CalendarView } from './components/CalendarView'
@@ -50,6 +50,7 @@ export default function App() {
 
   const [plan, setPlan] = useState<Plan>(() => loadPlan())
   const [calendarsOpen, setCalendarsOpen] = useState(false)
+  const calendarsMenuRef = useRef<HTMLDivElement>(null)
 
   const writableCalendars = useMemo(
     () => calendarsWritable(calendars),
@@ -178,9 +179,33 @@ export default function App() {
     setCalendars([])
     setVisibleIds(new Set())
     setGoogleEvents([])
+    setCalendarsOpen(false)
     setNotice(null)
     setError(null)
   }
+
+  useEffect(() => {
+    if (!calendarsOpen) return
+
+    function handlePointerDown(event: MouseEvent) {
+      const menu = calendarsMenuRef.current
+      if (!menu) return
+      if (event.target instanceof Node && !menu.contains(event.target)) {
+        setCalendarsOpen(false)
+      }
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') setCalendarsOpen(false)
+    }
+
+    document.addEventListener('mousedown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [calendarsOpen])
 
   function handleToggleCalendar(calendarId: string) {
     setVisibleIds((prev) => {
@@ -350,13 +375,27 @@ export default function App() {
 
         <div className="header-actions">
           {signedIn && (
-            <button
-              type="button"
-              className="btn btn-ghost"
-              onClick={() => setCalendarsOpen((o) => !o)}
-            >
-              Calendars
-            </button>
+            <div className="calendars-menu" ref={calendarsMenuRef}>
+              <button
+                type="button"
+                className="btn btn-text"
+                aria-expanded={calendarsOpen}
+                aria-haspopup="true"
+                onClick={() => setCalendarsOpen((o) => !o)}
+              >
+                Calendars
+              </button>
+              {calendarsOpen && (
+                <div className="calendars-dropdown" role="menu">
+                  <CalendarToggles
+                    calendars={calendars}
+                    visibleIds={visibleIds}
+                    onToggle={handleToggleCalendar}
+                    disabled={busy}
+                  />
+                </div>
+              )}
+            </div>
           )}
           <AuthButton
             signedIn={signedIn}
@@ -392,18 +431,6 @@ export default function App() {
         />
 
         <main className="main-panel">
-          {signedIn && calendarsOpen && (
-            <div className="calendars-drawer">
-              <h2>Calendars</h2>
-              <CalendarToggles
-                calendars={calendars}
-                visibleIds={visibleIds}
-                onToggle={handleToggleCalendar}
-                disabled={busy}
-              />
-            </div>
-          )}
-
           {!signedIn ? (
             <div className="empty-state">
               <h2>Your day, blocked out</h2>

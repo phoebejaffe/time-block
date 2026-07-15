@@ -86,6 +86,8 @@ select {
   border-bottom: 1px solid var(--line);
   backdrop-filter: blur(10px);
   background: rgba(255, 252, 246, 0.7);
+  position: relative;
+  z-index: 40;
 }
 
 .brand {
@@ -121,6 +123,23 @@ select {
   gap: 0.5rem;
 }
 
+.calendars-menu {
+  position: relative;
+}
+
+.calendars-dropdown {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  right: 0;
+  z-index: 50;
+  width: min(280px, calc(100vw - 2rem));
+  padding: 0.75rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: #fffcf6;
+  box-shadow: var(--shadow);
+}
+
 .banner {
   padding: 0.7rem 1.25rem;
   font-size: 0.92rem;
@@ -150,11 +169,6 @@ select {
   overflow: auto;
 }
 
-.sidebar-header h2 {
-  font-size: 1.25rem;
-}
-
-.sidebar-header p,
 .muted,
 .empty-hint {
   color: var(--ink-muted);
@@ -163,8 +177,7 @@ select {
 
 .stack-anchor,
 .task-form,
-.finish-panel,
-.task-editor {
+.finish-panel {
   display: flex;
   flex-direction: column;
   gap: 0.65rem;
@@ -180,6 +193,14 @@ select {
   gap: 0.4rem;
 }
 
+.task-form-row .btn {
+  flex-shrink: 0;
+}
+
+.task-form-row .btn:first-of-type {
+  margin-left: auto;
+}
+
 .task-form-duration {
   display: flex;
   align-items: center;
@@ -188,15 +209,10 @@ select {
 }
 
 .task-form-duration input {
-  width: 6.04ch;
-  min-width: 6.04ch;
-  padding-left: 0.35rem;
-  padding-right: 0.35rem;
+  width: 4rem;
+  min-width: 4rem;
+  padding: 0.25rem 0.2rem;
   text-align: right;
-}
-
-.task-form-row .btn {
-  flex-shrink: 0;
 }
 
 .stack-anchor {
@@ -261,8 +277,7 @@ select {
 
 .stack-anchor label,
 .task-form label,
-.finish-panel label,
-.task-editor label {
+.finish-panel label {
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
@@ -273,9 +288,7 @@ select {
 .stack-anchor input,
 .task-form input,
 .task-form select,
-.finish-panel select,
-.task-editor input,
-.task-editor select {
+.finish-panel select {
   border: 1px solid var(--line);
   background: #fffdf8;
   border-radius: 10px;
@@ -355,9 +368,35 @@ select {
   color: var(--ink);
 }
 
+.btn-text {
+  background: transparent;
+  border-color: transparent;
+  color: var(--ink-muted);
+  padding-inline: 0.55rem;
+}
+
+.btn-text:not(:disabled):hover {
+  color: var(--ink);
+  background: var(--paper-2);
+}
+
 .btn-sm {
   padding: 0.3rem 0.65rem;
   font-size: 0.82rem;
+}
+
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.15rem;
+  height: 2.15rem;
+  padding: 0;
+  color: var(--ink-muted);
+}
+
+.btn-icon:not(:disabled):hover {
+  color: var(--ink);
 }
 
 .task-list-header {
@@ -372,6 +411,8 @@ select {
 }
 
 .task-list-header .task-range {
+  margin-left: auto;
+  text-align: right;
   font-family: var(--font-body);
   font-weight: 400;
   letter-spacing: 0;
@@ -379,16 +420,8 @@ select {
 }
 
 .finish-panel h3,
-.calendars-drawer h2,
-.saved-lists h3,
-.new-event h3 {
+.saved-lists h3 {
   font-size: 1.05rem;
-}
-
-.new-event {
-  display: flex;
-  flex-direction: column;
-  gap: 0.55rem;
 }
 
 .task-list {
@@ -414,6 +447,60 @@ select {
   gap: 0;
   min-height: 0;
   cursor: grab;
+}
+
+.task-card.is-editing,
+.task-card-new {
+  padding-right: 0.5rem;
+  cursor: default;
+}
+
+.task-card-new:not(.is-editing) {
+  padding-top: 0.35rem;
+  padding-bottom: 0.35rem;
+  min-height: calc(0.35rem + 0.9rem * 1.35 + 0.35rem);
+  justify-content: center;
+}
+
+.task-card-new .task-form {
+  gap: 0.45rem;
+  width: 100%;
+}
+
+.task-new-trigger {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink-muted);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 500;
+  line-height: 1.35;
+  text-align: left;
+  cursor: pointer;
+}
+
+.task-new-trigger:hover:not(:disabled) {
+  color: var(--accent);
+}
+
+.task-new-trigger:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+body.is-task-reordering {
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: grabbing;
+}
+
+body.is-task-reordering .task-sidebar {
+  touch-action: none;
+  overscroll-behavior: none;
 }
 
 .task-card:last-child {
@@ -497,17 +584,6 @@ select {
   color: var(--ink);
 }
 
-.task-card-actions {
-  display: flex;
-  gap: 0.35rem;
-  justify-content: flex-end;
-}
-
-.task-card .task-editor {
-  padding-right: 0;
-  cursor: default;
-}
-
 .finish-panel {
   margin-top: auto;
   padding-top: 0.75rem;
@@ -540,22 +616,9 @@ select {
   padding: 0.85rem;
 }
 
-.calendars-drawer {
-  position: absolute;
-  z-index: 5;
-  top: 0.85rem;
-  right: 0.85rem;
-  width: min(280px, calc(100% - 1.7rem));
-  padding: 0.9rem;
-  border-radius: var(--radius);
-  border: 1px solid var(--line);
-  background: var(--panel);
-  box-shadow: var(--shadow);
-}
-
 .calendar-toggles {
   list-style: none;
-  margin: 0.65rem 0 0;
+  margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
@@ -613,15 +676,27 @@ select {
   box-shadow: none;
   text-transform: none;
   font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 2.1rem;
+  min-height: 2.1rem;
+  padding: 0 0.45rem;
+  line-height: 1;
+}
+
+.calendar-shell .fc .fc-prev-button,
+.calendar-shell .fc .fc-next-button,
+.calendar-shell .fc .fc-today-button {
+  min-width: 2.1rem;
+  padding-left: 0.45rem;
+  padding-right: 0.45rem;
 }
 
 .calendar-shell .fc .fc-today-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 2.1rem;
-  padding-left: 0.45rem;
-  padding-right: 0.45rem;
 }
 
 .calendar-shell .fc .fc-today-button .fc-icon {
@@ -654,11 +729,14 @@ select {
   opacity: 0.8;
 }
 
-/* Keep task blocks reasonably wide even when stacked beside other events. */
+/* Draw local tasks above Google events when they overlap. */
 .calendar-shell .fc .fc-timegrid-event-harness:has(.task-event) {
-  left: 0% !important;
-  right: 25% !important;
-  z-index: 3;
+  z-index: 8 !important;
+  min-width: 50%;
+}
+
+.calendar-shell .fc .fc-timegrid-event-harness:not(:has(.task-event)) {
+  z-index: 1;
 }
 
 .calendar-shell .fc .fc-timegrid-event {
@@ -671,32 +749,24 @@ select {
 }
 
 .calendar-shell .fc .fc-timegrid-event.task-event .fc-event-main-frame {
-  display: flex;
-  flex-direction: row;
-  align-items: baseline;
-  gap: 0.35em;
-  flex-wrap: nowrap;
+  display: block;
   overflow: hidden;
 }
 
 .calendar-shell .fc .fc-timegrid-event.task-event .fc-event-time {
-  flex: 0 0 auto;
+  display: inline;
   max-height: none;
   white-space: nowrap;
 }
 
-.calendar-shell .fc .fc-timegrid-event.task-event .fc-event-title-container {
-  flex: 1 1 auto;
-  min-width: 0;
-  min-height: 0;
-}
-
 .calendar-shell .fc .fc-timegrid-event.task-event .fc-event-title {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  display: inline;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
   top: auto;
   bottom: auto;
+  word-break: break-word;
 }
 
 .calendar-shell .fc .fc-timegrid-event-short .fc-event-main {

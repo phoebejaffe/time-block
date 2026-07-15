@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { GoogleCalendar } from '../lib/calendarApi'
 import type { SavedTaskList, StackAnchor, Task } from '../lib/tasks'
 import {
@@ -17,6 +17,11 @@ const timeFmt = new Intl.DateTimeFormat(undefined, {
   hour: 'numeric',
   minute: '2-digit',
 })
+
+const NEW_EDIT_ID = '__new__'
+const TOUCH_LONG_PRESS_MS = 320
+const TOUCH_CANCEL_MOVE_PX = 12
+const MOUSE_ACTIVATE_PX = 5
 
 type TaskSidebarProps = {
   tasks: Task[]
@@ -47,8 +52,6 @@ export function TaskSidebar({
   busy,
   notice,
 }: TaskSidebarProps) {
-  const [title, setTitle] = useState('')
-  const [durationMinutes, setDurationMinutes] = useState(30)
   const [commitCalendarId, setCommitCalendarId] = useState(loadTargetCalendarId)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [savedLists, setSavedLists] = useState<SavedTaskList[]>(() =>
@@ -58,6 +61,19 @@ export function TaskSidebar({
   const [selectedSavedId, setSelectedSavedId] = useState('')
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   const [dropLineIndex, setDropLineIndex] = useState<number | null>(null)
+
+  const listRef = useRef<HTMLUListElement>(null)
+  const dropLineIndexRef = useRef<number | null>(null)
+  const suppressClickRef = useRef(false)
+  const tasksLengthRef = useRef(tasks.length)
+
+  useEffect(() => {
+    dropLineIndexRef.current = dropLineIndex
+  }, [dropLineIndex])
+
+  useEffect(() => {
+    tasksLengthRef.current = tasks.length
+  }, [tasks.length])
 
   const resolved = useMemo(
     () => resolveStack(tasks, anchor),
@@ -87,15 +103,7 @@ export function TaskSidebar({
       ? null
       : `${timeFmt.format(resolved[0]!.start)} – ${timeFmt.format(resolved[resolved.length - 1]!.end)}`
 
-  function handleAdd(e: React.FormEvent) {
-    e.preventDefault()
-    if (!title.trim()) return
-    onAdd({
-      title: title.trim(),
-      durationMinutes: Math.max(1, Math.round(durationMinutes) || 1),
-    })
-    setTitle('')
-  }
+  const adding = editingId === NEW_EDIT_ID
 
   async function handleCommit() {
     if (!selectedCommitId) return
@@ -149,19 +157,149 @@ export function TaskSidebar({
     refreshSavedLists()
   }
 
+  function handleDropAt(insertAt: number, from: number) {
+    setDragIndex(null)
+    setDropLineIndex(null)
+    const len = tasksLengthRef.current
+    if (!Number.isInteger(from) || from < 0 || from >= len) {
+      return
+    }
+    if (insertAt === from || insertAt === from + 1) return
+    const to = from < insertAt ? insertAt - 1 : insertAt
+    onReorder(from, to)
+  }
+
+  function lineIndexFromY(clientY: number): number {
+    const list = listRef.current
+    if (!list) return 0
+    const cards = list.querySelectorAll<HTMLElement>('[data-task-index]')
+    for (let i = 0; i < cards.length; i++) {
+      const rect = cards[i]!.getBoundingClientRect()
+      if (clientY < rect.top + rect.height / 2) return i
+    }
+    return cards.length
+  }
+
+  function beginTaskDrag(
+    e: React.PointerEvent<HTMLLIElement>,
+    index: number,
+  ) {
+    if ((e.target as HTMLElement).closest('button, input, a')) return
+    if (e.button !== 0 && e.pointerType === 'mouse') return
+
+    const card = e.currentTarget
+    const pointerId = e.pointerId
+    const startX = e.clientX
+    const startY = e.clientY
+    const pointerType = e.pointerType
+    let active = false
+    let longPressTimer: number | null = null
+    let cancelled = false
+
+    const endReorderSession = () => {
+      document.body.classList.remove('is-task-reordering')
+      setDragIndex(null)
+      setDropLineIndex(null)
+      dropLineIndexRef.current = null
+    }
+
+    const activate = () => {
+      if (cancelled || active) return
+      active = true
+      try {
+        card.setPointerCapture(pointerId)
+      } catch {
+        /* ignore */
+      }
+      dropLineIndexRef.current = index
+      setDragIndex(index)
+      setDropLineIndex(index)
+      document.body.classList.add('is-task-reordering')
+      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+        navigator.vibrate?.(12)
+      }
+    }
+
+    const onMove = (ev: PointerEvent) => {
+      if (ev.pointerId !== pointerId || cancelled) return
+      const dx = ev.clientX - startX
+      const dy = ev.clientY - startY
+      const dist = Math.hypot(dx, dy)
+
+      if (!active) {
+        if (pointerType === 'touch') {
+          if (dist > TOUCH_CANCEL_MOVE_PX) {
+            cancelled = true
+            if (longPressTimer !== null) window.clearTimeout(longPressTimer)
+            cleanupListeners()
+          }
+          return
+        }
+        if (dist >= MOUSE_ACTIVATE_PX) activate()
+        return
+      }
+
+      ev.preventDefault()
+      const nextLine = lineIndexFromY(ev.clientY)
+      if (dropLineIndexRef.current !== nextLine) {
+        dropLineIndexRef.current = nextLine
+        setDropLineIndex(nextLine)
+      }
+    }
+
+    const onUp = (ev: PointerEvent) => {
+      if (ev.pointerId !== pointerId) return
+      if (longPressTimer !== null) window.clearTimeout(longPressTimer)
+      if (active) {
+        suppressClickRef.current = true
+        window.setTimeout(() => {
+          suppressClickRef.current = false
+        }, 0)
+        const insertAt =
+          dropLineIndexRef.current ?? lineIndexFromY(ev.clientY)
+        handleDropAt(insertAt, index)
+      }
+      endReorderSession()
+      cleanupListeners()
+    }
+
+    const cleanupListeners = () => {
+      cancelled = true
+      if (longPressTimer !== null) window.clearTimeout(longPressTimer)
+      document.removeEventListener('pointermove', onMove)
+      document.removeEventListener('pointerup', onUp)
+      document.removeEventListener('pointercancel', onUp)
+      try {
+        if (card.hasPointerCapture(pointerId)) {
+          card.releasePointerCapture(pointerId)
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+
+    document.addEventListener('pointermove', onMove, { passive: false })
+    document.addEventListener('pointerup', onUp)
+    document.addEventListener('pointercancel', onUp)
+
+    if (pointerType === 'touch') {
+      longPressTimer = window.setTimeout(activate, TOUCH_LONG_PRESS_MS)
+    } else {
+      try {
+        card.setPointerCapture(pointerId)
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
   return (
     <aside className="task-sidebar">
-      <header className="sidebar-header">
-        <h2>Plan</h2>
-      </header>
-
       <div className="task-list-header">
-        <h3>
-          Tasks
-          {stackSummary && (
-            <span className="task-range muted"> {stackSummary}</span>
-          )}
-        </h3>
+        <h3>Tasks</h3>
+        {stackSummary && (
+          <span className="task-range muted">{stackSummary}</span>
+        )}
       </div>
 
       <section className="stack-anchor">
@@ -202,177 +340,139 @@ export function TaskSidebar({
         </div>
       </section>
 
-      {tasks.length === 0 ? (
-        <p className="muted empty-hint">No local tasks yet.</p>
-      ) : (
-        <ul className="task-list">
-          {tasks.map((task, index) => {
-            const editing = editingId === task.id
-            const showLineBefore =
-              dropLineIndex === index &&
-              dragIndex !== null &&
-              dropLineIndex !== dragIndex &&
-              dropLineIndex !== dragIndex + 1
-            const showLineAfter =
-              index === tasks.length - 1 &&
-              dropLineIndex === tasks.length &&
-              dragIndex !== null &&
-              dropLineIndex !== dragIndex &&
-              dropLineIndex !== dragIndex + 1
+      <ul className="task-list" ref={listRef}>
+        {tasks.map((task, index) => {
+          const editing = editingId === task.id
+          const showLineBefore =
+            dropLineIndex === index &&
+            dragIndex !== null &&
+            dropLineIndex !== dragIndex &&
+            dropLineIndex !== dragIndex + 1
 
-            return (
-              <li
-                key={task.id}
-                className={[
-                  'task-card',
-                  dragIndex === index ? 'is-dragging' : '',
-                  showLineBefore ? 'drop-line-before' : '',
-                  showLineAfter ? 'drop-line-after' : '',
-                ]
-                  .filter(Boolean)
-                  .join(' ')}
-                draggable={!editing}
-                onDragStart={(e) => {
-                  if (editing || (e.target as HTMLElement).closest('button')) {
-                    e.preventDefault()
-                    return
-                  }
-                  setDragIndex(index)
-                  e.dataTransfer.effectAllowed = 'move'
-                  e.dataTransfer.setData('text/plain', String(index))
-                }}
-                onDragEnd={() => {
-                  setDragIndex(null)
-                  setDropLineIndex(null)
-                }}
-                onDragOver={(e) => {
-                  if (dragIndex === null || editing) return
-                  e.preventDefault()
-                  e.dataTransfer.dropEffect = 'move'
-                  const rect = e.currentTarget.getBoundingClientRect()
-                  const after = e.clientY > rect.top + rect.height / 2
-                  const nextLine = after ? index + 1 : index
-                  if (dropLineIndex !== nextLine) setDropLineIndex(nextLine)
-                }}
-                onDrop={(e) => {
-                  e.preventDefault()
-                  const from =
-                    dragIndex ??
-                    Number(e.dataTransfer.getData('text/plain'))
-                  const insertAt = dropLineIndex
-                  setDragIndex(null)
-                  setDropLineIndex(null)
-                  if (
-                    !Number.isInteger(from) ||
-                    insertAt === null ||
-                    from < 0 ||
-                    from >= tasks.length
-                  ) {
-                    return
-                  }
-                  // No-op if dropping into the same slot.
-                  if (insertAt === from || insertAt === from + 1) return
-                  const to = from < insertAt ? insertAt - 1 : insertAt
-                  onReorder(from, to)
-                }}
-              >
-                {editing ? (
-                  <TaskEditor
-                    task={task}
-                    onSave={(next) => {
-                      onUpdate(next)
-                      setEditingId(null)
-                    }}
-                    onCancel={() => setEditingId(null)}
-                  />
-                ) : (
-                  <>
-                    <div className="task-card-main">
-                      <span className="task-title">
-                        {task.title}
-                        <span className="muted task-duration">
-                          {' '}
-                          · {task.durationMinutes} min
-                        </span>
+          return (
+            <li
+              key={task.id}
+              data-task-index={index}
+              className={[
+                'task-card',
+                dragIndex === index ? 'is-dragging' : '',
+                showLineBefore ? 'drop-line-before' : '',
+                editing ? 'is-editing' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+              onPointerDown={(e) => {
+                if (editing) return
+                beginTaskDrag(e, index)
+              }}
+            >
+              {editing ? (
+                <TaskFieldsForm
+                  initialTitle={task.title}
+                  initialDuration={task.durationMinutes}
+                  submitLabel="Save"
+                  busy={busy}
+                  onCancel={() => setEditingId(null)}
+                  onSubmit={(next) => {
+                    onUpdate({
+                      ...task,
+                      title: next.title,
+                      durationMinutes: next.durationMinutes,
+                    })
+                    setEditingId(null)
+                  }}
+                />
+              ) : (
+                <>
+                  <div className="task-card-main">
+                    <span className="task-title">
+                      {task.title}
+                      <span className="muted task-duration">
+                        {' '}
+                        · {task.durationMinutes} min
                       </span>
-                    </div>
-                    <div className="task-card-icons">
-                      <button
-                        type="button"
-                        className="icon-btn"
-                        aria-label={`Edit ${task.title}`}
-                        title="Edit"
-                        onClick={() => setEditingId(task.id)}
-                      >
-                        <EditIcon />
-                      </button>
-                      <button
-                        type="button"
-                        className="icon-btn"
-                        aria-label={`Remove ${task.title}`}
-                        title="Remove"
-                        onClick={() => {
-                          if (
-                            window.confirm(
-                              `Remove “${task.title}” from the list?`,
-                            )
-                          ) {
-                            onRemove(task.id)
-                          }
-                        }}
-                      >
-                        <TrashIcon />
-                      </button>
-                    </div>
-                  </>
-                )}
-              </li>
-            )
-          })}
-        </ul>
-      )}
+                    </span>
+                  </div>
+                  <div className="task-card-icons">
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      aria-label={`Edit ${task.title}`}
+                      title="Edit"
+                      onClick={() => {
+                        if (suppressClickRef.current) return
+                        setEditingId(task.id)
+                      }}
+                    >
+                      <EditIcon />
+                    </button>
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      aria-label={`Remove ${task.title}`}
+                      title="Remove"
+                      onClick={() => {
+                        if (suppressClickRef.current) return
+                        if (
+                          window.confirm(
+                            `Remove “${task.title}” from the list?`,
+                          )
+                        ) {
+                          onRemove(task.id)
+                        }
+                      }}
+                    >
+                      <TrashIcon />
+                    </button>
+                  </div>
+                </>
+              )}
+            </li>
+          )
+        })}
 
-      <section className="new-event">
-        <h3>New event</h3>
-        <form className="task-form" onSubmit={handleAdd}>
-          <input
-            className="task-form-name"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Event Name"
-            aria-label="Event name"
-            required
-          />
-          <div className="task-form-row">
-            <div className="task-form-duration">
-              <input
-                type="number"
-                min={5}
-                step={5}
-                size={5}
-                value={durationMinutes}
-                onChange={(e) =>
-                  setDurationMinutes(
-                    Math.max(5, Math.round(Number(e.target.value)) || 5),
-                  )
-                }
-                aria-label="Duration in minutes"
-              />
-              <span className="muted">mins</span>
-            </div>
+        <li
+          className={[
+            'task-card',
+            'task-card-new',
+            adding ? 'is-editing' : '',
+            dropLineIndex === tasks.length &&
+            dragIndex !== null &&
+            dropLineIndex !== dragIndex &&
+            dropLineIndex !== dragIndex + 1
+              ? 'drop-line-before'
+              : '',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+        >
+          {adding ? (
+            <TaskFieldsForm
+              initialTitle=""
+              initialDuration={30}
+              submitLabel="Add"
+              busy={busy}
+              onCancel={() => setEditingId(null)}
+              onSubmit={(next) => {
+                onAdd(next)
+                setEditingId(null)
+              }}
+            />
+          ) : (
             <button
-              type="submit"
-              className="btn btn-primary btn-sm"
+              type="button"
+              className="task-new-trigger"
+              onClick={() => setEditingId(NEW_EDIT_ID)}
               disabled={busy}
             >
-              Add task
+              New +
             </button>
-          </div>
-        </form>
-      </section>
+          )}
+        </li>
+      </ul>
 
       <section className="saved-lists">
-        <h3>Saved lists</h3>
+        <h3>Saved task lists</h3>
         <form className="saved-lists-save" onSubmit={handleSaveList}>
           <input
             value={saveName}
@@ -505,50 +605,87 @@ function TrashIcon() {
   )
 }
 
-function TaskEditor({
-  task,
-  onSave,
+function TaskFieldsForm({
+  initialTitle,
+  initialDuration,
+  submitLabel,
+  busy,
+  onSubmit,
   onCancel,
 }: {
-  task: Task
-  onSave: (task: Task) => void
+  initialTitle: string
+  initialDuration: number
+  submitLabel: string
+  busy?: boolean
+  onSubmit: (task: Omit<Task, 'id'>) => void
   onCancel: () => void
 }) {
-  const [title, setTitle] = useState(task.title)
-  const [durationMinutes, setDurationMinutes] = useState(task.durationMinutes)
+  const [title, setTitle] = useState(initialTitle)
+  const [durationMinutes, setDurationMinutes] = useState<number | ''>(
+    initialDuration,
+  )
 
-  function handleSave(e: React.FormEvent) {
+  function parseDuration(value: number | ''): number {
+    if (value === '') return 15
+    return Math.max(5, Math.round(value) || 15)
+  }
+
+  function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    onSave({
-      ...task,
-      title: title.trim() || task.title,
-      durationMinutes: Math.max(1, Math.round(durationMinutes) || 1),
+    if (!title.trim()) return
+    onSubmit({
+      title: title.trim(),
+      durationMinutes: parseDuration(durationMinutes),
     })
   }
 
   return (
-    <form className="task-editor" onSubmit={handleSave}>
+    <form className="task-form" onSubmit={handleSubmit} noValidate>
       <input
+        className="task-form-name"
         value={title}
         onChange={(e) => setTitle(e.target.value)}
-        aria-label="Title"
+        placeholder="Event Name"
+        aria-label="Event name"
+        required
+        autoFocus
       />
-      <input
-        type="number"
-        min={5}
-        step={5}
-        value={durationMinutes}
-        onChange={(e) =>
-          setDurationMinutes(Math.max(5, Math.round(Number(e.target.value)) || 5))
-        }
-        aria-label="Duration minutes"
-      />
-      <div className="task-card-actions">
-        <button type="button" className="btn btn-ghost btn-sm" onClick={onCancel}>
+      <div className="task-form-row">
+        <div className="task-form-duration">
+          <input
+            type="number"
+            min={5}
+            step={5}
+            value={durationMinutes}
+            onChange={(e) => {
+              const raw = e.target.value
+              if (raw === '') {
+                setDurationMinutes('')
+                return
+              }
+              const next = Number(raw)
+              setDurationMinutes(Number.isFinite(next) ? next : '')
+            }}
+            onBlur={() => {
+              setDurationMinutes(parseDuration(durationMinutes))
+            }}
+            aria-label="Duration in minutes"
+          />
+          <span className="muted">mins</span>
+        </div>
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm"
+          onClick={onCancel}
+        >
           Cancel
         </button>
-        <button type="submit" className="btn btn-primary btn-sm">
-          Save
+        <button
+          type="submit"
+          className="btn btn-primary btn-sm"
+          disabled={busy}
+        >
+          {submitLabel}
         </button>
       </div>
     </form>
