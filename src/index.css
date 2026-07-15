@@ -170,9 +170,40 @@ select {
   gap: 0.65rem;
 }
 
+.task-form-duration-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.45rem;
+}
+
+.task-form-duration-row label {
+  flex: 1;
+  min-width: 0;
+}
+
+.task-form-duration-row .btn {
+  flex-shrink: 0;
+  margin-bottom: 1px;
+}
+
 .stack-anchor {
   padding-top: 0.75rem;
   border-top: 1px solid var(--line);
+}
+
+.stack-anchor-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.stack-anchor-time {
+  flex: 1;
+  min-width: 0;
+}
+
+.stack-anchor-time input {
+  width: 100%;
 }
 
 .saved-lists {
@@ -268,6 +299,20 @@ select {
   background: #fffdf8;
   color: var(--ink);
   box-shadow: 0 1px 2px rgba(26, 31, 28, 0.08);
+}
+
+.segmented.segmented-sm {
+  flex-shrink: 0;
+  width: auto;
+  grid-template-columns: auto auto;
+  gap: 0.15rem;
+  padding: 0.12rem;
+}
+
+.segmented.segmented-sm button {
+  padding: 0.28rem 0.45rem;
+  font-size: 0.75rem;
+  white-space: nowrap;
 }
 
 .btn {
@@ -549,6 +594,31 @@ select {
   box-shadow: none;
   text-transform: none;
   font-weight: 500;
+}
+
+.calendar-shell .fc .fc-today-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.1rem;
+  padding-left: 0.45rem;
+  padding-right: 0.45rem;
+}
+
+.calendar-shell .fc .fc-today-button .fc-icon {
+  display: none;
+}
+
+.calendar-shell .fc .fc-today-button::before {
+  content: '';
+  width: 1rem;
+  height: 1rem;
+  display: block;
+  background-color: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='2'/%3E%3Cpath d='M16 2v4M8 2v4M3 10h18'/%3E%3Ccircle cx='12' cy='16' r='1.5' fill='black' stroke='none'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='2'/%3E%3Cpath d='M16 2v4M8 2v4M3 10h18'/%3E%3Ccircle cx='12' cy='16' r='1.5' fill='black' stroke='none'/%3E%3C/svg%3E")
+    center / contain no-repeat;
 }
 
 .calendar-shell .fc .fc-button-primary:not(:disabled).fc-button-active,

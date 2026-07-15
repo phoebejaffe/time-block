@@ -166,24 +166,29 @@ export function TaskSidebar({
           />
         </label>
 
-        <label>
-          <span>Duration (min)</span>
-          <input
-            type="number"
-            min={1}
-            step={1}
-            value={durationMinutes}
-            onChange={(e) =>
-              setDurationMinutes(
-                Math.max(1, Math.round(Number(e.target.value)) || 1),
-              )
-            }
-          />
-        </label>
-
-        <button type="submit" className="btn btn-primary" disabled={busy}>
-          Add task
-        </button>
+        <div className="task-form-duration-row">
+          <label>
+            <span>Duration (min)</span>
+            <input
+              type="number"
+              min={1}
+              step={1}
+              value={durationMinutes}
+              onChange={(e) =>
+                setDurationMinutes(
+                  Math.max(1, Math.round(Number(e.target.value)) || 1),
+                )
+              }
+            />
+          </label>
+          <button
+            type="submit"
+            className="btn btn-primary btn-sm"
+            disabled={busy}
+          >
+            Add task
+          </button>
+        </div>
       </form>
 
       <div className="task-list-header">
@@ -327,39 +332,41 @@ export function TaskSidebar({
       )}
 
       <section className="stack-anchor">
-        <div className="segmented" role="group" aria-label="Stack anchor">
-          <button
-            type="button"
-            className={anchor.kind === 'end' ? 'active' : ''}
-            onClick={() => onAnchorChange({ ...anchor, kind: 'end' })}
-          >
-            Ends at
-          </button>
-          <button
-            type="button"
-            className={anchor.kind === 'start' ? 'active' : ''}
-            onClick={() => onAnchorChange({ ...anchor, kind: 'start' })}
-          >
-            Starts at
-          </button>
+        <div className="stack-anchor-row">
+          <div className="segmented segmented-sm" role="group" aria-label="Stack anchor">
+            <button
+              type="button"
+              className={anchor.kind === 'end' ? 'active' : ''}
+              onClick={() => onAnchorChange({ ...anchor, kind: 'end' })}
+            >
+              Ends
+            </button>
+            <button
+              type="button"
+              className={anchor.kind === 'start' ? 'active' : ''}
+              onClick={() => onAnchorChange({ ...anchor, kind: 'start' })}
+            >
+              Starts
+            </button>
+          </div>
+          <label className="stack-anchor-time">
+            <span className="sr-only">
+              {anchor.kind === 'end' ? 'List ends at' : 'List starts at'}
+            </span>
+            <input
+              type="datetime-local"
+              step={300}
+              value={toLocalInputValue(anchor.at)}
+              onChange={(e) =>
+                onAnchorChange({
+                  ...anchor,
+                  at: fromLocalInputValue(e.target.value),
+                })
+              }
+              onKeyDown={handleAnchorKeyDown}
+            />
+          </label>
         </div>
-        <label>
-          <span className="sr-only">
-            {anchor.kind === 'end' ? 'List ends at' : 'List starts at'}
-          </span>
-          <input
-            type="datetime-local"
-            step={300}
-            value={toLocalInputValue(anchor.at)}
-            onChange={(e) =>
-              onAnchorChange({
-                ...anchor,
-                at: fromLocalInputValue(e.target.value),
-              })
-            }
-            onKeyDown={handleAnchorKeyDown}
-          />
-        </label>
       </section>
 
       <section className="saved-lists">

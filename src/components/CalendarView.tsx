@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import FullCalendar from '@fullcalendar/react'
 import type {
   DateSelectArg,
@@ -6,9 +6,9 @@ import type {
   EventClickArg,
   EventDropArg,
   EventInput,
+  FormatterInput,
 } from '@fullcalendar/core'
 import type { EventResizeDoneArg } from '@fullcalendar/interaction'
-import dayGridPlugin from '@fullcalendar/daygrid'
 import timeGridPlugin from '@fullcalendar/timegrid'
 import interactionPlugin from '@fullcalendar/interaction'
 import type { CalendarEvent } from '../lib/calendarApi'
@@ -17,6 +17,20 @@ import { resolveStack } from '../lib/tasks'
 
 const TASK_COLOR = '#0f6e56'
 const TASK_BORDER = '#0b5341'
+const NARROW_BREAKPOINT = 560
+
+const TITLE_WIDE: FormatterInput = {
+  weekday: 'long',
+  month: 'long',
+  day: 'numeric',
+  year: 'numeric',
+}
+
+const TITLE_NARROW: FormatterInput = {
+  month: 'numeric',
+  day: 'numeric',
+  year: '2-digit',
+}
 
 type CalendarViewProps = {
   googleEvents: CalendarEvent[]
@@ -40,6 +54,25 @@ export function CalendarView({
   onTaskClick,
 }: CalendarViewProps) {
   const calendarRef = useRef<FullCalendar>(null)
+  const shellRef = useRef<HTMLDivElement>(null)
+  const [narrow, setNarrow] = useState(false)
+
+  useEffect(() => {
+    const el = shellRef.current
+    if (!el) return
+
+    const update = (width: number) => {
+      setNarrow(width < NARROW_BREAKPOINT)
+    }
+
+    update(el.clientWidth)
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width
+      if (typeof width === 'number') update(width)
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
 
   const events = useMemo((): EventInput[] => {
     const google: EventInput[] = googleEvents.map((e) => ({
@@ -112,16 +145,25 @@ export function CalendarView({
   }
 
   return (
-    <div className="calendar-shell">
+    <div className="calendar-shell" ref={shellRef}>
       <FullCalendar
         ref={calendarRef}
-        plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+        plugins={[timeGridPlugin, interactionPlugin]}
         initialView="timeGridDay"
         headerToolbar={{
           left: 'prev,next today',
           center: 'title',
-          right: 'timeGridDay,timeGridWeek,dayGridMonth',
+          right: 'timeGridDay,timeGridWeek',
         }}
+        buttonText={{
+          today: '',
+          day: 'Day',
+          week: 'Week',
+        }}
+        buttonHints={{
+          today: 'Today',
+        }}
+        titleFormat={narrow ? TITLE_NARROW : TITLE_WIDE}
         height="100%"
         nowIndicator
         editable
