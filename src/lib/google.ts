@@ -6,6 +6,10 @@ const DISCOVERY_DOC =
 const SESSION_KEY = 'time-blocking.google-session'
 const REMEMBER_KEY = 'time-blocking.google-remember'
 
+/** Refresh a few minutes before Google's ~1h access token expires. */
+const REFRESH_BEFORE_MS = 5 * 60_000
+const REFRESH_CHECK_MS = 60_000
+
 type StoredSession = {
   access_token: string
   expires_at: number
@@ -62,6 +66,8 @@ let tokenCallback:
 let grantedScopes = new Set<string>()
 let initPromise: Promise<void> | null = null
 let restorePromise: Promise<boolean> | null = null
+let refreshTimer: ReturnType<typeof setInterval> | null = null
+let refreshInFlight: Promise<boolean> | null = null
 
 function applyScopes(scope: string): void {
   for (const s of scope.split(/\s+/).filter(Boolean)) {
@@ -97,8 +103,12 @@ function persistSession(
   applyScopes(scope)
 }
 
-function clearStoredSession(): void {
+function clearStoredToken(): void {
   localStorage.removeItem(SESSION_KEY)
+}
+
+function clearStoredSession(): void {
+  clearStoredToken()
   localStorage.removeItem(REMEMBER_KEY)
 }
 
@@ -109,10 +119,57 @@ function shouldRemember(): boolean {
 function restoreTokenFromStorage(): boolean {
   const session = readStoredSession()
   if (!session) return false
-  if (Date.now() >= session.expires_at) return false
+  if (Date.now() >= session.expires_at) {
+    clearStoredToken()
+    return false
+  }
   gapi.client.setToken({ access_token: session.access_token })
   applyScopes(session.scope)
   return true
+}
+
+function stopTokenRefreshLoop(): void {
+  if (refreshTimer) {
+    clearInterval(refreshTimer)
+    refreshTimer = null
+  }
+}
+
+/**
+ * While the tab stays open, quietly refresh before expiry (prompt: none).
+ * Never opens a visible login UI — if Google needs interaction, we skip.
+ */
+function startTokenRefreshLoop(): void {
+  stopTokenRefreshLoop()
+  refreshTimer = setInterval(() => {
+    void maybeRefreshTokenQuietly()
+  }, REFRESH_CHECK_MS)
+  void maybeRefreshTokenQuietly()
+}
+
+async function maybeRefreshTokenQuietly(): Promise<void> {
+  const session = readStoredSession()
+  if (!session) return
+  const msLeft = session.expires_at - Date.now()
+  if (msLeft > REFRESH_BEFORE_MS) return
+  if (refreshInFlight) return
+
+  refreshInFlight = (async () => {
+    try {
+      await initGoogle()
+      const scope =
+        [...grantedScopes].join(' ') || session.scope || READ_SCOPES
+      // 'none' = fail silently if Google would need a popup / consent UI.
+      await requestToken(scope, 'none')
+      return true
+    } catch {
+      return false
+    } finally {
+      refreshInFlight = null
+    }
+  })()
+
+  await refreshInFlight
 }
 
 async function ensureGapi(): Promise<void> {
@@ -197,37 +254,31 @@ function requestToken(
 
 /**
  * Restore a previous session after refresh / revisit.
- * Uses a stored access token when still valid, otherwise silently
- * refreshes via Google when the user previously signed in.
+ * Only uses a still-valid stored access token — never pops a login UI.
+ * If the token expired, the user signs in again with the button.
  */
 export function restoreSession(): Promise<boolean> {
   if (!restorePromise) {
     restorePromise = (async () => {
       await initGoogle()
-      if (restoreTokenFromStorage()) return true
-      if (!shouldRemember()) return false
-
-      try {
-        // Empty prompt: no consent UI for returning users with an active Google session.
-        await requestToken(READ_SCOPES, '')
+      if (restoreTokenFromStorage()) {
+        startTokenRefreshLoop()
         return true
-      } catch {
-        clearStoredSession()
-        gapi.client.setToken(null)
-        grantedScopes.clear()
-        return false
       }
+      return false
     })()
   }
   return restorePromise
 }
 
-/** Sign in with calendar read access. */
+/** Sign in with calendar read access (user-initiated only). */
 export async function signIn(): Promise<void> {
   await initGoogle()
-  const prompt = hasAccessToken() || shouldRemember() ? '' : 'consent'
+  // Returning users: skip full consent when Google still has the grant.
+  const prompt = shouldRemember() || hasAccessToken() ? '' : 'consent'
   await requestToken(READ_SCOPES, prompt)
   restorePromise = Promise.resolve(true)
+  startTokenRefreshLoop()
 }
 
 /** Request write scope (incremental) when committing tasks to a calendar. */
@@ -235,9 +286,11 @@ export async function ensureWriteScope(): Promise<void> {
   await initGoogle()
   if (grantedScopes.has(WRITE_SCOPE)) return
   await requestToken(`${READ_SCOPES} ${WRITE_SCOPE}`, 'consent')
+  startTokenRefreshLoop()
 }
 
 export function signOut(): void {
+  stopTokenRefreshLoop()
   const token = gapi.client.getToken()
   if (token?.access_token) {
     google.accounts.oauth2.revoke(token.access_token, () => {})

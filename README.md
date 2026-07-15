@@ -39,7 +39,7 @@ If the OAuth app is in **Testing** mode, add your Google account as a test user.
 
 ## How it works
 
-1. **Sign in** — Google Identity Services issues an access token in the browser (token model; no server). The token is stored in `localStorage` and restored on refresh; if it expired, the app silently re-requests one for returning users.
+1. **Sign in** — Google Identity Services issues an access token in the browser (no server). Valid tokens are restored from `localStorage` on refresh. Expired tokens do **not** auto-open Google login — click **Sign in with Google**. While the tab stays open, the app quietly refreshes the token before it expires (~1 hour lifetime from Google).
 2. **Calendars** — Toggle which calendars appear. Events load for the visible FullCalendar range.
 3. **Plan** — Build an ordered task list, then set **Ends at** / **Starts at** for the whole stack. Save and reload named lists anytime.
 4. **Add to calendar** — Push the stacked tasks to a Google calendar. The local list stays put. You’ll get a warning if you already pushed a list for that day.
