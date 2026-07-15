@@ -155,42 +155,6 @@ export function TaskSidebar({
         <h2>Plan</h2>
       </header>
 
-      <form className="task-form" onSubmit={handleAdd}>
-        <label>
-          <span>Task</span>
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Slow wake, bathroom, pack…"
-            required
-          />
-        </label>
-
-        <div className="task-form-duration-row">
-          <label>
-            <span>Duration (min)</span>
-            <input
-              type="number"
-              min={1}
-              step={1}
-              value={durationMinutes}
-              onChange={(e) =>
-                setDurationMinutes(
-                  Math.max(1, Math.round(Number(e.target.value)) || 1),
-                )
-              }
-            />
-          </label>
-          <button
-            type="submit"
-            className="btn btn-primary btn-sm"
-            disabled={busy}
-          >
-            Add task
-          </button>
-        </div>
-      </form>
-
       <div className="task-list-header">
         <h3>
           Tasks
@@ -199,6 +163,44 @@ export function TaskSidebar({
           )}
         </h3>
       </div>
+
+      <section className="stack-anchor">
+        <div className="stack-anchor-row">
+          <div className="segmented segmented-sm" role="group" aria-label="Stack anchor">
+            <button
+              type="button"
+              className={anchor.kind === 'end' ? 'active' : ''}
+              onClick={() => onAnchorChange({ ...anchor, kind: 'end' })}
+            >
+              Ends
+            </button>
+            <button
+              type="button"
+              className={anchor.kind === 'start' ? 'active' : ''}
+              onClick={() => onAnchorChange({ ...anchor, kind: 'start' })}
+            >
+              Starts
+            </button>
+          </div>
+          <label className="stack-anchor-time">
+            <span className="sr-only">
+              {anchor.kind === 'end' ? 'List ends at' : 'List starts at'}
+            </span>
+            <input
+              type="datetime-local"
+              step={300}
+              value={toLocalInputValue(anchor.at)}
+              onChange={(e) =>
+                onAnchorChange({
+                  ...anchor,
+                  at: fromLocalInputValue(e.target.value),
+                })
+              }
+              onKeyDown={handleAnchorKeyDown}
+            />
+          </label>
+        </div>
+      </section>
 
       {tasks.length === 0 ? (
         <p className="muted empty-hint">No local tasks yet.</p>
@@ -287,7 +289,6 @@ export function TaskSidebar({
                   <>
                     <div className="task-card-main">
                       <span className="task-title">
-                        <span className="task-index">{index + 1}.</span>{' '}
                         {task.title}
                         <span className="muted task-duration">
                           {' '}
@@ -331,42 +332,43 @@ export function TaskSidebar({
         </ul>
       )}
 
-      <section className="stack-anchor">
-        <div className="stack-anchor-row">
-          <div className="segmented segmented-sm" role="group" aria-label="Stack anchor">
+      <section className="new-event">
+        <h3>New event</h3>
+        <form className="task-form" onSubmit={handleAdd}>
+          <input
+            className="task-form-name"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Event Name"
+            aria-label="Event name"
+            required
+          />
+          <div className="task-form-row">
+            <div className="task-form-duration">
+              <input
+                type="number"
+                min={5}
+                step={5}
+                size={5}
+                value={durationMinutes}
+                onChange={(e) =>
+                  setDurationMinutes(
+                    Math.max(5, Math.round(Number(e.target.value)) || 5),
+                  )
+                }
+                aria-label="Duration in minutes"
+              />
+              <span className="muted">mins</span>
+            </div>
             <button
-              type="button"
-              className={anchor.kind === 'end' ? 'active' : ''}
-              onClick={() => onAnchorChange({ ...anchor, kind: 'end' })}
+              type="submit"
+              className="btn btn-primary btn-sm"
+              disabled={busy}
             >
-              Ends
-            </button>
-            <button
-              type="button"
-              className={anchor.kind === 'start' ? 'active' : ''}
-              onClick={() => onAnchorChange({ ...anchor, kind: 'start' })}
-            >
-              Starts
+              Add task
             </button>
           </div>
-          <label className="stack-anchor-time">
-            <span className="sr-only">
-              {anchor.kind === 'end' ? 'List ends at' : 'List starts at'}
-            </span>
-            <input
-              type="datetime-local"
-              step={300}
-              value={toLocalInputValue(anchor.at)}
-              onChange={(e) =>
-                onAnchorChange({
-                  ...anchor,
-                  at: fromLocalInputValue(e.target.value),
-                })
-              }
-              onKeyDown={handleAnchorKeyDown}
-            />
-          </label>
-        </div>
+        </form>
       </section>
 
       <section className="saved-lists">
@@ -533,11 +535,11 @@ function TaskEditor({
       />
       <input
         type="number"
-        min={1}
-        step={1}
+        min={5}
+        step={5}
         value={durationMinutes}
         onChange={(e) =>
-          setDurationMinutes(Math.max(1, Math.round(Number(e.target.value)) || 1))
+          setDurationMinutes(Math.max(5, Math.round(Number(e.target.value)) || 5))
         }
         aria-label="Duration minutes"
       />

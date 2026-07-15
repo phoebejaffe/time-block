@@ -25,8 +25,8 @@ Open [http://localhost:5173](http://localhost:5173).
    - `https://www.googleapis.com/auth/calendar.events` (requested only when you tap **Add to calendar**)
 4. Create credentials → **OAuth client ID** → Application type **Web application**.
 5. Under **Authorized JavaScript origins**, add:
-   - `http://localhost:5173` (local Vite default)
-   - `http://127.0.0.1:3400` (sites launcher: `sites start time-blocking`)
+   - `http://localhost:5173`
+   - `http://127.0.0.1:5173`
 6. Copy the client ID into `.env`:
 
 ```env

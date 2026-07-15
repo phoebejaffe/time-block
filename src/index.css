@@ -170,25 +170,38 @@ select {
   gap: 0.65rem;
 }
 
-.task-form-duration-row {
+.task-form-name {
+  width: 100%;
+}
+
+.task-form-row {
   display: flex;
-  align-items: flex-end;
-  gap: 0.45rem;
+  align-items: center;
+  gap: 0.4rem;
 }
 
-.task-form-duration-row label {
-  flex: 1;
-  min-width: 0;
-}
-
-.task-form-duration-row .btn {
+.task-form-duration {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
   flex-shrink: 0;
-  margin-bottom: 1px;
+}
+
+.task-form-duration input {
+  width: 6.04ch;
+  min-width: 6.04ch;
+  padding-left: 0.35rem;
+  padding-right: 0.35rem;
+  text-align: right;
+}
+
+.task-form-row .btn {
+  flex-shrink: 0;
 }
 
 .stack-anchor {
-  padding-top: 0.75rem;
-  border-top: 1px solid var(--line);
+  padding-top: 0;
+  border-top: 0;
 }
 
 .stack-anchor-row {
@@ -242,9 +255,8 @@ select {
   min-width: 0;
 }
 
-.task-index {
-  color: var(--ink-muted);
-  font-weight: 500;
+.task-card-main .task-duration {
+  font-weight: 400;
 }
 
 .stack-anchor label,
@@ -368,8 +380,15 @@ select {
 
 .finish-panel h3,
 .calendars-drawer h2,
-.saved-lists h3 {
+.saved-lists h3,
+.new-event h3 {
   font-size: 1.05rem;
+}
+
+.new-event {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
 }
 
 .task-list {
