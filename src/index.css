@@ -283,12 +283,6 @@ body.is-sidebar-resizing .main-panel {
   text-align: right;
 }
 
-.stack-anchor-warning {
-  margin: 0.35rem 0 0;
-  font-size: 0.75rem;
-  color: #9a5b1a;
-}
-
 .sidebar-actions {
   margin-top: auto;
   padding-top: 0.75rem;
@@ -1021,6 +1015,7 @@ body.is-task-reordering .task-sidebar {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 0.35rem;
   min-width: 0;
   margin-inline: 8px;
 }
@@ -1048,6 +1043,16 @@ body.is-task-reordering .task-sidebar {
   overflow: hidden;
   text-overflow: ellipsis;
   text-align: center;
+  min-width: 0;
+}
+
+.calendar-date-warning {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #9a5b1a;
+  cursor: default;
 }
 
 .calendar-menu {

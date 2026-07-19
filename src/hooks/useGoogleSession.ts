@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { formatError } from '../lib/errors'
 import {
   hasAccessToken,
   initGoogle,
@@ -24,7 +25,7 @@ export function useGoogleSession() {
         setReady(true)
       } catch (err) {
         if (cancelled) return
-        setError(err instanceof Error ? err.message : String(err))
+        setError(formatError(err))
         setReady(true)
       }
     })()
@@ -40,7 +41,7 @@ export function useGoogleSession() {
       await googleSignIn()
       setSignedIn(true)
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      setError(formatError(err))
     } finally {
       setBusy(false)
     }

@@ -315,6 +315,54 @@ export function shiftAnchor(anchor: StackAnchor, deltaMs: number): StackAnchor {
   }
 }
 
+/** Local midnight for the given calendar day (defaults to today). */
+export function startOfLocalDay(date: Date = new Date()): Date {
+  const d = new Date(date)
+  d.setHours(0, 0, 0, 0)
+  return d
+}
+
+/**
+ * Pick the day blocks should attach to for a FullCalendar visible range.
+ * Prefer today when it falls in the range; otherwise the range start.
+ */
+export function pickViewDate(
+  rangeStart: Date,
+  rangeEnd: Date,
+  now: Date = new Date(),
+): Date {
+  if (now >= rangeStart && now < rangeEnd) {
+    return startOfLocalDay(now)
+  }
+  return startOfLocalDay(rangeStart)
+}
+
+/** Keep the anchor's clock time; place it on the given local calendar day. */
+export function anchorOnDay(anchor: StackAnchor, day: Date): StackAnchor {
+  const at = new Date(anchor.at)
+  if (Number.isNaN(at.getTime())) return anchor
+  const next = startOfLocalDay(day)
+  next.setHours(
+    at.getHours(),
+    at.getMinutes(),
+    at.getSeconds(),
+    at.getMilliseconds(),
+  )
+  return { ...anchor, at: next.toISOString() }
+}
+
+/** True when the local calendar day of `isoOrDate` is today or tomorrow. */
+export function isTodayOrTomorrow(isoOrDate: string | Date): boolean {
+  const target =
+    typeof isoOrDate === 'string' ? new Date(isoOrDate) : isoOrDate
+  if (Number.isNaN(target.getTime())) return true
+  const today = startOfLocalDay()
+  const tomorrow = startOfLocalDay()
+  tomorrow.setDate(tomorrow.getDate() + 1)
+  const day = startOfLocalDay(target).getTime()
+  return day === today.getTime() || day === tomorrow.getTime()
+}
+
 export function localDateKey(isoOrDate: string | Date): string {
   const d = typeof isoOrDate === 'string' ? new Date(isoOrDate) : isoOrDate
   if (Number.isNaN(d.getTime())) return ''

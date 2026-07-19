@@ -11,9 +11,17 @@ import { useNotice } from './hooks/useNotice'
 import { usePlan } from './hooks/usePlan'
 import { useSidebarWidth } from './hooks/useSidebarWidth'
 import { syncTasksToCalendar } from './lib/calendarApi'
+import { formatError } from './lib/errors'
 import { ensureWriteScope } from './lib/google'
 import { canUpdateCalendar } from './lib/pushedEvents'
-import { localDateKey, shiftAnchor, type Task } from './lib/tasks'
+import {
+  anchorOnDay,
+  localDateKey,
+  pickViewDate,
+  shiftAnchor,
+  startOfLocalDay,
+  type Task,
+} from './lib/tasks'
 
 export default function App() {
   const { notice, show, clear } = useNotice()
@@ -26,6 +34,7 @@ export default function App() {
 
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
   const [commitBusy, setCommitBusy] = useState(false)
+  const [viewDate, setViewDate] = useState(() => startOfLocalDay())
   const [stackDragPreview, setStackDragPreview] = useState<{
     groupId: string
     deltaMs: number
@@ -37,9 +46,20 @@ export default function App() {
 
   const busy = session.busy || calendars.busy || commitBusy
 
+  /** Anchors remapped onto the calendar's visible day (no drag preview). */
+  const viewDayGroups = useMemo(
+    () =>
+      plan.plan.groups.map((group) => ({
+        ...group,
+        anchor: anchorOnDay(group.anchor, viewDate),
+      })),
+    [plan.plan.groups, viewDate],
+  )
+
+  /** Sidebar preview: view-day anchors plus live stack drag shift. */
   const displayGroups = useMemo(
     () =>
-      plan.plan.groups.map((group) =>
+      viewDayGroups.map((group) =>
         stackDragPreview?.groupId === group.id
           ? {
               ...group,
@@ -47,8 +67,17 @@ export default function App() {
             }
           : group,
       ),
-    [plan.plan.groups, stackDragPreview],
+    [viewDayGroups, stackDragPreview],
   )
+
+  function handleDatesSet(start: Date, end: Date) {
+    calendars.setDates(start, end)
+    const next = pickViewDate(start, end)
+    setViewDate((prev) =>
+      prev.getTime() === next.getTime() ? prev : next,
+    )
+    setStackDragPreview(null)
+  }
 
   async function handleSignIn() {
     clear()
@@ -104,7 +133,8 @@ export default function App() {
   ): Promise<boolean> {
     const group = plan.plan.groups.find((g) => g.id === groupId)
     if (!group) return false
-    const dayKey = localDateKey(group.anchor.at)
+    const anchor = anchorOnDay(group.anchor, viewDate)
+    const dayKey = localDateKey(anchor.at)
     const isUpdate = canUpdateCalendar(calendarId, groupId, dayKey)
     if (group.tasks.length === 0 && !isUpdate) {
       show('info', 'Add at least one block before adding to a calendar.')
@@ -116,11 +146,15 @@ export default function App() {
     clear()
     try {
       await ensureWriteScope()
+      // Persist the viewed day so the plan matches what we sync.
+      if (group.anchor.at !== anchor.at) {
+        plan.setAnchor(groupId, anchor)
+      }
       const { updated, created, removed, failures } = await syncTasksToCalendar(
         calendarId,
         groupId,
         group.tasks,
-        group.anchor,
+        anchor,
       )
       await calendars.refreshEvents()
 
@@ -152,8 +186,7 @@ export default function App() {
       )
       return true
     } catch (err) {
-      const text = err instanceof Error ? err.message : String(err)
-      show('error', `Couldn't sync calendar: ${text}`)
+      show('error', `Couldn't sync calendar: ${formatError(err)}`)
       return false
     } finally {
       setCommitBusy(false)
@@ -237,8 +270,8 @@ export default function App() {
               calendars={calendars.calendars}
               visibleCalendarIds={calendars.visibleIds}
               onToggleCalendar={calendars.toggleCalendar}
-              groups={plan.plan.groups}
-              onDatesSet={calendars.setDates}
+              groups={viewDayGroups}
+              onDatesSet={handleDatesSet}
               onAnchorCommit={(groupId, next) => {
                 setStackDragPreview(null)
                 plan.setAnchor(groupId, next)

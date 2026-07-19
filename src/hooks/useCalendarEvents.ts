@@ -6,6 +6,7 @@ import {
   type CalendarEvent,
   type GoogleCalendar,
 } from '../lib/calendarApi'
+import { formatError } from '../lib/errors'
 
 type UseCalendarEventsOptions = {
   signedIn: boolean
@@ -83,9 +84,7 @@ export function useCalendarEvents({
         await refreshCalendars()
       } catch (err) {
         if (!cancelled) {
-          onErrorRef.current?.(
-            err instanceof Error ? err.message : String(err),
-          )
+          onErrorRef.current?.(formatError(err))
         }
       } finally {
         if (!cancelled) setBusy(false)
@@ -104,9 +103,7 @@ export function useCalendarEvents({
         await refreshEvents()
       } catch (err) {
         if (!cancelled) {
-          onErrorRef.current?.(
-            err instanceof Error ? err.message : String(err),
-          )
+          onErrorRef.current?.(formatError(err))
         }
       }
     })()

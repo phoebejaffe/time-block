@@ -1,11 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
+  anchorOnDay,
   hasCommittedOnDay,
   loadCommittedDays,
   localDateKey,
   markCommittedDay,
   migratePlan,
+  pickViewDate,
   resolveStack,
+  startOfLocalDay,
   type StackAnchor,
   type Task,
 } from './tasks'
@@ -51,6 +54,43 @@ describe('resolveStack', () => {
     expect(
       resolveStack(tasks, { kind: 'end', at: 'not-a-date' }),
     ).toEqual([])
+  })
+})
+
+describe('anchorOnDay', () => {
+  it('keeps clock time and moves it onto another local day', () => {
+    const anchor: StackAnchor = {
+      kind: 'end',
+      at: new Date(2026, 6, 18, 9, 30, 0, 0).toISOString(),
+    }
+    const next = anchorOnDay(anchor, new Date(2026, 6, 20))
+    const d = new Date(next.at)
+    expect(next.kind).toBe('end')
+    expect(d.getFullYear()).toBe(2026)
+    expect(d.getMonth()).toBe(6)
+    expect(d.getDate()).toBe(20)
+    expect(d.getHours()).toBe(9)
+    expect(d.getMinutes()).toBe(30)
+  })
+})
+
+describe('pickViewDate', () => {
+  it('uses today when it falls in the visible range', () => {
+    const start = new Date(2026, 6, 13)
+    const end = new Date(2026, 6, 20)
+    const now = new Date(2026, 6, 15, 14, 0)
+    expect(pickViewDate(start, end, now).getTime()).toBe(
+      startOfLocalDay(now).getTime(),
+    )
+  })
+
+  it('uses the range start when today is outside the range', () => {
+    const start = new Date(2026, 6, 20)
+    const end = new Date(2026, 6, 21)
+    const now = new Date(2026, 6, 15, 14, 0)
+    expect(pickViewDate(start, end, now).getTime()).toBe(
+      startOfLocalDay(start).getTime(),
+    )
   })
 })
 

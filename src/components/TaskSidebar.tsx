@@ -68,22 +68,6 @@ function shiftAnchorIso(iso: string, field: AnchorField, dir: 1 | -1): string {
   return d.toISOString()
 }
 
-function isTodayOrTomorrow(iso: string): boolean {
-  const target = new Date(iso)
-  if (Number.isNaN(target.getTime())) return true
-  const startOfDay = (d: Date) => {
-    const x = new Date(d)
-    x.setHours(0, 0, 0, 0)
-    return x.getTime()
-  }
-  const today = startOfDay(new Date())
-  const tomorrowDate = new Date()
-  tomorrowDate.setDate(tomorrowDate.getDate() + 1)
-  const tomorrow = startOfDay(tomorrowDate)
-  const day = startOfDay(target)
-  return day === today || day === tomorrow
-}
-
 type TaskSidebarProps = {
   groups: BlockGroup[]
   canDeleteGroup: boolean
@@ -636,8 +620,6 @@ function BlockGroupPanel({
       dayKey,
       stackPushFingerprint(anchor, resolved),
     )
-  const anchorFarFromToday = !isTodayOrTomorrow(anchor.at)
-
   function beginAnchorScrub(e: React.PointerEvent<HTMLInputElement>) {
     if (e.button !== 0) return
     const input = e.currentTarget
@@ -918,11 +900,6 @@ function BlockGroupPanel({
             <span className="task-range muted">{stackSummary}</span>
           )}
         </div>
-        {anchorFarFromToday && (
-          <p className="stack-anchor-warning" role="status">
-            Not today or tomorrow
-          </p>
-        )}
       </div>
 
       <ul className="task-list" ref={listRef}>

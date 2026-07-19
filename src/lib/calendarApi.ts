@@ -1,3 +1,4 @@
+import { formatError } from './errors'
 import {
   loadPushedEvents,
   savePushedEvents,
@@ -244,21 +245,6 @@ export type SyncTasksResult = {
   failures: SyncTaskFailure[]
 }
 
-function errorMessage(err: unknown): string {
-  if (err instanceof Error && err.message) return err.message
-  if (typeof err === 'string' && err.trim()) return err
-  if (err && typeof err === 'object') {
-    const e = err as {
-      message?: string
-      result?: { error?: { message?: string } }
-      error?: { message?: string }
-    }
-    const msg =
-      e.result?.error?.message || e.error?.message || e.message
-    if (msg) return msg
-  }
-  return 'Unknown error'
-}
 
 /**
  * Push the current stack to Google Calendar.
@@ -356,7 +342,7 @@ export async function syncTasksToCalendar(
                 taskId: task.id,
                 title: task.title,
                 action: 'update',
-                message: errorMessage(err),
+                message: formatError(err),
               })
               continue
             }
@@ -370,7 +356,7 @@ export async function syncTasksToCalendar(
           taskId: task.id,
           title: task.title,
           action: 'update',
-          message: errorMessage(err),
+          message: formatError(err),
         })
         continue
       }
@@ -399,7 +385,7 @@ export async function syncTasksToCalendar(
         taskId: task.id,
         title: task.title,
         action: 'create',
-        message: errorMessage(err),
+        message: formatError(err),
       })
     }
   }
@@ -428,7 +414,7 @@ export async function syncTasksToCalendar(
         taskId: orphan.taskId,
         title: 'Previously synced event',
         action: 'remove',
-        message: errorMessage(err),
+        message: formatError(err),
       })
     }
   }

@@ -15,7 +15,12 @@ import timeGridPlugin from '@fullcalendar/timegrid'
 import interactionPlugin from '@fullcalendar/interaction'
 import type { CalendarEvent, GoogleCalendar } from '../lib/calendarApi'
 import type { BlockGroup, StackAnchor } from '../lib/tasks'
-import { resolveStack, shiftAnchor } from '../lib/tasks'
+import {
+  isTodayOrTomorrow,
+  pickViewDate,
+  resolveStack,
+  shiftAnchor,
+} from '../lib/tasks'
 import { useCalendarZoom } from '../hooks/useCalendarZoom'
 import {
   TASK_STACK_CLASS,
@@ -118,6 +123,7 @@ export function CalendarView({
   const [menuOpen, setMenuOpen] = useState(false)
   const [calendarsOpen, setCalendarsOpen] = useState(false)
   const [isOnToday, setIsOnToday] = useState(true)
+  const [farFromTodayOrTomorrow, setFarFromTodayOrTomorrow] = useState(false)
 
   const zoom = useCalendarZoom({
     bodyRef: calendarBodyRef,
@@ -337,6 +343,9 @@ export function CalendarView({
     }
     const now = new Date()
     setIsOnToday(now >= arg.start && now < arg.end)
+    setFarFromTodayOrTomorrow(
+      !isTodayOrTomorrow(pickViewDate(arg.start, arg.end, now)),
+    )
     onDatesSet(arg.start, arg.end)
   }
 
@@ -396,6 +405,7 @@ export function CalendarView({
       <CalendarToolbar
         title={title}
         isOnToday={isOnToday}
+        farFromTodayOrTomorrow={farFromTodayOrTomorrow}
         viewType={viewType}
         narrow={narrow}
         showAllDay={showAllDay}
