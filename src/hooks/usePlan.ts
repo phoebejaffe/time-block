@@ -175,17 +175,6 @@ export function usePlan() {
     [updatePlan],
   )
 
-  const addFromSlot = useCallback(
-    (groupId: string, start: Date, end: Date) => {
-      const durationMinutes = Math.max(
-        1,
-        Math.round((end.getTime() - start.getTime()) / 60_000),
-      )
-      addTask(groupId, { title: 'New block', durationMinutes })
-    },
-    [addTask],
-  )
-
   const clearGroupTasks = useCallback(
     (groupId: string) => {
       updatePlan((prev) => ({
@@ -244,7 +233,6 @@ export function usePlan() {
     replaceTasks,
     shiftStack,
     setTaskDuration,
-    addFromSlot,
     clearGroupTasks,
     setGroupHidden,
     clear,

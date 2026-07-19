@@ -16,21 +16,27 @@ function touchDistance(a: Touch, b: Touch): number {
 type UseCalendarZoomOptions = {
   bodyRef: RefObject<HTMLElement | null>
   onZoomChange?: () => void
+  /** Fired when a two-finger pinch begins (so calendar can cancel drag/select). */
+  onPinchStart?: () => void
 }
 
 /** Pinch + Ctrl/Cmd-wheel zoom for the calendar body; blocks Safari page gestures. */
 export function useCalendarZoom({
   bodyRef,
   onZoomChange,
+  onPinchStart,
 }: UseCalendarZoomOptions) {
   const [zoom, setZoom] = useState(1)
   const zoomRef = useRef(1)
+  const pinchingRef = useRef(false)
   const pinchRef = useRef<{
     startDistance: number
     startZoom: number
   } | null>(null)
   const onZoomChangeRef = useRef(onZoomChange)
+  const onPinchStartRef = useRef(onPinchStart)
   onZoomChangeRef.current = onZoomChange
+  onPinchStartRef.current = onPinchStart
 
   useEffect(() => {
     zoomRef.current = zoom
@@ -62,14 +68,18 @@ export function useCalendarZoom({
     if (!el) return
 
     function onTouchStart(event: TouchEvent) {
-      if (event.touches.length !== 2) {
+      if (event.touches.length < 2) {
         pinchRef.current = null
         return
       }
+      event.preventDefault()
+      const wasPinching = pinchingRef.current
+      pinchingRef.current = true
       pinchRef.current = {
         startDistance: touchDistance(event.touches[0]!, event.touches[1]!),
         startZoom: zoomRef.current,
       }
+      if (!wasPinching) onPinchStartRef.current?.()
     }
 
     function onTouchMove(event: TouchEvent) {
@@ -82,7 +92,10 @@ export function useCalendarZoom({
     }
 
     function onTouchEnd(event: TouchEvent) {
-      if (event.touches.length < 2) pinchRef.current = null
+      if (event.touches.length < 2) {
+        pinchRef.current = null
+        pinchingRef.current = false
+      }
     }
 
     function onWheel(event: WheelEvent) {
@@ -92,7 +105,7 @@ export function useCalendarZoom({
       setZoom((prev) => clampZoom(prev * factor))
     }
 
-    el.addEventListener('touchstart', onTouchStart, { passive: true })
+    el.addEventListener('touchstart', onTouchStart, { passive: false })
     el.addEventListener('touchmove', onTouchMove, { passive: false })
     el.addEventListener('touchend', onTouchEnd)
     el.addEventListener('touchcancel', onTouchEnd)
@@ -106,5 +119,5 @@ export function useCalendarZoom({
     }
   }, [bodyRef])
 
-  return zoom
+  return { zoom, pinchingRef }
 }

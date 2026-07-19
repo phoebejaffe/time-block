@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import FullCalendar from '@fullcalendar/react'
 import type {
-  DateSelectArg,
   DateSpanApi,
   DatesSetArg,
   EventApi,
@@ -54,7 +53,6 @@ type CalendarViewProps = {
     groupId: string | null,
     deltaMs: number | null,
   ) => void
-  onSelectSlot: (groupId: string, start: Date, end: Date) => void
   onTaskClick: (taskId: string) => void
   busy?: boolean
 }
@@ -90,7 +88,6 @@ export function CalendarView({
   onDatesSet,
   onAnchorCommit,
   onStackShiftPreview,
-  onSelectSlot,
   onTaskClick,
   busy,
 }: CalendarViewProps) {
@@ -106,6 +103,8 @@ export function CalendarView({
   const dragGroupIdRef = useRef<string | null>(null)
   const pendingDeltaRef = useRef<number | null>(null)
   const dragFinalizedRef = useRef(false)
+  /** Pinch started mid-drag — discard any pending stack move on drop. */
+  const discardDragRef = useRef(false)
   const onAnchorCommitRef = useRef(onAnchorCommit)
   const onStackShiftPreviewRef = useRef(onStackShiftPreview)
   onAnchorCommitRef.current = onAnchorCommit
@@ -120,13 +119,21 @@ export function CalendarView({
   const [isOnToday, setIsOnToday] = useState(true)
   const [farFromTodayOrTomorrow, setFarFromTodayOrTomorrow] = useState(false)
 
-  const zoom = useCalendarZoom({
-    bodyRef: calendarBodyRef,
-    onZoomChange: () => calendarRef.current?.getApi().updateSize(),
-  })
-
   const { handleEventDragStart, handleEventDragStop, cancelStackDrag } =
     useTaskStackDrag({ shellRef })
+
+  const { zoom, pinchingRef } = useCalendarZoom({
+    bodyRef: calendarBodyRef,
+    onZoomChange: () => calendarRef.current?.getApi().updateSize(),
+    onPinchStart: () => {
+      // Two fingers: zoom only — never create or commit a stack move.
+      discardDragRef.current = true
+      pendingDeltaRef.current = 0
+      cancelStackDrag()
+      syncStackPreviewTimes(null)
+      onStackShiftPreviewRef.current?.(null, null)
+    },
+  })
 
   /** Live-update time labels on the whole stack while one event is dragged. */
   function syncStackPreviewTimes(
@@ -164,14 +171,16 @@ export function CalendarView({
 
     const origin = dragOriginAnchorRef.current
     const groupId = dragGroupIdRef.current
+    const discard = discardDragRef.current
     cancelStackDrag()
     pendingDeltaRef.current = null
     dragOriginAnchorRef.current = null
     dragOriginStartRef.current = null
     dragSpanOriginRef.current = null
     dragGroupIdRef.current = null
+    discardDragRef.current = false
 
-    if (origin && groupId && deltaMs != null && deltaMs !== 0) {
+    if (!discard && origin && groupId && deltaMs != null && deltaMs !== 0) {
       // Leave preview times in place until FC remounts with the commit.
       onAnchorCommitRef.current(groupId, shiftAnchor(origin, deltaMs))
     } else {
@@ -181,9 +190,11 @@ export function CalendarView({
   }
 
   function handleDragStart(arg: Parameters<typeof handleEventDragStart>[0]) {
+    if (pinchingRef.current) return
     const groupId = arg.event.extendedProps.groupId as string | undefined
     const group = groups.find((g) => g.id === groupId)
     dragFinalizedRef.current = false
+    discardDragRef.current = false
     dragOriginStartRef.current = arg.event.start?.getTime() ?? null
     dragSpanOriginRef.current = null
     dragOriginAnchorRef.current = group?.anchor ?? null
@@ -216,6 +227,7 @@ export function CalendarView({
   }
 
   function handleEventAllow(span: DateSpanApi, movingEvent: EventApi | null) {
+    if (pinchingRef.current || discardDragRef.current) return false
     if (movingEvent?.extendedProps.source !== 'task') return true
     const originMs = dragOriginStartRef.current
     if (originMs == null || !span.start) return true
@@ -366,29 +378,6 @@ export function CalendarView({
     setMenuOpen(false)
   }
 
-  function handleSelect(arg: DateSelectArg) {
-    // Switching apps mid-touch can complete a selection; ignore those.
-    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
-      calendarRef.current?.getApi().unselect()
-      return
-    }
-    const groupId = groups.find((g) => !g.hidden)?.id
-    if (groupId) onSelectSlot(groupId, arg.start, arg.end)
-    calendarRef.current?.getApi().unselect()
-  }
-
-  useEffect(() => {
-    function onVisibilityChange() {
-      if (document.visibilityState === 'hidden') {
-        calendarRef.current?.getApi().unselect()
-      }
-    }
-    document.addEventListener('visibilitychange', onVisibilityChange)
-    return () => {
-      document.removeEventListener('visibilitychange', onVisibilityChange)
-    }
-  }, [])
-
   function handleEventClick(arg: EventClickArg) {
     const taskId = arg.event.extendedProps.taskId as string | undefined
     if (taskId) onTaskClick(taskId)
@@ -466,21 +455,17 @@ export function CalendarView({
           height="100%"
           nowIndicator
           editable
-          selectable
-          selectMirror
+          selectable={false}
           eventStartEditable
           eventDurationEditable={false}
-          // Immediate event drag on touch, but keep a select delay so a
-          // backgrounded finger-up doesn't create a slot-selected "New block".
+          // Immediate event drag on touch; slot select is disabled (no create).
           eventLongPressDelay={0}
-          selectLongPressDelay={500}
           events={events}
           datesSet={handleDatesSet}
           eventAllow={handleEventAllow}
           eventDragStart={handleDragStart}
           eventDragStop={handleDragStop}
           eventDrop={handleDrop}
-          select={handleSelect}
           eventClick={handleEventClick}
           eventContent={handleEventContent}
           eventDidMount={(info) => {
