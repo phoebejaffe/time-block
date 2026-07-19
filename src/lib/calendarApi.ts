@@ -250,7 +250,8 @@ export type SyncTasksResult = {
  * Push the current stack to Google Calendar.
  * Updates events we previously created (tracked in localStorage for ~1 month),
  * recreates any that were deleted elsewhere, inserts new blocks, and removes
- * leftover events from an earlier push on the same day.
+ * leftover events from an earlier push on the same day. If the target calendar
+ * changed, also deletes that group/day's events from the previous calendar(s).
  * Continues after individual event failures and reports them in `failures`.
  */
 export async function syncTasksToCalendar(
@@ -274,6 +275,12 @@ export async function syncTasksToCalendar(
       e.dayKey === dayKey,
   )
   const unusedDay = [...dayPool]
+  const previousCalendars = tracked.filter(
+    (e) =>
+      e.groupId === groupId &&
+      e.dayKey === dayKey &&
+      e.calendarId !== calendarId,
+  )
 
   function upsertTracked(next: PushedEvent) {
     tracked = tracked.filter(
@@ -287,15 +294,47 @@ export async function syncTasksToCalendar(
     tracked.push(next)
   }
 
-  function forgetEventId(eventId: string) {
+  function forgetTracked(
+    event: Pick<PushedEvent, 'calendarId' | 'groupId' | 'eventId'>,
+  ) {
     tracked = tracked.filter(
       (e) =>
         !(
-          e.calendarId === calendarId &&
-          e.groupId === groupId &&
-          e.eventId === eventId
+          e.calendarId === event.calendarId &&
+          e.groupId === event.groupId &&
+          e.eventId === event.eventId
         ),
     )
+  }
+
+  // Target calendar changed — delete this stack's events from the old one(s).
+  for (const orphan of previousCalendars) {
+    try {
+      const stillThere = await isActiveCalendarEvent(
+        orphan.calendarId,
+        orphan.eventId,
+      )
+      if (stillThere) {
+        await gapi.client.calendar.events.delete({
+          calendarId: orphan.calendarId,
+          eventId: orphan.eventId,
+        })
+      }
+      forgetTracked(orphan)
+      removed += 1
+    } catch (err) {
+      if (isNotFoundError(err)) {
+        forgetTracked(orphan)
+        removed += 1
+        continue
+      }
+      failures.push({
+        taskId: orphan.taskId,
+        title: 'Previously synced event',
+        action: 'remove',
+        message: formatError(err),
+      })
+    }
   }
 
   for (const task of resolved) {
@@ -346,10 +385,10 @@ export async function syncTasksToCalendar(
               })
               continue
             }
-            forgetEventId(match.eventId)
+            forgetTracked(match)
           }
         } else {
-          forgetEventId(match.eventId)
+          forgetTracked(match)
         }
       } catch (err) {
         failures.push({
@@ -402,11 +441,11 @@ export async function syncTasksToCalendar(
           eventId: orphan.eventId,
         })
       }
-      forgetEventId(orphan.eventId)
+      forgetTracked(orphan)
       removed += 1
     } catch (err) {
       if (isNotFoundError(err)) {
-        forgetEventId(orphan.eventId)
+        forgetTracked(orphan)
         removed += 1
         continue
       }

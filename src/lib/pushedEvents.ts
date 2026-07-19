@@ -169,13 +169,9 @@ export function savePushSnapshot(
     fingerprint,
     savedAt: new Date().toISOString(),
   }
+  // Drop any snapshot for this group/day on another calendar (target moved).
   const snapshots = loadPushSnapshots().filter(
-    (s) =>
-      !(
-        s.calendarId === calendarId &&
-        s.groupId === groupId &&
-        s.dayKey === dayKey
-      ),
+    (s) => !(s.groupId === groupId && s.dayKey === dayKey),
   )
   snapshots.push(next)
   try {

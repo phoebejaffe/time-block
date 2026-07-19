@@ -9,10 +9,12 @@ type SettingsMenuProps = {
 function formatBuildTime(iso: string): string {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return iso
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
+  const date = `${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(-2)}`
+  const time = new Intl.DateTimeFormat(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
   }).format(d)
+  return `App built on ${date} at ${time}`
 }
 
 export function SettingsMenu({
@@ -61,27 +63,21 @@ export function SettingsMenu({
       </button>
       {open && (
         <div className="settings-menu-dropdown" role="menu">
-          <div className="settings-menu-meta">
-            <span className="settings-menu-meta-label">Built</span>
-            <span className="settings-menu-meta-value">{buildTime}</span>
-          </div>
           {signedIn && onSignOut && (
-            <>
-              <div className="calendar-menu-sep" role="separator" />
-              <button
-                type="button"
-                role="menuitem"
-                className="calendar-menu-item"
-                disabled={busy}
-                onClick={() => {
-                  setOpen(false)
-                  onSignOut()
-                }}
-              >
-                Log out
-              </button>
-            </>
+            <button
+              type="button"
+              role="menuitem"
+              className="calendar-menu-item"
+              disabled={busy}
+              onClick={() => {
+                setOpen(false)
+                onSignOut()
+              }}
+            >
+              Log out
+            </button>
           )}
+          <p className="settings-menu-build">{buildTime}</p>
         </div>
       )}
     </div>

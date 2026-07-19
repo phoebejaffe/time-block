@@ -57,14 +57,6 @@ function anchorFieldFromSelection(start: number | null): AnchorField {
   return 'minute'
 }
 
-function shiftAnchorIso(iso: string, field: AnchorField, dir: 1 | -1): string {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return iso
-  if (field === 'hour') d.setHours(d.getHours() + dir)
-  else d.setMinutes(d.getMinutes() + dir * 5)
-  return d.toISOString()
-}
-
 type TaskSidebarProps = {
   groups: BlockGroup[]
   canDeleteGroup: boolean
@@ -604,9 +596,14 @@ function BlockGroupPanel({
     const startY = e.clientY
     const startX = e.clientX
     const pointerId = e.pointerId
+    const isTouch = e.pointerType === 'touch'
     let active = false
     let lastTick = 0
     let field: AnchorField = 'minute'
+
+    // On touch, block the native time picker for the whole gesture; a plain
+    // tap re-opens it in onUp. Mouse keeps default so caret placement works.
+    if (isTouch) e.preventDefault()
 
     // Claim the gesture immediately so the sidebar doesn't scroll instead.
     try {
@@ -623,16 +620,23 @@ function BlockGroupPanel({
       return anchorRef.current.at
     }
 
-    function applyTicks(from: number, to: number) {
-      if (to === from) return
-      const dir: 1 | -1 = to > from ? 1 : -1
-      let steps = Math.abs(to - from)
-      let at = currentIso()
-      while (steps > 0) {
-        at = shiftAnchorIso(at, field, dir)
-        steps -= 1
+    let originIso = ''
+
+    function isoForTick(tick: number): string {
+      if (tick === 0 || !originIso) return originIso || currentIso()
+      const d = new Date(originIso)
+      if (Number.isNaN(d.getTime())) return originIso
+      if (field === 'hour') {
+        d.setHours(d.getHours() + tick)
+      } else {
+        const m = d.getMinutes()
+        const next =
+          tick > 0
+            ? Math.floor(m / 5) * 5 + tick * 5
+            : Math.ceil(m / 5) * 5 + tick * 5
+        d.setMinutes(next)
       }
-      onAnchorChange({ ...anchorRef.current, at })
+      return d.toISOString()
     }
 
     function onMove(ev: PointerEvent) {
@@ -642,22 +646,23 @@ function BlockGroupPanel({
       if (!active) {
         if (Math.abs(dy) < ANCHOR_SCRUB_ACTIVATE_PX) return
         if (Math.abs(dy) < Math.abs(dx)) {
-          cleanup()
+          cleanup(false)
           return
         }
         active = true
         field = anchorFieldFromSelection(readSelectionStart(input))
+        originIso = currentIso()
         document.body.classList.add('is-datetime-scrubbing')
+        input.blur()
       }
       ev.preventDefault()
       const tick = Math.trunc(-dy / ANCHOR_SCRUB_PX)
-      if (tick !== lastTick) {
-        applyTicks(lastTick, tick)
-        lastTick = tick
-      }
+      if (tick === lastTick) return
+      lastTick = tick
+      onAnchorChange({ ...anchorRef.current, at: isoForTick(tick) })
     }
 
-    function cleanup() {
+    function cleanup(openPicker: boolean) {
       document.removeEventListener('pointermove', onMove)
       document.removeEventListener('pointerup', onUp)
       document.removeEventListener('pointercancel', onUp)
@@ -669,11 +674,18 @@ function BlockGroupPanel({
       } catch {
         /* ignore */
       }
+      if (!openPicker || !isTouch) return
+      input.focus()
+      try {
+        input.showPicker?.()
+      } catch {
+        /* ignore — not supported or not allowed */
+      }
     }
 
     function onUp(ev: PointerEvent) {
       if (ev.pointerId !== pointerId) return
-      cleanup()
+      cleanup(!active)
     }
 
     document.addEventListener('pointermove', onMove, { passive: false })
@@ -1255,6 +1267,16 @@ function TaskFieldsForm({
     let lastTick = 0
     const origin = parseDuration(durationRef.current)
 
+    function durationForTick(tick: number): number {
+      if (tick === 0) return origin
+      if (tick > 0) {
+        const floor = Math.floor(origin / 5) * 5
+        return Math.max(1, floor + tick * 5)
+      }
+      const ceil = Math.ceil(origin / 5) * 5
+      return Math.max(1, ceil + tick * 5)
+    }
+
     try {
       input.setPointerCapture(pointerId)
     } catch {
@@ -1278,7 +1300,7 @@ function TaskFieldsForm({
       const tick = Math.trunc(-dy / ANCHOR_SCRUB_PX)
       if (tick === lastTick) return
       lastTick = tick
-      setDurationMinutes(Math.max(1, origin + tick * 5))
+      setDurationMinutes(durationForTick(tick))
     }
 
     function cleanup(focusForTyping: boolean) {
