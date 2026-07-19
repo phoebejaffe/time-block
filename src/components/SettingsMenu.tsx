@@ -63,6 +63,17 @@ export function SettingsMenu({
       </button>
       {open && (
         <div className="settings-menu-dropdown" role="menu">
+          <button
+            type="button"
+            role="menuitem"
+            className="calendar-menu-item"
+            onClick={() => {
+              setOpen(false)
+              window.location.reload()
+            }}
+          >
+            Reload App
+          </button>
           {signedIn && onSignOut && (
             <button
               type="button"
