@@ -860,12 +860,6 @@ export function TaskSidebar({
                 )}
               </select>
             </label>
-            {isUpdate && (
-              <p className="muted" style={{ margin: 0, fontSize: '0.85rem' }}>
-                Updates events previously added with Timeblock. Missing events
-                are recreated; extras from this day are removed.
-              </p>
-            )}
             <div className="modal-actions">
               <button
                 type="button"

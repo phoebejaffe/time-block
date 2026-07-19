@@ -2,7 +2,7 @@ const STORAGE_KEY = 'time-blocking.pushed-events'
 /** Keep about one month of push history. */
 const RETAIN_MS = 31 * 24 * 60 * 60 * 1000
 
-export const TIMEBLOCK_EVENT_DESCRIPTION = 'Added with Timeblock, with love'
+export const TIMEBLOCK_EVENT_DESCRIPTION = 'Added with love, by Timeblock'
 
 export type PushedEvent = {
   calendarId: string
