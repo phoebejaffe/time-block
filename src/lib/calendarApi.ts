@@ -1,6 +1,8 @@
 import {
   loadPushedEvents,
   savePushedEvents,
+  savePushSnapshot,
+  stackPushFingerprint,
   TIMEBLOCK_EVENT_DESCRIPTION,
   type PushedEvent,
 } from './pushedEvents'
@@ -267,6 +269,7 @@ function errorMessage(err: unknown): string {
  */
 export async function syncTasksToCalendar(
   calendarId: string,
+  groupId: string,
   tasks: Task[],
   anchor: StackAnchor,
 ): Promise<SyncTasksResult> {
@@ -279,7 +282,10 @@ export async function syncTasksToCalendar(
   const failures: SyncTaskFailure[] = []
 
   const dayPool = tracked.filter(
-    (e) => e.calendarId === calendarId && e.dayKey === dayKey,
+    (e) =>
+      e.calendarId === calendarId &&
+      e.groupId === groupId &&
+      e.dayKey === dayKey,
   )
   const unusedDay = [...dayPool]
 
@@ -288,6 +294,7 @@ export async function syncTasksToCalendar(
       (e) =>
         !(
           e.calendarId === next.calendarId &&
+          e.groupId === next.groupId &&
           (e.eventId === next.eventId || e.taskId === next.taskId)
         ),
     )
@@ -296,7 +303,12 @@ export async function syncTasksToCalendar(
 
   function forgetEventId(eventId: string) {
     tracked = tracked.filter(
-      (e) => !(e.calendarId === calendarId && e.eventId === eventId),
+      (e) =>
+        !(
+          e.calendarId === calendarId &&
+          e.groupId === groupId &&
+          e.eventId === eventId
+        ),
     )
   }
 
@@ -305,7 +317,10 @@ export async function syncTasksToCalendar(
     const match =
       unusedDay.find((e) => e.taskId === task.id) ||
       tracked.find(
-        (e) => e.calendarId === calendarId && e.taskId === task.id,
+        (e) =>
+          e.calendarId === calendarId &&
+          e.groupId === groupId &&
+          e.taskId === task.id,
       ) ||
       unusedDay[0]
 
@@ -329,6 +344,7 @@ export async function syncTasksToCalendar(
               calendarId,
               eventId: match.eventId,
               taskId: task.id,
+              groupId,
               dayKey,
               pushedAt: new Date().toISOString(),
             })
@@ -373,6 +389,7 @@ export async function syncTasksToCalendar(
         calendarId,
         eventId,
         taskId: task.id,
+        groupId,
         dayKey,
         pushedAt: new Date().toISOString(),
       })
@@ -417,6 +434,14 @@ export async function syncTasksToCalendar(
   }
 
   savePushedEvents(tracked)
+  if (failures.length === 0) {
+    savePushSnapshot(
+      calendarId,
+      groupId,
+      dayKey,
+      stackPushFingerprint(anchor, resolved),
+    )
+  }
   return { updated, created, removed, failures }
 }
 

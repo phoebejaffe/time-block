@@ -3,12 +3,12 @@ import type {
   EventDragStartArg,
   EventDragStopArg,
 } from '@fullcalendar/interaction'
-import type { EventDropArg } from '@fullcalendar/core'
 
 const TASK_STACK_CLASS = 'task-event'
 
 type StackDragState = {
   taskId: string
+  groupId: string
   subjectEl: HTMLElement
   originTop: number
   originLeft: number
@@ -19,18 +19,15 @@ type StackDragState = {
 
 type UseTaskStackDragOptions = {
   shellRef: RefObject<HTMLElement | null>
-  onStackShift: (deltaMs: number) => void
 }
 
-/** Visually moves the whole task stack while dragging one block. */
-export function useTaskStackDrag({
-  shellRef,
-  onStackShift,
-}: UseTaskStackDragOptions) {
+/**
+ * Visually moves one group's task stack while dragging a block in that group.
+ * Time commits happen in CalendarView via that group's stack anchor.
+ */
+export function useTaskStackDrag({ shellRef }: UseTaskStackDragOptions) {
   const stackDragRef = useRef<StackDragState | null>(null)
   const stackDragRafRef = useRef<number | null>(null)
-  const onStackShiftRef = useRef(onStackShift)
-  onStackShiftRef.current = onStackShift
 
   function clearStackDragTransforms() {
     shellRef.current
@@ -46,6 +43,11 @@ export function useTaskStackDrag({
       cancelAnimationFrame(stackDragRafRef.current)
       stackDragRafRef.current = null
     }
+  }
+
+  function cancelStackDrag() {
+    stopStackDragTracking()
+    clearStackDragTransforms()
   }
 
   function syncStackDragTransforms() {
@@ -79,16 +81,15 @@ export function useTaskStackDrag({
       if (el.classList.contains('fc-event-mirror') || el === drag.subjectEl) {
         return
       }
+      if (el.dataset.groupId !== drag.groupId) return
       el.style.transform = `translate(${deltaX}px, ${deltaY}px)`
     })
   }
 
   useEffect(() => {
     const shell = shellRef
-    const dragRef = stackDragRef
     const rafRef = stackDragRafRef
     return () => {
-      dragRef.current = null
       if (rafRef.current !== null) {
         cancelAnimationFrame(rafRef.current)
         rafRef.current = null
@@ -103,12 +104,15 @@ export function useTaskStackDrag({
 
   function handleEventDragStart(arg: EventDragStartArg) {
     const taskId = arg.event.extendedProps.taskId as string | undefined
-    if (!taskId) return
+    const groupId = arg.event.extendedProps.groupId as string | undefined
+    if (!taskId || !groupId) return
 
     const rect = arg.el.getBoundingClientRect()
     const harness = arg.el.closest<HTMLElement>('.fc-timegrid-event-harness')
+    arg.el.dataset.groupId = groupId
     stackDragRef.current = {
       taskId,
+      groupId,
       subjectEl: arg.el,
       originTop: rect.top,
       originLeft: rect.left,
@@ -124,28 +128,15 @@ export function useTaskStackDrag({
     stackDragRafRef.current = requestAnimationFrame(tick)
   }
 
+  /** Stops mirror tracking; keep transforms until finalize clears them. */
   function handleEventDragStop(_arg: EventDragStopArg) {
     stopStackDragTracking()
-    clearStackDragTransforms()
-  }
-
-  function handleEventDrop(arg: EventDropArg) {
-    const taskId = arg.event.extendedProps.taskId as string | undefined
-    if (!taskId || !arg.event.start || !arg.oldEvent.start) {
-      arg.revert()
-      return
-    }
-    stopStackDragTracking()
-    clearStackDragTransforms()
-    onStackShiftRef.current(
-      arg.event.start.getTime() - arg.oldEvent.start.getTime(),
-    )
   }
 
   return {
     handleEventDragStart,
     handleEventDragStop,
-    handleEventDrop,
+    cancelStackDrag,
   }
 }
 

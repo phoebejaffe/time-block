@@ -1,9 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   canUpdateCalendar,
+  isPushUnchanged,
   loadPushedEvents,
   prunePushedEvents,
   savePushedEvents,
+  savePushSnapshot,
+  stackPushFingerprint,
   type PushedEvent,
 } from './pushedEvents'
 
@@ -43,6 +46,7 @@ describe('pushedEvents', () => {
         calendarId: 'cal',
         eventId: 'old',
         taskId: 't1',
+        groupId: 'g1',
         dayKey: '2026-06-01',
         pushedAt: '2026-06-01T12:00:00.000Z',
       },
@@ -50,6 +54,7 @@ describe('pushedEvents', () => {
         calendarId: 'cal',
         eventId: 'new',
         taskId: 't2',
+        groupId: 'g1',
         dayKey: '2026-07-10',
         pushedAt: '2026-07-10T12:00:00.000Z',
       },
@@ -64,14 +69,34 @@ describe('pushedEvents', () => {
         calendarId: 'cal',
         eventId: 'e1',
         taskId: 'task-a',
+        groupId: 'group-1',
         dayKey: '2026-07-18',
         pushedAt: new Date().toISOString(),
       },
     ])
     expect(loadPushedEvents()).toHaveLength(1)
-    expect(canUpdateCalendar('cal', ['task-a'], '2026-07-18')).toBe(true)
-    expect(canUpdateCalendar('cal', ['other'], '2026-07-18')).toBe(true)
-    expect(canUpdateCalendar('cal', ['task-a'], '2026-07-19')).toBe(false)
-    expect(canUpdateCalendar('other', ['task-a'], '2026-07-18')).toBe(false)
+    expect(canUpdateCalendar('cal', 'group-1', '2026-07-18')).toBe(true)
+    expect(canUpdateCalendar('cal', 'group-2', '2026-07-18')).toBe(false)
+    expect(canUpdateCalendar('cal', 'group-1', '2026-07-19')).toBe(false)
+    expect(canUpdateCalendar('other', 'group-1', '2026-07-18')).toBe(false)
+  })
+
+  it('disables update when the stack fingerprint matches the last push', () => {
+    const start = new Date('2026-07-18T15:00:00.000Z')
+    const end = new Date('2026-07-18T16:00:00.000Z')
+    const fingerprint = stackPushFingerprint(
+      { kind: 'end', at: end.toISOString() },
+      [{ id: 't1', title: 'Focus', start, end }],
+    )
+    savePushSnapshot('cal', 'group-1', '2026-07-18', fingerprint)
+    expect(isPushUnchanged('cal', 'group-1', '2026-07-18', fingerprint)).toBe(
+      true,
+    )
+    expect(
+      isPushUnchanged('cal', 'group-1', '2026-07-18', fingerprint + '!'),
+    ).toBe(false)
+    expect(isPushUnchanged('other', 'group-1', '2026-07-18', fingerprint)).toBe(
+      false,
+    )
   })
 })

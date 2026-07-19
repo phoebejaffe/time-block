@@ -55,19 +55,41 @@ describe('resolveStack', () => {
 })
 
 describe('migratePlan', () => {
-  it('keeps the current { tasks, anchor } shape', () => {
+  it('keeps the current { groups } shape', () => {
     const plan = migratePlan({
-      tasks: [
-        { id: '1', title: 'Write', durationMinutes: 25 },
-        { id: 'x', title: 'bad' },
+      groups: [
+        {
+          id: 'g1',
+          tasks: [
+            { id: '1', title: 'Write', durationMinutes: 25 },
+            { id: 'x', title: 'bad' },
+          ],
+          anchor: { kind: 'start', at: '2026-07-18T08:00:00.000Z' },
+        },
       ],
-      anchor: { kind: 'start', at: '2026-07-18T08:00:00.000Z' },
     })
     expect(plan).not.toBeNull()
-    expect(plan!.tasks).toEqual([
+    expect(plan!.groups).toHaveLength(1)
+    expect(plan!.groups[0]!.id).toBe('g1')
+    expect(plan!.groups[0]!.tasks).toEqual([
       { id: '1', title: 'Write', durationMinutes: 25 },
     ])
-    expect(plan!.anchor).toEqual({
+    expect(plan!.groups[0]!.anchor).toEqual({
+      kind: 'start',
+      at: '2026-07-18T08:00:00.000Z',
+    })
+  })
+
+  it('migrates previous { tasks, anchor } into one group', () => {
+    const plan = migratePlan({
+      tasks: [{ id: '1', title: 'Write', durationMinutes: 25 }],
+      anchor: { kind: 'start', at: '2026-07-18T08:00:00.000Z' },
+    })
+    expect(plan!.groups).toHaveLength(1)
+    expect(plan!.groups[0]!.tasks).toEqual([
+      { id: '1', title: 'Write', durationMinutes: 25 },
+    ])
+    expect(plan!.groups[0]!.anchor).toEqual({
       kind: 'start',
       at: '2026-07-18T08:00:00.000Z',
     })
@@ -82,11 +104,11 @@ describe('migratePlan', () => {
         anchor: { kind: 'end', at: '2026-07-18T09:00:00.000Z' },
       },
     ])
-    expect(plan!.tasks).toEqual([
+    expect(plan!.groups[0]!.tasks).toEqual([
       { id: '1', title: 'Old', durationMinutes: 10 },
     ])
-    expect(plan!.anchor.kind).toBe('end')
-    expect(plan!.anchor.at).toBe('2026-07-18T09:00:00.000Z')
+    expect(plan!.groups[0]!.anchor.kind).toBe('end')
+    expect(plan!.groups[0]!.anchor.at).toBe('2026-07-18T09:00:00.000Z')
   })
 
   it('returns null for unrecognized payloads', () => {
@@ -100,7 +122,7 @@ describe('migratePlan', () => {
       tasks: [{ id: '1', title: 'Tiny', durationMinutes: 0 }],
       anchor: { kind: 'end', at: '2026-07-18T09:00:00.000Z' },
     })
-    expect(plan!.tasks[0]!.durationMinutes).toBe(1)
+    expect(plan!.groups[0]!.tasks[0]!.durationMinutes).toBe(1)
   })
 })
 

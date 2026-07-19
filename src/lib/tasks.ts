@@ -9,9 +9,19 @@ export type Task = {
   durationMinutes: number
 }
 
-export type Plan = {
+/** One independent stack of blocks with its own start/end anchor. */
+export type BlockGroup = {
+  id: string
   tasks: Task[]
   anchor: StackAnchor
+  /** Optional label shown when the group is collapsed. */
+  name?: string
+  /** When true, the group is collapsed in the sidebar and omitted from the calendar. */
+  hidden?: boolean
+}
+
+export type Plan = {
+  groups: BlockGroup[]
 }
 
 export type ResolvedTask = Task & {
@@ -23,6 +33,20 @@ const STORAGE_KEY = 'time-blocking.plan'
 
 function newId(): string {
   return crypto.randomUUID()
+}
+
+export function createBlockGroup(
+  input?: Partial<Pick<BlockGroup, 'tasks' | 'anchor' | 'name' | 'hidden'>> & {
+    id?: string
+  },
+): BlockGroup {
+  return {
+    id: input?.id ?? newId(),
+    tasks: input?.tasks ?? [],
+    anchor: input?.anchor ?? defaultAnchor(),
+    ...(input?.name?.trim() ? { name: input.name.trim() } : {}),
+    ...(input?.hidden ? { hidden: true } : {}),
+  }
 }
 
 function pad(n: number): string {
@@ -45,7 +69,56 @@ export function defaultAnchor(): StackAnchor {
 }
 
 export function defaultPlan(): Plan {
-  return { tasks: [], anchor: defaultAnchor() }
+  return { groups: [createBlockGroup()] }
+}
+
+function normalizeTasks(raw: unknown): Task[] {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .filter(
+      (t): t is Task =>
+        Boolean(t) &&
+        typeof t === 'object' &&
+        typeof (t as Task).id === 'string' &&
+        typeof (t as Task).title === 'string' &&
+        typeof (t as Task).durationMinutes === 'number',
+    )
+    .map((t) => ({
+      id: t.id,
+      title: t.title,
+      durationMinutes: Math.max(1, Math.round(t.durationMinutes) || 1),
+    }))
+}
+
+function normalizeAnchor(raw: unknown): StackAnchor {
+  if (
+    raw &&
+    typeof raw === 'object' &&
+    ((raw as StackAnchor).kind === 'start' ||
+      (raw as StackAnchor).kind === 'end') &&
+    typeof (raw as StackAnchor).at === 'string'
+  ) {
+    return {
+      kind: (raw as StackAnchor).kind,
+      at: (raw as StackAnchor).at,
+    }
+  }
+  return defaultAnchor()
+}
+
+function normalizeGroup(raw: unknown): BlockGroup | null {
+  if (!raw || typeof raw !== 'object') return null
+  const g = raw as Partial<BlockGroup>
+  if (typeof g.id !== 'string' || !g.id) return null
+  const name =
+    typeof g.name === 'string' && g.name.trim() ? g.name.trim() : undefined
+  return {
+    id: g.id,
+    tasks: normalizeTasks(g.tasks),
+    anchor: normalizeAnchor(g.anchor),
+    ...(name ? { name } : {}),
+    ...(g.hidden === true ? { hidden: true } : {}),
+  }
 }
 
 export function toLocalInputValue(iso: string): string {
@@ -58,34 +131,61 @@ export function fromLocalInputValue(value: string): string {
   return new Date(value).toISOString()
 }
 
-/** Normalize stored plan shapes (current + legacy Task[]). Exported for tests. */
+/** HH:mm for `<input type="time">`. */
+export function toLocalTimeValue(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+/** Apply HH:mm onto the date portion of `baseIso`. */
+export function fromLocalTimeValue(value: string, baseIso: string): string {
+  const base = new Date(baseIso)
+  if (Number.isNaN(base.getTime())) return baseIso
+  const match = /^(\d{1,2}):(\d{2})/.exec(value)
+  if (!match) return baseIso
+  const hours = Number(match[1])
+  const minutes = Number(match[2])
+  if (
+    !Number.isFinite(hours) ||
+    !Number.isFinite(minutes) ||
+    hours < 0 ||
+    hours > 23 ||
+    minutes < 0 ||
+    minutes > 59
+  ) {
+    return baseIso
+  }
+  base.setHours(hours, minutes, 0, 0)
+  return base.toISOString()
+}
+
+/** Normalize stored plan shapes (groups + legacy single stack / Task[]). */
 export function migratePlan(raw: unknown): Plan | null {
   if (!raw || typeof raw !== 'object') return null
 
-  // New shape: { tasks, anchor }
-  if ('tasks' in raw && Array.isArray((raw as Plan).tasks)) {
-    const plan = raw as Plan
-    const anchor =
-      plan.anchor?.kind && plan.anchor?.at
-        ? plan.anchor
-        : defaultAnchor()
-    const tasks = plan.tasks
-      .filter(
-        (t): t is Task =>
-          Boolean(t) &&
-          typeof t.id === 'string' &&
-          typeof t.title === 'string' &&
-          typeof t.durationMinutes === 'number',
-      )
-      .map((t) => ({
-        id: t.id,
-        title: t.title,
-        durationMinutes: Math.max(1, Math.round(t.durationMinutes) || 1),
-      }))
-    return { tasks, anchor }
+  // Current shape: { groups: BlockGroup[] }
+  if ('groups' in raw && Array.isArray((raw as Plan).groups)) {
+    const groups = (raw as Plan).groups
+      .map((g) => normalizeGroup(g))
+      .filter((g): g is BlockGroup => g != null)
+    return { groups: groups.length > 0 ? groups : [createBlockGroup()] }
   }
 
-  // Old shape: Task[] with optional per-task anchors
+  // Previous shape: { tasks, anchor } → one group
+  if ('tasks' in raw && Array.isArray((raw as { tasks: unknown }).tasks)) {
+    const legacy = raw as { tasks: unknown; anchor?: unknown }
+    return {
+      groups: [
+        createBlockGroup({
+          tasks: normalizeTasks(legacy.tasks),
+          anchor: normalizeAnchor(legacy.anchor),
+        }),
+      ],
+    }
+  }
+
+  // Oldest shape: Task[] with optional per-task anchors
   if (Array.isArray(raw)) {
     const tasks: Task[] = []
     let anchor = defaultAnchor()
@@ -107,7 +207,7 @@ export function migratePlan(raw: unknown): Plan | null {
         anchor = t.anchor
       }
     }
-    return { tasks, anchor }
+    return { groups: [createBlockGroup({ tasks, anchor })] }
   }
 
   return null

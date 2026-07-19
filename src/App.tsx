@@ -2,15 +2,18 @@ import { useMemo, useRef, useState } from 'react'
 import { AuthButton } from './components/AuthButton'
 import { CalendarView } from './components/CalendarView'
 import { MobileSplitHandle } from './components/MobileSplitHandle'
+import { SidebarResizeHandle } from './components/SidebarResizeHandle'
 import { TaskSidebar } from './components/TaskSidebar'
 import { useCalendarEvents } from './hooks/useCalendarEvents'
 import { useGoogleSession } from './hooks/useGoogleSession'
 import { useMobileSplit } from './hooks/useMobileSplit'
 import { useNotice } from './hooks/useNotice'
 import { usePlan } from './hooks/usePlan'
+import { useSidebarWidth } from './hooks/useSidebarWidth'
 import { syncTasksToCalendar } from './lib/calendarApi'
 import { ensureWriteScope } from './lib/google'
-import { shiftAnchor, type Task } from './lib/tasks'
+import { canUpdateCalendar } from './lib/pushedEvents'
+import { localDateKey, shiftAnchor, type Task } from './lib/tasks'
 
 export default function App() {
   const { notice, show, clear } = useNotice()
@@ -23,17 +26,28 @@ export default function App() {
 
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
   const [commitBusy, setCommitBusy] = useState(false)
-  const [stackDragDeltaMs, setStackDragDeltaMs] = useState<number | null>(null)
+  const [stackDragPreview, setStackDragPreview] = useState<{
+    groupId: string
+    deltaMs: number
+  } | null>(null)
   const appBodyRef = useRef<HTMLDivElement>(null)
   const { setSplitPercent, splitStyle } = useMobileSplit()
+  const { setSidebarWidth, sidebarStyle } = useSidebarWidth()
+  const bodyStyle = { ...splitStyle, ...sidebarStyle }
 
   const busy = session.busy || calendars.busy || commitBusy
-  const sidebarAnchor = useMemo(
+
+  const displayGroups = useMemo(
     () =>
-      stackDragDeltaMs != null
-        ? shiftAnchor(plan.plan.anchor, stackDragDeltaMs)
-        : plan.plan.anchor,
-    [plan.plan.anchor, stackDragDeltaMs],
+      plan.plan.groups.map((group) =>
+        stackDragPreview?.groupId === group.id
+          ? {
+              ...group,
+              anchor: shiftAnchor(group.anchor, stackDragPreview.deltaMs),
+            }
+          : group,
+      ),
+    [plan.plan.groups, stackDragPreview],
   )
 
   async function handleSignIn() {
@@ -47,28 +61,52 @@ export default function App() {
     clear()
   }
 
-  function handleAddTask(input: Omit<Task, 'id'>) {
-    plan.addTask(input)
+  function handleAddTask(groupId: string, input: Omit<Task, 'id'>) {
+    plan.addTask(groupId, input)
     clear()
   }
 
-  function handleReplaceTasks(tasks: Task[]) {
-    plan.replaceTasks(tasks)
+  function handleReplaceTasks(groupId: string, tasks: Task[]) {
+    plan.replaceTasks(groupId, tasks)
     clear()
   }
 
-  function handleClearBlocks() {
-    if (plan.plan.tasks.length === 0) return
-    if (!window.confirm('Clear all blocks from this list?')) return
-    plan.clear()
+  function handleClearBlocks(groupId: string) {
+    const group = plan.plan.groups.find((g) => g.id === groupId)
+    if (!group || group.tasks.length === 0) return
+    if (!window.confirm('Clear all blocks from this group?')) return
+    plan.clearGroupTasks(groupId)
     setEditingTaskId(null)
     clear()
     show('info', 'Cleared blocks.')
   }
 
+  function handleDeleteGroup(groupId: string) {
+    if (plan.plan.groups.length <= 1) {
+      show('info', 'Keep at least one block group.')
+      return
+    }
+    if (!window.confirm('Delete this block group?')) return
+    plan.removeGroup(groupId)
+    setEditingTaskId(null)
+    clear()
+  }
+
+  function handleAddGroup() {
+    plan.addGroup()
+    clear()
+  }
+
   /** Returns true when the commit modal should close (full success). */
-  async function handleCommit(calendarId: string): Promise<boolean> {
-    if (plan.plan.tasks.length === 0) {
+  async function handleCommit(
+    groupId: string,
+    calendarId: string,
+  ): Promise<boolean> {
+    const group = plan.plan.groups.find((g) => g.id === groupId)
+    if (!group) return false
+    const dayKey = localDateKey(group.anchor.at)
+    const isUpdate = canUpdateCalendar(calendarId, groupId, dayKey)
+    if (group.tasks.length === 0 && !isUpdate) {
       show('info', 'Add at least one block before adding to a calendar.')
       return false
     }
@@ -80,8 +118,9 @@ export default function App() {
       await ensureWriteScope()
       const { updated, created, removed, failures } = await syncTasksToCalendar(
         calendarId,
-        plan.plan.tasks,
-        plan.plan.anchor,
+        groupId,
+        group.tasks,
+        group.anchor,
       )
       await calendars.refreshEvents()
 
@@ -135,21 +174,29 @@ export default function App() {
         </div>
       )}
 
-      <div className="app-body" ref={appBodyRef} style={splitStyle}>
+      <div className="app-body" ref={appBodyRef} style={bodyStyle}>
         <TaskSidebar
-          tasks={plan.plan.tasks}
-          anchor={sidebarAnchor}
+          groups={displayGroups}
+          canDeleteGroup={plan.plan.groups.length > 1}
           writableCalendars={calendars.writableCalendars}
           onAdd={handleAddTask}
           onUpdate={plan.updateTask}
           onRemove={plan.removeTask}
           onReorder={plan.reorderTasks}
-          onAnchorChange={(next) => {
-            setStackDragDeltaMs(null)
-            plan.setAnchor(next)
+          onAnchorChange={(groupId, next) => {
+            setStackDragPreview(null)
+            plan.setAnchor(groupId, next)
           }}
           onReplaceTasks={handleReplaceTasks}
           onClear={handleClearBlocks}
+          onDeleteGroup={handleDeleteGroup}
+          onAddGroup={handleAddGroup}
+          onHideGroup={(groupId, name) => {
+            plan.setGroupHidden(groupId, true, name)
+          }}
+          onShowGroup={(groupId) => {
+            plan.setGroupHidden(groupId, false)
+          }}
           onCommit={handleCommit}
           editingId={editingTaskId}
           onEditingIdChange={setEditingTaskId}
@@ -157,6 +204,11 @@ export default function App() {
           notice={notice}
           signedIn={session.signedIn}
           onSignOut={handleSignOut}
+        />
+
+        <SidebarResizeHandle
+          bodyRef={appBodyRef}
+          onWidthChange={setSidebarWidth}
         />
 
         <MobileSplitHandle
@@ -185,14 +237,19 @@ export default function App() {
               calendars={calendars.calendars}
               visibleCalendarIds={calendars.visibleIds}
               onToggleCalendar={calendars.toggleCalendar}
-              tasks={plan.plan.tasks}
-              anchor={plan.plan.anchor}
+              groups={plan.plan.groups}
               onDatesSet={calendars.setDates}
-              onStackShift={(deltaMs) => {
-                setStackDragDeltaMs(null)
-                plan.shiftStack(deltaMs)
+              onAnchorCommit={(groupId, next) => {
+                setStackDragPreview(null)
+                plan.setAnchor(groupId, next)
               }}
-              onStackShiftPreview={setStackDragDeltaMs}
+              onStackShiftPreview={(groupId, deltaMs) => {
+                if (groupId == null || deltaMs == null) {
+                  setStackDragPreview(null)
+                  return
+                }
+                setStackDragPreview({ groupId, deltaMs })
+              }}
               onTaskDurationChange={plan.setTaskDuration}
               onSelectSlot={plan.addFromSlot}
               onTaskClick={setEditingTaskId}

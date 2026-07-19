@@ -1,9 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { GoogleCalendar } from '../lib/calendarApi'
-import type { SavedTaskList, StackAnchor, Task } from '../lib/tasks'
+import type {
+  BlockGroup,
+  SavedTaskList,
+  StackAnchor,
+  Task,
+} from '../lib/tasks'
 import {
   deleteSavedList,
-  fromLocalInputValue,
+  fromLocalTimeValue,
   loadSavedLists,
   loadTargetCalendarId,
   localDateKey,
@@ -11,10 +16,14 @@ import {
   saveTargetCalendarId,
   saveTaskList,
   tasksFromSavedList,
-  toLocalInputValue,
+  toLocalTimeValue,
 } from '../lib/tasks'
 import type { Notice } from '../lib/notice'
-import { canUpdateCalendar } from '../lib/pushedEvents'
+import {
+  canUpdateCalendar,
+  isPushUnchanged,
+  stackPushFingerprint,
+} from '../lib/pushedEvents'
 import { SignOutButton } from './AuthButton'
 
 const timeFmt = new Intl.DateTimeFormat(undefined, {
@@ -29,7 +38,12 @@ const MOUSE_ACTIVATE_PX = 5
 const ANCHOR_SCRUB_PX = 25
 const ANCHOR_SCRUB_ACTIVATE_PX = 8
 
-type AnchorField = 'year' | 'month' | 'day' | 'hour' | 'minute'
+type AnchorField = 'hour' | 'minute'
+type ModalKind = 'save' | 'restore' | 'commit' | 'hide'
+
+function blockCountLabel(count: number): string {
+  return count === 1 ? '1 Block' : `${count} Blocks`
+}
 
 function readSelectionStart(input: HTMLInputElement): number | null {
   try {
@@ -39,45 +53,19 @@ function readSelectionStart(input: HTMLInputElement): number | null {
   }
 }
 
+/** Value shape: HH:mm */
 function anchorFieldFromSelection(start: number | null): AnchorField {
-  // Value shape: YYYY-MM-DDTHH:mm — same segments as native arrow keys.
   if (start == null) return 'minute'
-  if (start <= 4) return 'year'
-  if (start <= 7) return 'month'
-  if (start <= 10) return 'day'
-  if (start <= 13) return 'hour'
+  if (start <= 2) return 'hour'
   return 'minute'
 }
 
 function shiftAnchorIso(iso: string, field: AnchorField, dir: 1 | -1): string {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return iso
-  if (field === 'year') d.setFullYear(d.getFullYear() + dir)
-  else if (field === 'month') d.setMonth(d.getMonth() + dir)
-  else if (field === 'day') d.setDate(d.getDate() + dir)
-  else if (field === 'hour') d.setHours(d.getHours() + dir)
+  if (field === 'hour') d.setHours(d.getHours() + dir)
   else d.setMinutes(d.getMinutes() + dir * 5)
   return d.toISOString()
-}
-
-type TaskSidebarProps = {
-  tasks: Task[]
-  anchor: StackAnchor
-  writableCalendars: GoogleCalendar[]
-  onAdd: (task: Omit<Task, 'id'>) => void
-  onUpdate: (task: Task) => void
-  onRemove: (id: string) => void
-  onReorder: (fromIndex: number, toIndex: number) => void
-  onAnchorChange: (anchor: StackAnchor) => void
-  onReplaceTasks: (tasks: Task[]) => void
-  onClear: () => void
-  onCommit: (calendarId: string) => Promise<boolean>
-  editingId: string | null
-  onEditingIdChange: (id: string | null) => void
-  busy?: boolean
-  notice?: Notice | null
-  signedIn?: boolean
-  onSignOut?: () => void
 }
 
 function isTodayOrTomorrow(iso: string): boolean {
@@ -96,9 +84,33 @@ function isTodayOrTomorrow(iso: string): boolean {
   return day === today || day === tomorrow
 }
 
+type TaskSidebarProps = {
+  groups: BlockGroup[]
+  canDeleteGroup: boolean
+  writableCalendars: GoogleCalendar[]
+  onAdd: (groupId: string, task: Omit<Task, 'id'>) => void
+  onUpdate: (groupId: string, task: Task) => void
+  onRemove: (groupId: string, id: string) => void
+  onReorder: (groupId: string, fromIndex: number, toIndex: number) => void
+  onAnchorChange: (groupId: string, anchor: StackAnchor) => void
+  onReplaceTasks: (groupId: string, tasks: Task[]) => void
+  onClear: (groupId: string) => void
+  onDeleteGroup: (groupId: string) => void
+  onAddGroup: () => void
+  onHideGroup: (groupId: string, name: string) => void
+  onShowGroup: (groupId: string) => void
+  onCommit: (groupId: string, calendarId: string) => Promise<boolean>
+  editingId: string | null
+  onEditingIdChange: (id: string | null) => void
+  busy?: boolean
+  notice?: Notice | null
+  signedIn?: boolean
+  onSignOut?: () => void
+}
+
 export function TaskSidebar({
-  tasks,
-  anchor,
+  groups,
+  canDeleteGroup,
   writableCalendars,
   onAdd,
   onUpdate,
@@ -107,6 +119,10 @@ export function TaskSidebar({
   onAnchorChange,
   onReplaceTasks,
   onClear,
+  onDeleteGroup,
+  onAddGroup,
+  onHideGroup,
+  onShowGroup,
   onCommit,
   editingId,
   onEditingIdChange,
@@ -120,11 +136,436 @@ export function TaskSidebar({
     loadSavedLists(),
   )
   const [saveName, setSaveName] = useState('')
+  const [hideName, setHideName] = useState('')
   const [selectedSavedId, setSelectedSavedId] = useState('')
+  const [modal, setModal] = useState<ModalKind | null>(null)
+  const [modalGroupId, setModalGroupId] = useState<string | null>(null)
+  const [pushEpoch, setPushEpoch] = useState(0)
+  const [addingGroupId, setAddingGroupId] = useState<string | null>(null)
+
+  const modalGroup = groups.find((g) => g.id === modalGroupId) ?? null
+  const selectedCommitId = useMemo(() => {
+    if (
+      commitCalendarId &&
+      writableCalendars.some((c) => c.id === commitCalendarId)
+    ) {
+      return commitCalendarId
+    }
+    return (
+      writableCalendars.find((c) => c.primary)?.id ||
+      writableCalendars[0]?.id ||
+      ''
+    )
+  }, [commitCalendarId, writableCalendars])
+
+  useEffect(() => {
+    if (!editingId || editingId === NEW_EDIT_ID) return
+    if (!groups.some((g) => g.tasks.some((t) => t.id === editingId))) {
+      onEditingIdChange(null)
+    }
+  }, [editingId, groups, onEditingIdChange])
+
+  function openModal(kind: ModalKind, groupId: string) {
+    setModalGroupId(groupId)
+    if (kind === 'restore') refreshSavedLists()
+    if (kind === 'hide') {
+      const group = groups.find((g) => g.id === groupId)
+      setHideName(group?.name ?? '')
+    }
+    setModal(kind)
+  }
+
+  function handleHideGroup(e: React.FormEvent) {
+    e.preventDefault()
+    if (!modalGroupId) return
+    onHideGroup(modalGroupId, hideName)
+    closeModal()
+  }
+
+  function closeModal() {
+    setModal(null)
+    setModalGroupId(null)
+  }
+
+  function refreshSavedLists(preferId?: string) {
+    const lists = loadSavedLists()
+    setSavedLists(lists)
+    if (preferId && lists.some((l) => l.id === preferId)) {
+      setSelectedSavedId(preferId)
+    } else if (
+      selectedSavedId &&
+      !lists.some((l) => l.id === selectedSavedId)
+    ) {
+      setSelectedSavedId(lists[0]?.id ?? '')
+    } else if (!selectedSavedId && lists[0]) {
+      setSelectedSavedId(lists[0].id)
+    }
+  }
+
+  async function handleCommit() {
+    if (!selectedCommitId || !modalGroupId) return
+    const ok = await onCommit(modalGroupId, selectedCommitId)
+    setPushEpoch((n) => n + 1)
+    if (ok) closeModal()
+  }
+
+  function handleSaveList(e: React.FormEvent) {
+    e.preventDefault()
+    if (!modalGroup || modalGroup.tasks.length === 0) return
+    const saved = saveTaskList(saveName || 'Morning', modalGroup.tasks)
+    setSaveName(saved.name)
+    refreshSavedLists(saved.id)
+    closeModal()
+  }
+
+  function handleLoadList() {
+    if (!modalGroupId) return
+    const list =
+      savedLists.find((l) => l.id === selectedSavedId) || savedLists[0]
+    if (!list) return
+    onReplaceTasks(modalGroupId, tasksFromSavedList(list))
+    setSaveName(list.name)
+    setSelectedSavedId(list.id)
+    closeModal()
+  }
+
+  function handleDeleteList() {
+    const id = selectedSavedId || savedLists[0]?.id
+    if (!id) return
+    deleteSavedList(id)
+    refreshSavedLists()
+  }
+
+  const modalResolved = modalGroup
+    ? resolveStack(modalGroup.tasks, modalGroup.anchor)
+    : []
+  const modalDayKey = modalGroup ? localDateKey(modalGroup.anchor.at) : ''
+  const modalIsUpdate =
+    pushEpoch >= 0 &&
+    Boolean(modalGroupId) &&
+    canUpdateCalendar(selectedCommitId, modalGroupId || '', modalDayKey)
+  const modalPushUnchanged =
+    modalIsUpdate &&
+    modalGroup != null &&
+    isPushUnchanged(
+      selectedCommitId,
+      modalGroup.id,
+      modalDayKey,
+      stackPushFingerprint(modalGroup.anchor, modalResolved),
+    )
+
+  return (
+    <aside className="task-sidebar">
+      <div className="task-list-header">
+        <div className="task-list-brand">
+          <span className="brand-mark brand-mark-sm" aria-hidden />
+          <h3>Timeblock</h3>
+        </div>
+        <div className="task-list-meta">
+          {signedIn && onSignOut && (
+            <SignOutButton busy={busy} onSignOut={onSignOut} />
+          )}
+        </div>
+      </div>
+
+      <div className="block-groups">
+        {groups.map((group) => (
+          <BlockGroupPanel
+            key={group.id}
+            group={group}
+            canDeleteGroup={canDeleteGroup}
+            busy={busy}
+            pushEpoch={pushEpoch}
+            selectedCommitId={selectedCommitId}
+            editingId={editingId}
+            adding={addingGroupId === group.id && editingId === NEW_EDIT_ID}
+            onEditingIdChange={onEditingIdChange}
+            onStartAdd={() => {
+              setAddingGroupId(group.id)
+              onEditingIdChange(NEW_EDIT_ID)
+            }}
+            onCancelAdd={() => {
+              setAddingGroupId(null)
+              onEditingIdChange(null)
+            }}
+            onAdd={(task) => {
+              onAdd(group.id, task)
+              setAddingGroupId(null)
+              onEditingIdChange(null)
+            }}
+            onUpdate={(task) => onUpdate(group.id, task)}
+            onRemove={(id) => onRemove(group.id, id)}
+            onReorder={(from, to) => onReorder(group.id, from, to)}
+            onAnchorChange={(anchor) => onAnchorChange(group.id, anchor)}
+            onClear={() => onClear(group.id)}
+            onDeleteGroup={() => onDeleteGroup(group.id)}
+            onShowGroup={() => onShowGroup(group.id)}
+            onOpenSave={() => openModal('save', group.id)}
+            onOpenRestore={() => openModal('restore', group.id)}
+            onOpenCommit={() => openModal('commit', group.id)}
+            onOpenHide={() => openModal('hide', group.id)}
+          />
+        ))}
+        <button
+          type="button"
+          className="task-new-group"
+          onClick={onAddGroup}
+          disabled={busy}
+        >
+          New group +
+        </button>
+      </div>
+
+      {notice && !modal && (
+        <div className="sidebar-actions">
+          <p
+            className={`notice notice-${notice.kind}`}
+            role={notice.kind === 'error' ? 'alert' : 'status'}
+          >
+            {notice.text}
+          </p>
+        </div>
+      )}
+
+      {modal === 'hide' && modalGroup && (
+        <Modal title="Hide block group" onClose={closeModal}>
+          <form className="modal-form" onSubmit={handleHideGroup}>
+            <label>
+              <span>Name (optional)</span>
+              <input
+                value={hideName}
+                onChange={(e) => setHideName(e.target.value)}
+                placeholder="Morning stack"
+                autoFocus
+              />
+            </label>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={closeModal}
+              >
+                Cancel
+              </button>
+              <button type="submit" className="btn btn-primary btn-sm">
+                Hide
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {modal === 'save' && modalGroup && (
+        <Modal title="Save block list" onClose={closeModal}>
+          <form className="modal-form" onSubmit={handleSaveList}>
+            <label>
+              <span>Name</span>
+              <input
+                value={saveName}
+                onChange={(e) => setSaveName(e.target.value)}
+                placeholder="Morning"
+                autoFocus
+              />
+            </label>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={closeModal}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="btn btn-primary btn-sm"
+                disabled={busy || modalGroup.tasks.length === 0}
+              >
+                Save
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {modal === 'restore' && (
+        <Modal title="Restore block list" onClose={closeModal}>
+          <div className="modal-form">
+            {savedLists.length === 0 ? (
+              <p className="muted">No saved lists yet.</p>
+            ) : (
+              <label>
+                <span>Saved list</span>
+                <select
+                  value={selectedSavedId || savedLists[0]?.id || ''}
+                  onChange={(e) => setSelectedSavedId(e.target.value)}
+                  autoFocus
+                >
+                  {savedLists.map((list) => (
+                    <option key={list.id} value={list.id}>
+                      {list.name} ({list.tasks.length})
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={handleDeleteList}
+                disabled={busy || savedLists.length === 0}
+              >
+                Delete
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={closeModal}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={handleLoadList}
+                disabled={busy || savedLists.length === 0}
+              >
+                Restore
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {modal === 'commit' && modalGroup && (
+        <Modal
+          title={modalIsUpdate ? 'Update calendar' : 'Add to calendar'}
+          onClose={closeModal}
+        >
+          <div className="modal-form">
+            <label>
+              <span>Target calendar</span>
+              <select
+                value={selectedCommitId}
+                onChange={(e) => {
+                  setCommitCalendarId(e.target.value)
+                  saveTargetCalendarId(e.target.value)
+                }}
+                disabled={!writableCalendars.length || busy}
+                autoFocus
+              >
+                {writableCalendars.length === 0 ? (
+                  <option value="">Sign in to choose a calendar</option>
+                ) : (
+                  writableCalendars.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.summary}
+                    </option>
+                  ))
+                )}
+              </select>
+            </label>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={closeModal}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm task-new-commit"
+                onClick={() => void handleCommit()}
+                disabled={
+                  busy ||
+                  (!modalIsUpdate && modalGroup.tasks.length === 0) ||
+                  !selectedCommitId ||
+                  modalPushUnchanged
+                }
+                title={
+                  modalPushUnchanged
+                    ? 'Calendar already matches this list'
+                    : undefined
+                }
+              >
+                {busy
+                  ? modalIsUpdate
+                    ? 'Updating…'
+                    : 'Adding…'
+                  : modalIsUpdate
+                    ? 'Update'
+                    : 'Add'}
+                {!busy && <CalendarIcon />}
+              </button>
+            </div>
+            {notice && (
+              <p
+                className={`notice notice-${notice.kind}`}
+                role={notice.kind === 'error' ? 'alert' : 'status'}
+              >
+                {notice.text}
+              </p>
+            )}
+          </div>
+        </Modal>
+      )}
+    </aside>
+  )
+}
+
+type BlockGroupPanelProps = {
+  group: BlockGroup
+  canDeleteGroup: boolean
+  busy?: boolean
+  pushEpoch: number
+  selectedCommitId: string
+  editingId: string | null
+  adding: boolean
+  onEditingIdChange: (id: string | null) => void
+  onStartAdd: () => void
+  onCancelAdd: () => void
+  onAdd: (task: Omit<Task, 'id'>) => void
+  onUpdate: (task: Task) => void
+  onRemove: (id: string) => void
+  onReorder: (fromIndex: number, toIndex: number) => void
+  onAnchorChange: (anchor: StackAnchor) => void
+  onClear: () => void
+  onDeleteGroup: () => void
+  onShowGroup: () => void
+  onOpenSave: () => void
+  onOpenRestore: () => void
+  onOpenCommit: () => void
+  onOpenHide: () => void
+}
+
+function BlockGroupPanel({
+  group,
+  canDeleteGroup,
+  busy,
+  pushEpoch,
+  selectedCommitId,
+  editingId,
+  adding,
+  onEditingIdChange,
+  onStartAdd,
+  onCancelAdd,
+  onAdd,
+  onUpdate,
+  onRemove,
+  onReorder,
+  onAnchorChange,
+  onClear,
+  onDeleteGroup,
+  onShowGroup,
+  onOpenSave,
+  onOpenRestore,
+  onOpenCommit,
+  onOpenHide,
+}: BlockGroupPanelProps) {
+  const { tasks, anchor } = group
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   const [dropLineIndex, setDropLineIndex] = useState<number | null>(null)
-  const [modal, setModal] = useState<'save' | 'restore' | 'commit' | null>(null)
-  const [pushEpoch, setPushEpoch] = useState(0)
   const [listMenuOpen, setListMenuOpen] = useState(false)
 
   const listRef = useRef<HTMLUListElement>(null)
@@ -134,6 +575,7 @@ export function TaskSidebar({
   const tasksLengthRef = useRef(tasks.length)
   const anchorRef = useRef(anchor)
   anchorRef.current = anchor
+
   useEffect(() => {
     dropLineIndexRef.current = dropLineIndex
   }, [dropLineIndex])
@@ -144,15 +586,12 @@ export function TaskSidebar({
 
   useEffect(() => {
     if (!editingId || editingId === NEW_EDIT_ID) return
-    if (!tasks.some((t) => t.id === editingId)) {
-      onEditingIdChange(null)
-      return
-    }
+    if (!tasks.some((t) => t.id === editingId)) return
     const card = listRef.current?.querySelector(
       `[data-task-id="${CSS.escape(editingId)}"]`,
     )
     card?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
-  }, [editingId, tasks, onEditingIdChange])
+  }, [editingId, tasks])
 
   useEffect(() => {
     if (!listMenuOpen) return
@@ -181,48 +620,23 @@ export function TaskSidebar({
     () => resolveStack(tasks, anchor),
     [tasks, anchor],
   )
-  const selectedCommitId = useMemo(() => {
-    if (
-      commitCalendarId &&
-      writableCalendars.some((c) => c.id === commitCalendarId)
-    ) {
-      return commitCalendarId
-    }
-    return (
-      writableCalendars.find((c) => c.primary)?.id ||
-      writableCalendars[0]?.id ||
-      ''
-    )
-  }, [commitCalendarId, writableCalendars])
-
-  function handleTargetCalendarChange(id: string) {
-    setCommitCalendarId(id)
-    saveTargetCalendarId(id)
-  }
-
   const stackSummary =
     resolved.length === 0
       ? null
       : `${timeFmt.format(resolved[0]!.start)} – ${timeFmt.format(resolved[resolved.length - 1]!.end)}`
-
-  const adding = editingId === NEW_EDIT_ID
-  const anchorFarFromToday = !isTodayOrTomorrow(anchor.at)
   const dayKey = localDateKey(anchor.at)
-  // Re-read localStorage after sync (pushEpoch bumps on commit).
   const isUpdate =
     pushEpoch >= 0 &&
-    canUpdateCalendar(
+    canUpdateCalendar(selectedCommitId, group.id, dayKey)
+  const pushUnchanged =
+    isUpdate &&
+    isPushUnchanged(
       selectedCommitId,
-      tasks.map((t) => t.id),
+      group.id,
       dayKey,
+      stackPushFingerprint(anchor, resolved),
     )
-
-  async function handleCommit() {
-    if (!selectedCommitId) return
-    const ok = await onCommit(selectedCommitId)
-    setPushEpoch((n) => n + 1)
-    if (ok) setModal(null)
-  }
+  const anchorFarFromToday = !isTodayOrTomorrow(anchor.at)
 
   function beginAnchorScrub(e: React.PointerEvent<HTMLInputElement>) {
     if (e.button !== 0) return
@@ -236,7 +650,7 @@ export function TaskSidebar({
 
     function currentIso(): string {
       if (input.value) {
-        const parsed = fromLocalInputValue(input.value)
+        const parsed = fromLocalTimeValue(input.value, anchorRef.current.at)
         if (!Number.isNaN(new Date(parsed).getTime())) return parsed
       }
       return anchorRef.current.at
@@ -273,7 +687,6 @@ export function TaskSidebar({
         }
       }
       ev.preventDefault()
-      // Drag up → increase (same as ArrowUp).
       const tick = Math.trunc(-dy / ANCHOR_SCRUB_PX)
       if (tick !== lastTick) {
         applyTicks(lastTick, tick)
@@ -297,57 +710,11 @@ export function TaskSidebar({
     document.addEventListener('pointercancel', onUp)
   }
 
-  function handleSaveList(e: React.FormEvent) {
-    e.preventDefault()
-    if (tasks.length === 0) return
-    const saved = saveTaskList(saveName || 'Morning', tasks)
-    setSaveName(saved.name)
-    refreshSavedLists(saved.id)
-    setModal(null)
-  }
-
-  function handleLoadList() {
-    const list =
-      savedLists.find((l) => l.id === selectedSavedId) || savedLists[0]
-    if (!list) return
-    onReplaceTasks(tasksFromSavedList(list))
-    setSaveName(list.name)
-    setSelectedSavedId(list.id)
-    setModal(null)
-  }
-
-  function handleDeleteList() {
-    const id = selectedSavedId || savedLists[0]?.id
-    if (!id) return
-    deleteSavedList(id)
-    refreshSavedLists()
-  }
-
-  function openRestoreModal() {
-    refreshSavedLists()
-    setModal('restore')
-  }
-
-  function refreshSavedLists(preferId?: string) {
-    const lists = loadSavedLists()
-    setSavedLists(lists)
-    if (preferId && lists.some((l) => l.id === preferId)) {
-      setSelectedSavedId(preferId)
-    } else if (
-      selectedSavedId &&
-      !lists.some((l) => l.id === selectedSavedId)
-    ) {
-      setSelectedSavedId(lists[0]?.id ?? '')
-    }
-  }
-
   function handleDropAt(insertAt: number, from: number) {
     setDragIndex(null)
     setDropLineIndex(null)
     const len = tasksLengthRef.current
-    if (!Number.isInteger(from) || from < 0 || from >= len) {
-      return
-    }
+    if (!Number.isInteger(from) || from < 0 || from >= len) return
     if (insertAt === from || insertAt === from + 1) return
     const to = from < insertAt ? insertAt - 1 : insertAt
     onReorder(from, to)
@@ -477,26 +844,43 @@ export function TaskSidebar({
     }
   }
 
-  return (
-    <aside className="task-sidebar">
-      <div className="task-list-header">
-        <div className="task-list-brand">
-          <span className="brand-mark brand-mark-sm" aria-hidden />
-          <h3>Timeblock</h3>
-        </div>
-        <div className="task-list-meta">
-          {stackSummary && (
-            <span className="task-range muted">{stackSummary}</span>
+  if (group.hidden) {
+    const countText = ` (${blockCountLabel(tasks.length)})`
+    return (
+      <section className="block-group block-group-collapsed">
+        <button
+          type="button"
+          className="block-group-collapsed-toggle"
+          onClick={onShowGroup}
+          disabled={busy}
+          aria-expanded={false}
+        >
+          {group.name ? (
+            <>
+              <span className="block-group-collapsed-title">{group.name}</span>
+              <span className="muted block-group-collapsed-count">
+                {countText}
+              </span>
+            </>
+          ) : (
+            <span className="muted block-group-collapsed-count">
+              {countText}
+            </span>
           )}
-          {signedIn && onSignOut && (
-            <SignOutButton busy={busy} onSignOut={onSignOut} />
-          )}
-        </div>
-      </div>
+        </button>
+      </section>
+    )
+  }
 
-      <section className="stack-anchor">
+  return (
+    <section className="block-group">
+      <div className="stack-anchor">
         <div className="stack-anchor-row">
-          <div className="segmented segmented-sm" role="group" aria-label="Stack anchor">
+          <div
+            className="segmented segmented-sm"
+            role="group"
+            aria-label="Stack anchor"
+          >
             <button
               type="button"
               className={anchor.kind === 'end' ? 'active' : ''}
@@ -517,27 +901,29 @@ export function TaskSidebar({
               {anchor.kind === 'end' ? 'List ends at' : 'List starts at'}
             </span>
             <input
-              type="datetime-local"
+              type="time"
               step={300}
-              value={toLocalInputValue(anchor.at)}
+              value={toLocalTimeValue(anchor.at)}
               onChange={(e) => {
-                // Ignore transient empty values while typing segments.
                 if (!e.target.value) return
                 onAnchorChange({
                   ...anchor,
-                  at: fromLocalInputValue(e.target.value),
+                  at: fromLocalTimeValue(e.target.value, anchor.at),
                 })
               }}
               onPointerDown={beginAnchorScrub}
             />
           </label>
+          {stackSummary && (
+            <span className="task-range muted">{stackSummary}</span>
+          )}
         </div>
         {anchorFarFromToday && (
           <p className="stack-anchor-warning" role="status">
             Not today or tomorrow
           </p>
         )}
-      </section>
+      </div>
 
       <ul className="task-list" ref={listRef}>
         {tasks.map((task, index) => {
@@ -654,18 +1040,15 @@ export function TaskSidebar({
               initialDuration={30}
               submitLabel="Add"
               busy={busy}
-              onCancel={() => onEditingIdChange(null)}
-              onSubmit={(next) => {
-                onAdd(next)
-                onEditingIdChange(null)
-              }}
+              onCancel={onCancelAdd}
+              onSubmit={onAdd}
             />
           ) : (
             <div className="task-new-row">
               <button
                 type="button"
                 className="task-new-trigger"
-                onClick={() => onEditingIdChange(NEW_EDIT_ID)}
+                onClick={onStartAdd}
                 disabled={busy}
               >
                 New block +
@@ -675,7 +1058,7 @@ export function TaskSidebar({
                   <button
                     type="button"
                     className="btn btn-text btn-icon task-new-menu-btn"
-                    aria-label="Block list options"
+                    aria-label="Block group options"
                     aria-expanded={listMenuOpen}
                     aria-haspopup="true"
                     disabled={busy}
@@ -692,7 +1075,7 @@ export function TaskSidebar({
                         disabled={busy || tasks.length === 0}
                         onClick={() => {
                           setListMenuOpen(false)
-                          setModal('save')
+                          onOpenSave()
                         }}
                       >
                         Save blocks
@@ -704,12 +1087,11 @@ export function TaskSidebar({
                         disabled={busy}
                         onClick={() => {
                           setListMenuOpen(false)
-                          openRestoreModal()
+                          onOpenRestore()
                         }}
                       >
                         Restore blocks
                       </button>
-                      <div className="calendar-menu-sep" role="separator" />
                       <button
                         type="button"
                         role="menuitem"
@@ -722,14 +1104,48 @@ export function TaskSidebar({
                       >
                         Clear blocks
                       </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="calendar-menu-item"
+                        disabled={busy}
+                        onClick={() => {
+                          setListMenuOpen(false)
+                          onOpenHide()
+                        }}
+                      >
+                        Hide block group
+                      </button>
+                      <div className="calendar-menu-sep" role="separator" />
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="calendar-menu-item"
+                        disabled={busy || !canDeleteGroup}
+                        onClick={() => {
+                          setListMenuOpen(false)
+                          onDeleteGroup()
+                        }}
+                      >
+                        Delete block group
+                      </button>
                     </div>
                   )}
                 </div>
                 <button
                   type="button"
                   className="btn btn-primary btn-sm task-new-commit"
-                  onClick={() => setModal('commit')}
-                  disabled={busy || tasks.length === 0}
+                  onClick={onOpenCommit}
+                  disabled={
+                    busy ||
+                    pushUnchanged ||
+                    (!isUpdate && tasks.length === 0)
+                  }
+                  title={
+                    pushUnchanged
+                      ? 'Calendar already matches this list'
+                      : undefined
+                  }
                 >
                   {isUpdate ? 'Update' : 'Add'}
                   <CalendarIcon />
@@ -739,163 +1155,7 @@ export function TaskSidebar({
           )}
         </li>
       </ul>
-
-      {notice && !modal && (
-        <div className="sidebar-actions">
-          <p
-            className={`notice notice-${notice.kind}`}
-            role={notice.kind === 'error' ? 'alert' : 'status'}
-          >
-            {notice.text}
-          </p>
-        </div>
-      )}
-
-      {modal === 'save' && (
-        <Modal title="Save block list" onClose={() => setModal(null)}>
-          <form className="modal-form" onSubmit={handleSaveList}>
-            <label>
-              <span>List name</span>
-              <input
-                value={saveName}
-                onChange={(e) => setSaveName(e.target.value)}
-                placeholder="Morning"
-                aria-label="Saved list name"
-                autoFocus
-              />
-            </label>
-            <div className="modal-actions">
-              <button
-                type="button"
-                className="btn btn-ghost btn-sm"
-                onClick={() => setModal(null)}
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="btn btn-primary btn-sm"
-                disabled={busy || tasks.length === 0}
-              >
-                Save
-              </button>
-            </div>
-          </form>
-        </Modal>
-      )}
-
-      {modal === 'restore' && (
-        <Modal title="Restore block list" onClose={() => setModal(null)}>
-          {savedLists.length === 0 ? (
-            <p className="muted">No saved block lists yet.</p>
-          ) : (
-            <div className="modal-form">
-              <label>
-                <span>Saved list</span>
-                <select
-                  value={selectedSavedId || savedLists[0]?.id || ''}
-                  onChange={(e) => setSelectedSavedId(e.target.value)}
-                  aria-label="Saved list"
-                  autoFocus
-                >
-                  {savedLists.map((list) => (
-                    <option key={list.id} value={list.id}>
-                      {list.name} ({list.tasks.length})
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="modal-actions">
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-sm"
-                  onClick={handleDeleteList}
-                  disabled={busy}
-                >
-                  Delete
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-sm"
-                  onClick={() => setModal(null)}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-primary btn-sm"
-                  onClick={handleLoadList}
-                  disabled={busy}
-                >
-                  Restore
-                </button>
-              </div>
-            </div>
-          )}
-        </Modal>
-      )}
-
-      {modal === 'commit' && (
-        <Modal
-          title={isUpdate ? 'Update calendar' : 'Add to calendar'}
-          onClose={() => setModal(null)}
-        >
-          <div className="modal-form">
-            <label>
-              <span>Target calendar</span>
-              <select
-                value={selectedCommitId}
-                onChange={(e) => handleTargetCalendarChange(e.target.value)}
-                disabled={!writableCalendars.length || busy}
-                autoFocus
-              >
-                {writableCalendars.length === 0 ? (
-                  <option value="">Sign in to choose a calendar</option>
-                ) : (
-                  writableCalendars.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.summary}
-                    </option>
-                  ))
-                )}
-              </select>
-            </label>
-            <div className="modal-actions">
-              <button
-                type="button"
-                className="btn btn-ghost btn-sm"
-                onClick={() => setModal(null)}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary btn-sm task-new-commit"
-                onClick={() => void handleCommit()}
-                disabled={busy || tasks.length === 0 || !selectedCommitId}
-              >
-                {busy
-                  ? isUpdate
-                    ? 'Updating…'
-                    : 'Adding…'
-                  : isUpdate
-                    ? 'Update'
-                    : 'Add'}
-                {!busy && <CalendarIcon />}
-              </button>
-            </div>
-            {notice && (
-              <p
-                className={`notice notice-${notice.kind}`}
-                role={notice.kind === 'error' ? 'alert' : 'status'}
-              >
-                {notice.text}
-              </p>
-            )}
-          </div>
-        </Modal>
-      )}
-    </aside>
+    </section>
   )
 }
 

@@ -14,8 +14,8 @@ import type { EventResizeDoneArg } from '@fullcalendar/interaction'
 import timeGridPlugin from '@fullcalendar/timegrid'
 import interactionPlugin from '@fullcalendar/interaction'
 import type { CalendarEvent, GoogleCalendar } from '../lib/calendarApi'
-import type { StackAnchor, Task } from '../lib/tasks'
-import { resolveStack } from '../lib/tasks'
+import type { BlockGroup, StackAnchor } from '../lib/tasks'
+import { resolveStack, shiftAnchor } from '../lib/tasks'
 import { useCalendarZoom } from '../hooks/useCalendarZoom'
 import {
   TASK_STACK_CLASS,
@@ -41,14 +41,21 @@ type CalendarViewProps = {
   calendars: GoogleCalendar[]
   visibleCalendarIds: Set<string>
   onToggleCalendar: (calendarId: string) => void
-  tasks: Task[]
-  anchor: StackAnchor
+  groups: BlockGroup[]
   onDatesSet: (start: Date, end: Date) => void
-  onStackShift: (deltaMs: number) => void
-  /** Live stack time shift while dragging (null when drag ends). */
-  onStackShiftPreview?: (deltaMs: number | null) => void
-  onTaskDurationChange: (taskId: string, durationMinutes: number) => void
-  onSelectSlot: (start: Date, end: Date) => void
+  /** Commit a new stack anchor for a group (same path as editing start/end). */
+  onAnchorCommit: (groupId: string, anchor: StackAnchor) => void
+  /** Live stack time shift while dragging (null group/delta when drag ends). */
+  onStackShiftPreview?: (
+    groupId: string | null,
+    deltaMs: number | null,
+  ) => void
+  onTaskDurationChange: (
+    groupId: string,
+    taskId: string,
+    durationMinutes: number,
+  ) => void
+  onSelectSlot: (groupId: string, start: Date, end: Date) => void
   onTaskClick: (taskId: string) => void
   busy?: boolean
 }
@@ -64,15 +71,25 @@ function durationClass(start: Date | string, end: Date | string): string[] {
   return []
 }
 
+function formatTaskEventTime(date: Date): string {
+  return new Intl.DateTimeFormat(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  })
+    .format(date)
+    .replace(/\s/g, '')
+    .toLowerCase()
+}
+
 export function CalendarView({
   googleEvents,
   calendars,
   visibleCalendarIds,
   onToggleCalendar,
-  tasks,
-  anchor,
+  groups,
   onDatesSet,
-  onStackShift,
+  onAnchorCommit,
   onStackShiftPreview,
   onTaskDurationChange,
   onSelectSlot,
@@ -85,8 +102,13 @@ export function CalendarView({
   const menuRef = useRef<HTMLDivElement>(null)
   const calendarsMenuRef = useRef<HTMLDivElement>(null)
   const dragOriginStartRef = useRef<number | null>(null)
-  const lastPreviewDeltaRef = useRef<number | null>(null)
+  const dragOriginAnchorRef = useRef<StackAnchor | null>(null)
+  const dragGroupIdRef = useRef<string | null>(null)
+  const pendingDeltaRef = useRef<number | null>(null)
+  const dragFinalizedRef = useRef(false)
+  const onAnchorCommitRef = useRef(onAnchorCommit)
   const onStackShiftPreviewRef = useRef(onStackShiftPreview)
+  onAnchorCommitRef.current = onAnchorCommit
   onStackShiftPreviewRef.current = onStackShiftPreview
 
   const [narrow, setNarrow] = useState(false)
@@ -102,37 +124,102 @@ export function CalendarView({
     onZoomChange: () => calendarRef.current?.getApi().updateSize(),
   })
 
-  const { handleEventDragStart, handleEventDragStop, handleEventDrop } =
-    useTaskStackDrag({ shellRef, onStackShift })
+  const { handleEventDragStart, handleEventDragStop, cancelStackDrag } =
+    useTaskStackDrag({ shellRef })
+
+  /** Live-update time labels on the whole stack while one event is dragged. */
+  function syncStackPreviewTimes(
+    deltaMs: number | null,
+    groupId = dragGroupIdRef.current,
+  ) {
+    const shell = shellRef.current
+    if (!shell || !groupId) return
+
+    shell.querySelectorAll<HTMLElement>(`.${TASK_STACK_CLASS}`).forEach((el) => {
+      if (el.dataset.groupId !== groupId) return
+      if (el.classList.contains('fc-event-mirror')) return
+
+      const startMs = Number(el.dataset.startMs)
+      const timeEl = el.querySelector('.fc-event-time')
+      if (!timeEl || !Number.isFinite(startMs)) return
+
+      const next =
+        deltaMs == null || deltaMs === 0 ? startMs : startMs + deltaMs
+      timeEl.textContent = `${formatTaskEventTime(new Date(next))}\u00a0\u00a0`
+    })
+  }
 
   function publishPreview(deltaMs: number | null) {
-    if (lastPreviewDeltaRef.current === deltaMs) return
-    lastPreviewDeltaRef.current = deltaMs
-    onStackShiftPreviewRef.current?.(deltaMs)
+    if (pendingDeltaRef.current === deltaMs) return
+    pendingDeltaRef.current = deltaMs
+    syncStackPreviewTimes(deltaMs)
+    onStackShiftPreviewRef.current?.(dragGroupIdRef.current, deltaMs)
+  }
+
+  /** Apply the pending drag delta once — same as setting start/end. */
+  function finalizeStackDrag(deltaMs: number | null) {
+    if (dragFinalizedRef.current) return
+    dragFinalizedRef.current = true
+
+    const origin = dragOriginAnchorRef.current
+    const groupId = dragGroupIdRef.current
+    cancelStackDrag()
+    pendingDeltaRef.current = null
+    dragOriginAnchorRef.current = null
+    dragOriginStartRef.current = null
+    dragGroupIdRef.current = null
+
+    if (origin && groupId && deltaMs != null && deltaMs !== 0) {
+      // Leave preview times in place until FC remounts with the commit.
+      onAnchorCommitRef.current(groupId, shiftAnchor(origin, deltaMs))
+    } else {
+      syncStackPreviewTimes(null, groupId)
+      onStackShiftPreviewRef.current?.(null, null)
+    }
   }
 
   function handleDragStart(arg: Parameters<typeof handleEventDragStart>[0]) {
+    const groupId = arg.event.extendedProps.groupId as string | undefined
+    const group = groups.find((g) => g.id === groupId)
+    dragFinalizedRef.current = false
     dragOriginStartRef.current = arg.event.start?.getTime() ?? null
-    lastPreviewDeltaRef.current = null
+    dragOriginAnchorRef.current = group?.anchor ?? null
+    dragGroupIdRef.current = groupId ?? null
+    pendingDeltaRef.current = null
     handleEventDragStart(arg)
   }
 
   function handleDragStop(arg: Parameters<typeof handleEventDragStop>[0]) {
+    // dragStop runs before drop. Capture delta now; finalize after drop has
+    // had a chance to run (or on its own if FC skips eventDrop).
     handleEventDragStop(arg)
-    dragOriginStartRef.current = null
-    publishPreview(null)
+    const deltaAtStop = pendingDeltaRef.current
+    queueMicrotask(() => {
+      finalizeStackDrag(deltaAtStop)
+    })
   }
 
-  function handleDrop(arg: Parameters<typeof handleEventDrop>[0]) {
-    handleEventDrop(arg)
-    dragOriginStartRef.current = null
-    publishPreview(null)
+  function handleDrop(arg: {
+    event: { start: Date | null }
+    oldEvent: { start: Date | null }
+    revert: () => void
+  }) {
+    const fcDelta =
+      arg.event.start && arg.oldEvent.start
+        ? arg.event.start.getTime() - arg.oldEvent.start.getTime()
+        : 0
+    const deltaMs = pendingDeltaRef.current ?? fcDelta
+    // Undo FC's single-event mutation; we commit the whole stack via anchor.
+    arg.revert()
+    finalizeStackDrag(deltaMs)
   }
 
   function handleEventAllow(span: DateSpanApi, movingEvent: EventApi | null) {
     if (movingEvent?.extendedProps.source !== 'task') return true
     const origin = dragOriginStartRef.current
     if (origin == null || !span.start) return true
+    // Preview only — calendar event data stays on the committed anchor so FC
+    // still sees a real drop. Sidebar follows via displayAnchor.
     publishPreview(span.start.getTime() - origin)
     return true
   }
@@ -211,24 +298,32 @@ export function CalendarView({
         extendedProps: e.extendedProps,
       }))
 
-    const local: EventInput[] = resolveStack(tasks, anchor).map((task) => ({
-      id: `task:${task.id}`,
-      title: task.title,
-      start: task.start.toISOString(),
-      end: task.end.toISOString(),
-      backgroundColor: TASK_COLOR,
-      borderColor: TASK_BORDER,
-      editable: true,
-      order: 0,
-      classNames: [TASK_STACK_CLASS, ...durationClass(task.start, task.end)],
-      extendedProps: {
-        source: 'task',
-        taskId: task.id,
-      },
-    }))
+    const local: EventInput[] = groups
+      .filter((group) => !group.hidden)
+      .flatMap((group) =>
+        resolveStack(group.tasks, group.anchor).map((task) => ({
+          id: `task:${task.id}`,
+          title: task.title,
+          start: task.start.toISOString(),
+          end: task.end.toISOString(),
+          backgroundColor: TASK_COLOR,
+          borderColor: TASK_BORDER,
+          editable: true,
+          order: 0,
+          classNames: [
+            TASK_STACK_CLASS,
+            ...durationClass(task.start, task.end),
+          ],
+          extendedProps: {
+            source: 'task',
+            taskId: task.id,
+            groupId: group.id,
+          },
+        })),
+      )
 
     return [...google, ...local]
-  }, [googleEvents, tasks, anchor, showAllDay])
+  }, [googleEvents, groups, showAllDay])
 
   function handleDatesSet(arg: DatesSetArg) {
     setTitle(arg.view.title)
@@ -253,7 +348,8 @@ export function CalendarView({
 
   function handleEventResize(arg: EventResizeDoneArg) {
     const taskId = arg.event.extendedProps.taskId as string | undefined
-    if (!taskId || !arg.event.start || !arg.event.end) {
+    const groupId = arg.event.extendedProps.groupId as string | undefined
+    if (!taskId || !groupId || !arg.event.start || !arg.event.end) {
       arg.revert()
       return
     }
@@ -263,11 +359,14 @@ export function CalendarView({
         (arg.event.end.getTime() - arg.event.start.getTime()) / 60_000,
       ),
     )
-    onTaskDurationChange(taskId, durationMinutes)
+    // Duration change reflows the whole stack via resolveStack.
+    arg.revert()
+    onTaskDurationChange(groupId, taskId, durationMinutes)
   }
 
   function handleSelect(arg: DateSelectArg) {
-    onSelectSlot(arg.start, arg.end)
+    const groupId = groups.find((g) => !g.hidden)?.id
+    if (groupId) onSelectSlot(groupId, arg.start, arg.end)
     calendarRef.current?.getApi().unselect()
   }
 
@@ -280,16 +379,7 @@ export function CalendarView({
     if (arg.event.extendedProps.source !== 'task') return true
 
     const start = arg.event.start
-    const timeText = start
-      ? new Intl.DateTimeFormat(undefined, {
-          hour: 'numeric',
-          minute: '2-digit',
-          hour12: true,
-        })
-          .format(start)
-          .replace(/\s/g, '')
-          .toLowerCase()
-      : ''
+    const timeText = start ? formatTaskEventTime(start) : ''
 
     return (
       <div className="fc-event-main-frame">
@@ -370,6 +460,18 @@ export function CalendarView({
           select={handleSelect}
           eventClick={handleEventClick}
           eventContent={handleEventContent}
+          eventDidMount={(info) => {
+            const groupId = info.event.extendedProps.groupId
+            if (typeof groupId === 'string') {
+              info.el.dataset.groupId = groupId
+            }
+            if (
+              info.event.extendedProps.source === 'task' &&
+              info.event.start
+            ) {
+              info.el.dataset.startMs = String(info.event.start.getTime())
+            }
+          }}
           slotMinTime="05:00:00"
           slotMaxTime="24:00:00"
           scrollTime="06:00:00"
