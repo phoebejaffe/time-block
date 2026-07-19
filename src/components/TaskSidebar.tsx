@@ -420,7 +420,6 @@ export function TaskSidebar({
                   saveTargetCalendarId(e.target.value)
                 }}
                 disabled={!writableCalendars.length || busy}
-                autoFocus
               >
                 {writableCalendars.length === 0 ? (
                   <option value="">Sign in to choose a calendar</option>

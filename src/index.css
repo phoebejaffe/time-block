@@ -1311,17 +1311,9 @@ body.is-task-reordering .task-sidebar {
   touch-action: none;
 }
 
-/* Prefer the pointer-following drag mirror (keeps grab offset) over the
-   snapped grid mirror that FullCalendar shows after useEventCenter jumps. */
-body.is-cal-stack-dragging .fc-event-dragging {
-  display: block !important;
-  visibility: visible !important;
-  opacity: 0.8;
-}
-
-body.is-cal-stack-dragging .fc-event-mirror.task-event {
-  opacity: 0 !important;
-  pointer-events: none;
+/* Hide FC's free-follow drag clone; the snapped grid mirror is the visual. */
+.calendar-shell .fc-event-dragging:not(.fc-event-mirror) {
+  visibility: hidden !important;
 }
 
 /* Draw local tasks above Google events when they overlap. */

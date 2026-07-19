@@ -217,10 +217,23 @@ export function CalendarView({
 
   function handleEventAllow(span: DateSpanApi, movingEvent: EventApi | null) {
     if (movingEvent?.extendedProps.source !== 'task') return true
-    if (dragOriginStartRef.current == null || !span.start) return true
+    const originMs = dragOriginStartRef.current
+    if (originMs == null || !span.start) return true
+
+    // Keep stacks on the same local calendar day (vertical time moves only).
+    const origin = new Date(originMs)
+    if (
+      span.start.getFullYear() !== origin.getFullYear() ||
+      span.start.getMonth() !== origin.getMonth() ||
+      span.start.getDate() !== origin.getDate()
+    ) {
+      return false
+    }
+
     // FullCalendar defaults to useEventCenter, which shifts the event on the
     // first hit so the center (not the grab point) sits under the pointer.
     // Treat the first span.start as zero so preview/commit only follow movement.
+    // Deltas are already snapped via snapDuration (5 minutes).
     if (dragSpanOriginRef.current == null) {
       dragSpanOriginRef.current = span.start.getTime()
     }
