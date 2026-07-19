@@ -6,6 +6,7 @@ import {
   fromLocalInputValue,
   loadSavedLists,
   loadTargetCalendarId,
+  localDateKey,
   resolveStack,
   saveTargetCalendarId,
   saveTaskList,
@@ -13,6 +14,7 @@ import {
   toLocalInputValue,
 } from '../lib/tasks'
 import type { Notice } from '../lib/notice'
+import { canUpdateCalendar } from '../lib/pushedEvents'
 import { SignOutButton } from './AuthButton'
 
 const timeFmt = new Intl.DateTimeFormat(undefined, {
@@ -36,7 +38,7 @@ type TaskSidebarProps = {
   onAnchorChange: (anchor: StackAnchor) => void
   onReplaceTasks: (tasks: Task[]) => void
   onClear: () => void
-  onCommit: (calendarId: string) => Promise<void>
+  onCommit: (calendarId: string) => Promise<boolean>
   editingId: string | null
   onEditingIdChange: (id: string | null) => void
   busy?: boolean
@@ -89,6 +91,7 @@ export function TaskSidebar({
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   const [dropLineIndex, setDropLineIndex] = useState<number | null>(null)
   const [modal, setModal] = useState<'save' | 'restore' | 'commit' | null>(null)
+  const [pushEpoch, setPushEpoch] = useState(0)
 
   const listRef = useRef<HTMLUListElement>(null)
   const dropLineIndexRef = useRef<number | null>(null)
@@ -144,10 +147,21 @@ export function TaskSidebar({
 
   const adding = editingId === NEW_EDIT_ID
   const anchorFarFromToday = !isTodayOrTomorrow(anchor.at)
+  const dayKey = localDateKey(anchor.at)
+  // Re-read localStorage after sync (pushEpoch bumps on commit).
+  const isUpdate =
+    pushEpoch >= 0 &&
+    canUpdateCalendar(
+      selectedCommitId,
+      tasks.map((t) => t.id),
+      dayKey,
+    )
 
   async function handleCommit() {
     if (!selectedCommitId) return
-    await onCommit(selectedCommitId)
+    const ok = await onCommit(selectedCommitId)
+    setPushEpoch((n) => n + 1)
+    if (ok) setModal(null)
   }
 
   function handleSaveList(e: React.FormEvent) {
@@ -462,10 +476,12 @@ export function TaskSidebar({
                       type="button"
                       className="icon-btn"
                       aria-label={`Remove ${task.title}`}
-                      title="Remove"
-                      onClick={() => {
+                      title="Remove (⌘-click to skip confirm)"
+                      onClick={(e) => {
                         if (suppressClickRef.current) return
+                        const skipConfirm = e.metaKey || e.ctrlKey
                         if (
+                          skipConfirm ||
                           window.confirm(
                             `Remove “${task.title}” from the list?`,
                           )
@@ -554,7 +570,7 @@ export function TaskSidebar({
           onClick={() => setModal('commit')}
           disabled={busy || tasks.length === 0}
         >
-          Add to calendar
+          {isUpdate ? 'Update' : 'Create'}
         </button>
         {notice && !modal && (
           <p
@@ -651,7 +667,10 @@ export function TaskSidebar({
       )}
 
       {modal === 'commit' && (
-        <Modal title="Add to calendar" onClose={() => setModal(null)}>
+        <Modal
+          title={isUpdate ? 'Update calendar' : 'Create calendar events'}
+          onClose={() => setModal(null)}
+        >
           <div className="modal-form">
             <label>
               <span>Target calendar</span>
@@ -672,6 +691,12 @@ export function TaskSidebar({
                 )}
               </select>
             </label>
+            {isUpdate && (
+              <p className="muted" style={{ margin: 0, fontSize: '0.85rem' }}>
+                Updates events previously added with Timeblock. Missing events
+                are recreated; extras from this day are removed.
+              </p>
+            )}
             <div className="modal-actions">
               <button
                 type="button"
@@ -686,7 +711,13 @@ export function TaskSidebar({
                 onClick={() => void handleCommit()}
                 disabled={busy || tasks.length === 0 || !selectedCommitId}
               >
-                {busy ? 'Adding…' : 'Add to calendar'}
+                {busy
+                  ? isUpdate
+                    ? 'Updating…'
+                    : 'Creating…'
+                  : isUpdate
+                    ? 'Update'
+                    : 'Create'}
               </button>
             </div>
             {notice && (

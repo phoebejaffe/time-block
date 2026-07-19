@@ -1,5 +1,11 @@
+import {
+  loadPushedEvents,
+  savePushedEvents,
+  TIMEBLOCK_EVENT_DESCRIPTION,
+  type PushedEvent,
+} from './pushedEvents'
 import type { Task } from './tasks'
-import { resolveStack, type StackAnchor } from './tasks'
+import { localDateKey, resolveStack, type StackAnchor } from './tasks'
 
 export type GoogleCalendar = {
   id: string
@@ -131,30 +137,287 @@ export async function listEvents(
   return events
 }
 
-export async function insertTasksAsEvents(
+/** Exported for tests — gapi error shapes vary by browser/client version. */
+export function isNotFoundError(err: unknown): boolean {
+  if (err == null) return false
+
+  if (typeof err === 'string') {
+    const lower = err.toLowerCase()
+    return lower.includes('not found') || lower.includes('"code": 404')
+  }
+
+  if (typeof err !== 'object') return false
+  const e = err as {
+    status?: number
+    statusCode?: number
+    message?: string
+    body?: string
+    error?: {
+      code?: number
+      message?: string
+      errors?: Array<{ reason?: string }>
+    }
+    result?: {
+      error?: {
+        code?: number
+        message?: string
+        errors?: Array<{ reason?: string }>
+      }
+    }
+  }
+
+  const code =
+    e.status ?? e.statusCode ?? e.result?.error?.code ?? e.error?.code
+  if (code === 404 || code === 410) return true
+
+  const reasons = [
+    ...(e.result?.error?.errors ?? []),
+    ...(e.error?.errors ?? []),
+  ]
+  if (
+    reasons.some(
+      (r) => r.reason === 'notFound' || r.reason === 'deleted',
+    )
+  ) {
+    return true
+  }
+
+  const message = [
+    e.message,
+    e.result?.error?.message,
+    e.error?.message,
+    e.body,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+  return (
+    message.includes('not found') ||
+    message.includes('has been deleted') ||
+    message.includes('"code": 404')
+  )
+}
+
+function eventResource(task: {
+  title: string
+  start: Date
+  end: Date
+}): gapi.client.calendar.Event {
+  return {
+    summary: task.title,
+    description: TIMEBLOCK_EVENT_DESCRIPTION,
+    start: { dateTime: task.start.toISOString() },
+    end: { dateTime: task.end.toISOString() },
+  }
+}
+
+/** Returns true when the event exists and is not cancelled/trashed. */
+async function isActiveCalendarEvent(
+  calendarId: string,
+  eventId: string,
+): Promise<boolean> {
+  try {
+    const res = await gapi.client.calendar.events.get({
+      calendarId,
+      eventId,
+    })
+    return Boolean(res.result.id) && res.result.status !== 'cancelled'
+  } catch (err) {
+    if (isNotFoundError(err)) return false
+    throw err
+  }
+}
+
+export type SyncTaskFailure = {
+  taskId: string
+  title: string
+  action: 'update' | 'create' | 'remove'
+  message: string
+}
+
+export type SyncTasksResult = {
+  updated: number
+  created: number
+  removed: number
+  failures: SyncTaskFailure[]
+}
+
+function errorMessage(err: unknown): string {
+  if (err instanceof Error && err.message) return err.message
+  if (typeof err === 'string' && err.trim()) return err
+  if (err && typeof err === 'object') {
+    const e = err as {
+      message?: string
+      result?: { error?: { message?: string } }
+      error?: { message?: string }
+    }
+    const msg =
+      e.result?.error?.message || e.error?.message || e.message
+    if (msg) return msg
+  }
+  return 'Unknown error'
+}
+
+/**
+ * Push the current stack to Google Calendar.
+ * Updates events we previously created (tracked in localStorage for ~1 month),
+ * recreates any that were deleted elsewhere, inserts new blocks, and removes
+ * leftover events from an earlier push on the same day.
+ * Continues after individual event failures and reports them in `failures`.
+ */
+export async function syncTasksToCalendar(
   calendarId: string,
   tasks: Task[],
   anchor: StackAnchor,
-): Promise<{ inserted: number; skipped: number }> {
+): Promise<SyncTasksResult> {
   const resolved = resolveStack(tasks, anchor)
-  if (resolved.length === 0) {
-    return { inserted: 0, skipped: tasks.length }
+  const dayKey = localDateKey(anchor.at)
+  let tracked = loadPushedEvents()
+  let updated = 0
+  let created = 0
+  let removed = 0
+  const failures: SyncTaskFailure[] = []
+
+  const dayPool = tracked.filter(
+    (e) => e.calendarId === calendarId && e.dayKey === dayKey,
+  )
+  const unusedDay = [...dayPool]
+
+  function upsertTracked(next: PushedEvent) {
+    tracked = tracked.filter(
+      (e) =>
+        !(
+          e.calendarId === next.calendarId &&
+          (e.eventId === next.eventId || e.taskId === next.taskId)
+        ),
+    )
+    tracked.push(next)
   }
 
-  let inserted = 0
+  function forgetEventId(eventId: string) {
+    tracked = tracked.filter(
+      (e) => !(e.calendarId === calendarId && e.eventId === eventId),
+    )
+  }
+
   for (const task of resolved) {
-    await gapi.client.calendar.events.insert({
-      calendarId,
-      resource: {
-        summary: task.title,
-        start: { dateTime: task.start.toISOString() },
-        end: { dateTime: task.end.toISOString() },
-      },
-    })
-    inserted += 1
+    const resource = eventResource(task)
+    const match =
+      unusedDay.find((e) => e.taskId === task.id) ||
+      tracked.find(
+        (e) => e.calendarId === calendarId && e.taskId === task.id,
+      ) ||
+      unusedDay[0]
+
+    if (match) {
+      const idx = unusedDay.indexOf(match)
+      if (idx >= 0) unusedDay.splice(idx, 1)
+
+      try {
+        const stillThere = await isActiveCalendarEvent(
+          calendarId,
+          match.eventId,
+        )
+        if (stillThere) {
+          try {
+            await gapi.client.calendar.events.patch({
+              calendarId,
+              eventId: match.eventId,
+              resource,
+            })
+            upsertTracked({
+              calendarId,
+              eventId: match.eventId,
+              taskId: task.id,
+              dayKey,
+              pushedAt: new Date().toISOString(),
+            })
+            updated += 1
+            continue
+          } catch (err) {
+            if (!isNotFoundError(err)) {
+              failures.push({
+                taskId: task.id,
+                title: task.title,
+                action: 'update',
+                message: errorMessage(err),
+              })
+              continue
+            }
+            forgetEventId(match.eventId)
+          }
+        } else {
+          forgetEventId(match.eventId)
+        }
+      } catch (err) {
+        failures.push({
+          taskId: task.id,
+          title: task.title,
+          action: 'update',
+          message: errorMessage(err),
+        })
+        continue
+      }
+    }
+
+    try {
+      const res = await gapi.client.calendar.events.insert({
+        calendarId,
+        resource,
+      })
+      const eventId = res.result.id
+      if (!eventId) {
+        throw new Error('Google Calendar did not return an event id')
+      }
+      upsertTracked({
+        calendarId,
+        eventId,
+        taskId: task.id,
+        dayKey,
+        pushedAt: new Date().toISOString(),
+      })
+      created += 1
+    } catch (err) {
+      failures.push({
+        taskId: task.id,
+        title: task.title,
+        action: 'create',
+        message: errorMessage(err),
+      })
+    }
   }
 
-  return { inserted, skipped: 0 }
+  for (const orphan of unusedDay) {
+    try {
+      const stillThere = await isActiveCalendarEvent(
+        calendarId,
+        orphan.eventId,
+      )
+      if (stillThere) {
+        await gapi.client.calendar.events.delete({
+          calendarId,
+          eventId: orphan.eventId,
+        })
+      }
+      forgetEventId(orphan.eventId)
+      removed += 1
+    } catch (err) {
+      if (isNotFoundError(err)) {
+        forgetEventId(orphan.eventId)
+        removed += 1
+        continue
+      }
+      failures.push({
+        taskId: orphan.taskId,
+        title: 'Previously synced event',
+        action: 'remove',
+        message: errorMessage(err),
+      })
+    }
+  }
+
+  savePushedEvents(tracked)
+  return { updated, created, removed, failures }
 }
 
 export function calendarsWritable(calendars: GoogleCalendar[]): GoogleCalendar[] {

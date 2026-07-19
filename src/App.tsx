@@ -6,15 +6,9 @@ import { useCalendarEvents } from './hooks/useCalendarEvents'
 import { useGoogleSession } from './hooks/useGoogleSession'
 import { useNotice } from './hooks/useNotice'
 import { usePlan } from './hooks/usePlan'
-import { insertTasksAsEvents } from './lib/calendarApi'
+import { syncTasksToCalendar } from './lib/calendarApi'
 import { ensureWriteScope } from './lib/google'
-import {
-  formatLocalDate,
-  hasCommittedOnDay,
-  localDateKey,
-  markCommittedDay,
-  type Task,
-} from './lib/tasks'
+import { type Task } from './lib/tasks'
 
 export default function App() {
   const { notice, show, clear } = useNotice()
@@ -60,18 +54,11 @@ export default function App() {
     show('info', 'Cleared blocks.')
   }
 
-  async function handleCommit(calendarId: string) {
+  /** Returns true when the commit modal should close (full success). */
+  async function handleCommit(calendarId: string): Promise<boolean> {
     if (plan.plan.tasks.length === 0) {
       show('info', 'Add at least one block before adding to a calendar.')
-      return
-    }
-
-    const dayKey = localDateKey(plan.plan.anchor.at)
-    if (dayKey && hasCommittedOnDay(dayKey)) {
-      const ok = window.confirm(
-        `You've already added a block list to the calendar for ${formatLocalDate(plan.plan.anchor.at)}. Add another anyway?`,
-      )
-      if (!ok) return
+      return false
     }
 
     setCommitBusy(true)
@@ -79,20 +66,44 @@ export default function App() {
     clear()
     try {
       await ensureWriteScope()
-      const { inserted } = await insertTasksAsEvents(
+      const { updated, created, removed, failures } = await syncTasksToCalendar(
         calendarId,
         plan.plan.tasks,
         plan.plan.anchor,
       )
-      if (dayKey) markCommittedDay(dayKey)
       await calendars.refreshEvents()
+
+      if (failures.length > 0) {
+        const detail = failures
+          .map((f) => `“${f.title}” (${f.action}): ${f.message}`)
+          .join(' · ')
+        const okParts: string[] = []
+        if (updated) okParts.push(`updated ${updated}`)
+        if (created) okParts.push(`added ${created}`)
+        if (removed) okParts.push(`removed ${removed}`)
+        const prefix =
+          okParts.length > 0
+            ? `Partly synced (${okParts.join(', ')}). Failed: `
+            : "Couldn't sync some events: "
+        show('error', `${prefix}${detail}`)
+        return false
+      }
+
+      const parts: string[] = []
+      if (updated) parts.push(`updated ${updated}`)
+      if (created) parts.push(`added ${created}`)
+      if (removed) parts.push(`removed ${removed}`)
       show(
         'success',
-        `Added ${inserted} event${inserted === 1 ? '' : 's'} to Google Calendar.`,
+        parts.length > 0
+          ? `Calendar sync: ${parts.join(', ')}.`
+          : 'Calendar already up to date.',
       )
+      return true
     } catch (err) {
       const text = err instanceof Error ? err.message : String(err)
-      show('error', `Couldn't add to calendar: ${text}`)
+      show('error', `Couldn't sync calendar: ${text}`)
+      return false
     } finally {
       setCommitBusy(false)
     }
