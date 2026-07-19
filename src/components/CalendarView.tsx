@@ -16,9 +16,10 @@ import type {
 } from '@fullcalendar/interaction'
 import timeGridPlugin from '@fullcalendar/timegrid'
 import interactionPlugin from '@fullcalendar/interaction'
-import type { CalendarEvent } from '../lib/calendarApi'
+import type { CalendarEvent, GoogleCalendar } from '../lib/calendarApi'
 import type { StackAnchor, Task } from '../lib/tasks'
 import { resolveStack } from '../lib/tasks'
+import { CalendarToggles } from './CalendarToggles'
 
 const TASK_COLOR = '#0f6e56'
 const TASK_BORDER = '#0b5341'
@@ -34,6 +35,9 @@ type CalendarViewType = 'timeGridDay' | 'timeGridThreeDay' | 'timeGridWeek'
 
 type CalendarViewProps = {
   googleEvents: CalendarEvent[]
+  calendars: GoogleCalendar[]
+  visibleCalendarIds: Set<string>
+  onToggleCalendar: (calendarId: string) => void
   tasks: Task[]
   anchor: StackAnchor
   onDatesSet: (start: Date, end: Date) => void
@@ -41,9 +45,12 @@ type CalendarViewProps = {
   onTaskDurationChange: (taskId: string, durationMinutes: number) => void
   onSelectSlot?: (start: Date, end: Date) => void
   onTaskClick?: (taskId: string) => void
+  busy?: boolean
 }
 
 const TASK_STACK_CLASS = 'task-event'
+const CAL_ZOOM_MIN = 0.7
+const CAL_ZOOM_MAX = 2.5
 
 type StackDragState = {
   taskId: string
@@ -52,8 +59,21 @@ type StackDragState = {
   originLeft: number
 }
 
+function clampZoom(value: number): number {
+  return Math.min(CAL_ZOOM_MAX, Math.max(CAL_ZOOM_MIN, value))
+}
+
+function touchDistance(a: Touch, b: Touch): number {
+  const dx = a.clientX - b.clientX
+  const dy = a.clientY - b.clientY
+  return Math.hypot(dx, dy)
+}
+
 export function CalendarView({
   googleEvents,
+  calendars,
+  visibleCalendarIds,
+  onToggleCalendar,
   tasks,
   anchor,
   onDatesSet,
@@ -61,18 +81,28 @@ export function CalendarView({
   onTaskDurationChange,
   onSelectSlot,
   onTaskClick,
+  busy,
 }: CalendarViewProps) {
   const calendarRef = useRef<FullCalendar>(null)
   const shellRef = useRef<HTMLDivElement>(null)
+  const calendarBodyRef = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
+  const calendarsMenuRef = useRef<HTMLDivElement>(null)
   const stackDragRef = useRef<StackDragState | null>(null)
   const stackDragRafRef = useRef<number | null>(null)
+  const zoomRef = useRef(1)
+  const pinchRef = useRef<{
+    startDistance: number
+    startZoom: number
+  } | null>(null)
   const [narrow, setNarrow] = useState(false)
   const [title, setTitle] = useState('')
   const [viewType, setViewType] = useState<CalendarViewType>('timeGridDay')
   const [showAllDay, setShowAllDay] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [calendarsOpen, setCalendarsOpen] = useState(false)
   const [isOnToday, setIsOnToday] = useState(true)
+  const [zoom, setZoom] = useState(1)
 
   function clearStackDragTransforms() {
     shellRef.current
@@ -113,9 +143,87 @@ export function CalendarView({
   }
 
   useEffect(() => {
+    zoomRef.current = zoom
+    calendarRef.current?.getApi().updateSize()
+  }, [zoom])
+
+  useEffect(() => {
     return () => {
       stopStackDragTracking()
       clearStackDragTransforms()
+    }
+  }, [])
+
+  useEffect(() => {
+    function preventPageGesture(event: Event) {
+      event.preventDefault()
+    }
+    // Safari page-level pinch zoom gestures.
+    document.addEventListener('gesturestart', preventPageGesture, {
+      passive: false,
+    })
+    document.addEventListener('gesturechange', preventPageGesture, {
+      passive: false,
+    })
+    document.addEventListener('gestureend', preventPageGesture, {
+      passive: false,
+    })
+    return () => {
+      document.removeEventListener('gesturestart', preventPageGesture)
+      document.removeEventListener('gesturechange', preventPageGesture)
+      document.removeEventListener('gestureend', preventPageGesture)
+    }
+  }, [])
+
+  useEffect(() => {
+    const el = calendarBodyRef.current
+    if (!el) return
+
+    function onTouchStart(event: TouchEvent) {
+      if (event.touches.length !== 2) {
+        pinchRef.current = null
+        return
+      }
+      pinchRef.current = {
+        startDistance: touchDistance(event.touches[0]!, event.touches[1]!),
+        startZoom: zoomRef.current,
+      }
+    }
+
+    function onTouchMove(event: TouchEvent) {
+      const pinch = pinchRef.current
+      if (!pinch || event.touches.length !== 2) return
+      event.preventDefault()
+      const distance = touchDistance(event.touches[0]!, event.touches[1]!)
+      if (pinch.startDistance <= 0) return
+      const next = clampZoom(
+        pinch.startZoom * (distance / pinch.startDistance),
+      )
+      setZoom(next)
+    }
+
+    function onTouchEnd(event: TouchEvent) {
+      if (event.touches.length < 2) pinchRef.current = null
+    }
+
+    function onWheel(event: WheelEvent) {
+      if (!event.ctrlKey && !event.metaKey) return
+      event.preventDefault()
+      const factor = Math.exp(-event.deltaY * 0.01)
+      setZoom((prev) => clampZoom(prev * factor))
+    }
+
+    el.addEventListener('touchstart', onTouchStart, { passive: true })
+    el.addEventListener('touchmove', onTouchMove, { passive: false })
+    el.addEventListener('touchend', onTouchEnd)
+    el.addEventListener('touchcancel', onTouchEnd)
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart)
+      el.removeEventListener('touchmove', onTouchMove)
+      el.removeEventListener('touchend', onTouchEnd)
+      el.removeEventListener('touchcancel', onTouchEnd)
+      el.removeEventListener('wheel', onWheel)
     }
   }, [])
 
@@ -145,18 +253,27 @@ export function CalendarView({
   }, [narrow, viewType])
 
   useEffect(() => {
-    if (!menuOpen) return
+    if (!menuOpen && !calendarsOpen) return
 
     function handlePointerDown(event: MouseEvent) {
-      const menu = menuRef.current
-      if (!menu) return
-      if (event.target instanceof Node && !menu.contains(event.target)) {
+      const target = event.target
+      if (!(target instanceof Node)) return
+      if (menuOpen && menuRef.current && !menuRef.current.contains(target)) {
         setMenuOpen(false)
+      }
+      if (
+        calendarsOpen &&
+        calendarsMenuRef.current &&
+        !calendarsMenuRef.current.contains(target)
+      ) {
+        setCalendarsOpen(false)
       }
     }
 
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') setMenuOpen(false)
+      if (event.key !== 'Escape') return
+      setMenuOpen(false)
+      setCalendarsOpen(false)
     }
 
     document.addEventListener('mousedown', handlePointerDown)
@@ -165,7 +282,7 @@ export function CalendarView({
       document.removeEventListener('mousedown', handlePointerDown)
       document.removeEventListener('keydown', handleKeyDown)
     }
-  }, [menuOpen])
+  }, [menuOpen, calendarsOpen])
 
   const events = useMemo((): EventInput[] => {
     const google: EventInput[] = googleEvents
@@ -362,83 +479,119 @@ export function CalendarView({
         </div>
 
         <div className="calendar-toolbar-side calendar-toolbar-right">
-          <div className="calendar-menu" ref={menuRef}>
-            <button
-              type="button"
-              className="btn btn-text btn-icon"
-              aria-label="Calendar options"
-              aria-expanded={menuOpen}
-              aria-haspopup="true"
-              onClick={() => setMenuOpen((open) => !open)}
-            >
-              ···
-            </button>
-            {menuOpen && (
-              <div className="calendar-menu-dropdown" role="menu">
-                <button
-                  type="button"
-                  role="menuitemcheckbox"
-                  aria-checked={showAllDay}
-                  className="calendar-menu-item"
-                  onClick={() => {
-                    setShowAllDay((v) => !v)
-                    setMenuOpen(false)
-                  }}
-                >
-                  {showAllDay ? 'Hide all-day events' : 'Show all-day events'}
-                </button>
-                <div className="calendar-menu-sep" role="separator" />
-                <button
-                  type="button"
-                  role="menuitemradio"
-                  aria-checked={viewType === 'timeGridDay'}
-                  className={[
-                    'calendar-menu-item',
-                    viewType === 'timeGridDay' ? 'is-active' : '',
-                  ]
-                    .filter(Boolean)
-                    .join(' ')}
-                  onClick={() => changeView('timeGridDay')}
-                >
-                  Day
-                </button>
-                <button
-                  type="button"
-                  role="menuitemradio"
-                  aria-checked={viewType === 'timeGridThreeDay'}
-                  className={[
-                    'calendar-menu-item',
-                    viewType === 'timeGridThreeDay' ? 'is-active' : '',
-                  ]
-                    .filter(Boolean)
-                    .join(' ')}
-                  onClick={() => changeView('timeGridThreeDay')}
-                >
-                  3 Day
-                </button>
-                {!narrow && (
+          <div className="calendar-toolbar-menus">
+            <div className="calendars-menu" ref={calendarsMenuRef}>
+              <button
+                type="button"
+                className="btn btn-text btn-icon"
+                aria-label="Calendars"
+                aria-expanded={calendarsOpen}
+                aria-haspopup="true"
+                title="Calendars"
+                onClick={() => {
+                  setMenuOpen(false)
+                  setCalendarsOpen((open) => !open)
+                }}
+              >
+                🗓️
+              </button>
+              {calendarsOpen && (
+                <div className="calendars-dropdown" role="menu">
+                  <CalendarToggles
+                    calendars={calendars}
+                    visibleIds={visibleCalendarIds}
+                    onToggle={onToggleCalendar}
+                    disabled={busy}
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="calendar-menu" ref={menuRef}>
+              <button
+                type="button"
+                className="btn btn-text btn-icon"
+                aria-label="Calendar options"
+                aria-expanded={menuOpen}
+                aria-haspopup="true"
+                onClick={() => {
+                  setCalendarsOpen(false)
+                  setMenuOpen((open) => !open)
+                }}
+              >
+                ···
+              </button>
+              {menuOpen && (
+                <div className="calendar-menu-dropdown" role="menu">
+                  <button
+                    type="button"
+                    role="menuitemcheckbox"
+                    aria-checked={showAllDay}
+                    className="calendar-menu-item"
+                    onClick={() => {
+                      setShowAllDay((v) => !v)
+                      setMenuOpen(false)
+                    }}
+                  >
+                    {showAllDay ? 'Hide all-day events' : 'Show all-day events'}
+                  </button>
+                  <div className="calendar-menu-sep" role="separator" />
                   <button
                     type="button"
                     role="menuitemradio"
-                    aria-checked={viewType === 'timeGridWeek'}
+                    aria-checked={viewType === 'timeGridDay'}
                     className={[
                       'calendar-menu-item',
-                      viewType === 'timeGridWeek' ? 'is-active' : '',
+                      viewType === 'timeGridDay' ? 'is-active' : '',
                     ]
                       .filter(Boolean)
                       .join(' ')}
-                    onClick={() => changeView('timeGridWeek')}
+                    onClick={() => changeView('timeGridDay')}
                   >
-                    Week
+                    Day
                   </button>
-                )}
-              </div>
-            )}
+                  <button
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={viewType === 'timeGridThreeDay'}
+                    className={[
+                      'calendar-menu-item',
+                      viewType === 'timeGridThreeDay' ? 'is-active' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                    onClick={() => changeView('timeGridThreeDay')}
+                  >
+                    3 Day
+                  </button>
+                  {!narrow && (
+                    <button
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={viewType === 'timeGridWeek'}
+                      className={[
+                        'calendar-menu-item',
+                        viewType === 'timeGridWeek' ? 'is-active' : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                      onClick={() => changeView('timeGridWeek')}
+                    >
+                      Week
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="calendar-body">
+      <div
+        className="calendar-body"
+        ref={calendarBodyRef}
+        style={{ ['--cal-zoom' as string]: String(zoom) }}
+      >
         <FullCalendar
           ref={calendarRef}
           plugins={[timeGridPlugin, interactionPlugin]}

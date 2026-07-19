@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AuthButton } from './components/AuthButton'
-import { CalendarToggles } from './components/CalendarToggles'
 import { CalendarView } from './components/CalendarView'
 import { TaskSidebar } from './components/TaskSidebar'
 import {
@@ -49,8 +48,6 @@ export default function App() {
   const [range, setRange] = useState<{ start: Date; end: Date } | null>(null)
 
   const [plan, setPlan] = useState<Plan>(() => loadPlan())
-  const [calendarsOpen, setCalendarsOpen] = useState(false)
-  const calendarsMenuRef = useRef<HTMLDivElement>(null)
 
   const writableCalendars = useMemo(
     () => calendarsWritable(calendars),
@@ -179,33 +176,9 @@ export default function App() {
     setCalendars([])
     setVisibleIds(new Set())
     setGoogleEvents([])
-    setCalendarsOpen(false)
     setNotice(null)
     setError(null)
   }
-
-  useEffect(() => {
-    if (!calendarsOpen) return
-
-    function handlePointerDown(event: MouseEvent) {
-      const menu = calendarsMenuRef.current
-      if (!menu) return
-      if (event.target instanceof Node && !menu.contains(event.target)) {
-        setCalendarsOpen(false)
-      }
-    }
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') setCalendarsOpen(false)
-    }
-
-    document.addEventListener('mousedown', handlePointerDown)
-    document.addEventListener('keydown', handleKeyDown)
-    return () => {
-      document.removeEventListener('mousedown', handlePointerDown)
-      document.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [calendarsOpen])
 
   function handleToggleCalendar(calendarId: string) {
     setVisibleIds((prev) => {
@@ -365,47 +338,6 @@ export default function App() {
 
   return (
     <div className="app">
-      <header className="app-header">
-        <div className="brand">
-          <span className="brand-mark" aria-hidden />
-          <div>
-            <h1>Timeblock</h1>
-          </div>
-        </div>
-
-        <div className="header-actions">
-          {signedIn && (
-            <div className="calendars-menu" ref={calendarsMenuRef}>
-              <button
-                type="button"
-                className="btn btn-text"
-                aria-expanded={calendarsOpen}
-                aria-haspopup="true"
-                onClick={() => setCalendarsOpen((o) => !o)}
-              >
-                Calendars
-              </button>
-              {calendarsOpen && (
-                <div className="calendars-dropdown" role="menu">
-                  <CalendarToggles
-                    calendars={calendars}
-                    visibleIds={visibleIds}
-                    onToggle={handleToggleCalendar}
-                    disabled={busy}
-                  />
-                </div>
-              )}
-            </div>
-          )}
-          <AuthButton
-            signedIn={signedIn}
-            busy={busy || !ready}
-            onSignIn={() => void handleSignIn()}
-            onSignOut={handleSignOut}
-          />
-        </div>
-      </header>
-
       {(error || missingClientId) && (
         <div className="banner banner-error" role="alert">
           {missingClientId
@@ -428,6 +360,8 @@ export default function App() {
           onCommit={handleCommit}
           busy={busy}
           notice={notice}
+          signedIn={signedIn}
+          onSignOut={handleSignOut}
         />
 
         <main className="main-panel">
@@ -448,12 +382,16 @@ export default function App() {
           ) : (
             <CalendarView
               googleEvents={googleEvents}
+              calendars={calendars}
+              visibleCalendarIds={visibleIds}
+              onToggleCalendar={handleToggleCalendar}
               tasks={plan.tasks}
               anchor={plan.anchor}
               onDatesSet={handleDatesSet}
               onStackShift={handleStackShift}
               onTaskDurationChange={handleTaskDurationChange}
               onSelectSlot={handleSelectSlot}
+              busy={busy}
             />
           )}
         </main>

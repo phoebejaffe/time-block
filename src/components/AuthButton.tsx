@@ -12,18 +12,7 @@ export function AuthButton({
   onSignOut,
 }: AuthButtonProps) {
   if (signedIn) {
-    return (
-      <button
-        type="button"
-        className="btn btn-text btn-icon"
-        onClick={onSignOut}
-        disabled={busy}
-        aria-label="Sign out"
-        title="Sign out"
-      >
-        <SignOutIcon />
-      </button>
-    )
+    return <SignOutButton busy={busy} onSignOut={onSignOut} />
   }
 
   return (
@@ -34,6 +23,27 @@ export function AuthButton({
       disabled={busy}
     >
       {busy ? 'Connecting…' : 'Sign in with Google'}
+    </button>
+  )
+}
+
+export function SignOutButton({
+  busy,
+  onSignOut,
+}: {
+  busy?: boolean
+  onSignOut: () => void
+}) {
+  return (
+    <button
+      type="button"
+      className="btn btn-text btn-icon"
+      onClick={onSignOut}
+      disabled={busy}
+      aria-label="Sign out"
+      title="Sign out"
+    >
+      <SignOutIcon />
     </button>
   )
 }

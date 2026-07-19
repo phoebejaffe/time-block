@@ -12,6 +12,7 @@ import {
   tasksFromSavedList,
   toLocalInputValue,
 } from '../lib/tasks'
+import { SignOutButton } from './AuthButton'
 
 const timeFmt = new Intl.DateTimeFormat(undefined, {
   hour: 'numeric',
@@ -36,6 +37,8 @@ type TaskSidebarProps = {
   onCommit: (calendarId: string) => Promise<void>
   busy?: boolean
   notice?: { kind: 'success' | 'error' | 'info'; text: string } | null
+  signedIn?: boolean
+  onSignOut?: () => void
 }
 
 export function TaskSidebar({
@@ -51,6 +54,8 @@ export function TaskSidebar({
   onCommit,
   busy,
   notice,
+  signedIn,
+  onSignOut,
 }: TaskSidebarProps) {
   const [commitCalendarId, setCommitCalendarId] = useState(loadTargetCalendarId)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -304,10 +309,18 @@ export function TaskSidebar({
   return (
     <aside className="task-sidebar">
       <div className="task-list-header">
-        <h3>Tasks</h3>
-        {stackSummary && (
-          <span className="task-range muted">{stackSummary}</span>
-        )}
+        <div className="task-list-brand">
+          <span className="brand-mark brand-mark-sm" aria-hidden />
+          <h3>Timeblock tasks</h3>
+        </div>
+        <div className="task-list-meta">
+          {stackSummary && (
+            <span className="task-range muted">{stackSummary}</span>
+          )}
+          {signedIn && onSignOut && (
+            <SignOutButton busy={busy} onSignOut={onSignOut} />
+          )}
+        </div>
       </div>
 
       <section className="stack-anchor">
@@ -482,23 +495,23 @@ export function TaskSidebar({
       <div className="sidebar-actions">
         <button
           type="button"
-          className="btn btn-text"
+          className="btn btn-ghost btn-sm"
           onClick={() => setModal('save')}
           disabled={busy || tasks.length === 0}
         >
-          Save task list
+          Save tasks
         </button>
         <button
           type="button"
-          className="btn btn-text"
+          className="btn btn-ghost btn-sm"
           onClick={openRestoreModal}
           disabled={busy}
         >
-          Restore task list
+          Restore tasks
         </button>
         <button
           type="button"
-          className="btn btn-text"
+          className="btn btn-primary btn-sm sidebar-action-commit"
           onClick={() => setModal('commit')}
           disabled={busy || tasks.length === 0}
         >
