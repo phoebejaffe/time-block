@@ -723,22 +723,21 @@ function BlockGroupPanel({
   }
 
   function beginTaskDrag(
-    e: React.PointerEvent<HTMLLIElement>,
+    e: React.PointerEvent<HTMLElement>,
     index: number,
   ) {
-    if ((e.target as HTMLElement).closest('button, input, a')) return
     if (e.button !== 0 && e.pointerType === 'mouse') return
 
-    const card = e.currentTarget
+    const handle = e.currentTarget
     const pointerId = e.pointerId
     const startX = e.clientX
     const startY = e.clientY
     let active = false
     let cancelled = false
 
-    // Immediate drag on touch/mouse — sidebar won't scroll from this card.
+    // Immediate drag on touch/mouse — only from the title/duration handle.
     try {
-      card.setPointerCapture(pointerId)
+      handle.setPointerCapture(pointerId)
     } catch {
       /* ignore */
     }
@@ -802,8 +801,8 @@ function BlockGroupPanel({
       document.removeEventListener('pointerup', onUp)
       document.removeEventListener('pointercancel', onUp)
       try {
-        if (card.hasPointerCapture(pointerId)) {
-          card.releasePointerCapture(pointerId)
+        if (handle.hasPointerCapture(pointerId)) {
+          handle.releasePointerCapture(pointerId)
         }
       } catch {
         /* ignore */
@@ -913,10 +912,6 @@ function BlockGroupPanel({
               ]
                 .filter(Boolean)
                 .join(' ')}
-              onPointerDown={(e) => {
-                if (editing) return
-                beginTaskDrag(e, index)
-              }}
             >
               {editing ? (
                 <TaskFieldsForm
@@ -936,7 +931,10 @@ function BlockGroupPanel({
                 />
               ) : (
                 <>
-                  <div className="task-card-main">
+                  <div
+                    className="task-card-main task-card-drag"
+                    onPointerDown={(e) => beginTaskDrag(e, index)}
+                  >
                     <span className="task-title">
                       {task.title}
                       <span className="muted task-duration">

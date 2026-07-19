@@ -354,10 +354,27 @@ export function CalendarView({
   }
 
   function handleSelect(arg: DateSelectArg) {
+    // Switching apps mid-touch can complete a selection; ignore those.
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+      calendarRef.current?.getApi().unselect()
+      return
+    }
     const groupId = groups.find((g) => !g.hidden)?.id
     if (groupId) onSelectSlot(groupId, arg.start, arg.end)
     calendarRef.current?.getApi().unselect()
   }
+
+  useEffect(() => {
+    function onVisibilityChange() {
+      if (document.visibilityState === 'hidden') {
+        calendarRef.current?.getApi().unselect()
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
+  }, [])
 
   function handleEventClick(arg: EventClickArg) {
     const taskId = arg.event.extendedProps.taskId as string | undefined
@@ -440,9 +457,10 @@ export function CalendarView({
           selectMirror
           eventStartEditable
           eventDurationEditable={false}
-          // Immediate drag on touch (skip the default 1s long-press).
-          longPressDelay={0}
+          // Immediate event drag on touch, but keep a select delay so a
+          // backgrounded finger-up doesn't create a slot-selected "New block".
           eventLongPressDelay={0}
+          selectLongPressDelay={500}
           events={events}
           datesSet={handleDatesSet}
           eventAllow={handleEventAllow}

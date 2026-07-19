@@ -596,15 +596,23 @@ body.is-datetime-scrubbing .task-form-duration input {
   flex-direction: column;
   gap: 0;
   min-height: 0;
-  cursor: grab;
-  touch-action: none;
+  cursor: default;
 }
 
 .task-card.is-editing,
 .task-card-new {
   padding-right: 0.5rem;
-  cursor: default;
-  touch-action: auto;
+}
+
+.task-card-drag {
+  cursor: grab;
+  touch-action: none;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.task-card-drag:active {
+  cursor: grabbing;
 }
 
 .task-card-new:not(.is-editing) {
@@ -870,10 +878,6 @@ body.is-task-reordering .task-sidebar {
 
 .task-card.drop-line-after::after {
   bottom: -1px;
-}
-
-.task-card:active {
-  cursor: grabbing;
 }
 
 .task-card-main {
