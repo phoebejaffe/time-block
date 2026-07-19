@@ -10,7 +10,6 @@ import type {
   EventInput,
   FormatterInput,
 } from '@fullcalendar/core'
-import type { EventResizeDoneArg } from '@fullcalendar/interaction'
 import timeGridPlugin from '@fullcalendar/timegrid'
 import interactionPlugin from '@fullcalendar/interaction'
 import type { CalendarEvent, GoogleCalendar } from '../lib/calendarApi'
@@ -55,11 +54,6 @@ type CalendarViewProps = {
     groupId: string | null,
     deltaMs: number | null,
   ) => void
-  onTaskDurationChange: (
-    groupId: string,
-    taskId: string,
-    durationMinutes: number,
-  ) => void
   onSelectSlot: (groupId: string, start: Date, end: Date) => void
   onTaskClick: (taskId: string) => void
   busy?: boolean
@@ -96,7 +90,6 @@ export function CalendarView({
   onDatesSet,
   onAnchorCommit,
   onStackShiftPreview,
-  onTaskDurationChange,
   onSelectSlot,
   onTaskClick,
   busy,
@@ -107,6 +100,8 @@ export function CalendarView({
   const menuRef = useRef<HTMLDivElement>(null)
   const calendarsMenuRef = useRef<HTMLDivElement>(null)
   const dragOriginStartRef = useRef<number | null>(null)
+  /** First FC span.start during a drag — cancels useEventCenter jump. */
+  const dragSpanOriginRef = useRef<number | null>(null)
   const dragOriginAnchorRef = useRef<StackAnchor | null>(null)
   const dragGroupIdRef = useRef<string | null>(null)
   const pendingDeltaRef = useRef<number | null>(null)
@@ -173,6 +168,7 @@ export function CalendarView({
     pendingDeltaRef.current = null
     dragOriginAnchorRef.current = null
     dragOriginStartRef.current = null
+    dragSpanOriginRef.current = null
     dragGroupIdRef.current = null
 
     if (origin && groupId && deltaMs != null && deltaMs !== 0) {
@@ -189,6 +185,7 @@ export function CalendarView({
     const group = groups.find((g) => g.id === groupId)
     dragFinalizedRef.current = false
     dragOriginStartRef.current = arg.event.start?.getTime() ?? null
+    dragSpanOriginRef.current = null
     dragOriginAnchorRef.current = group?.anchor ?? null
     dragGroupIdRef.current = groupId ?? null
     pendingDeltaRef.current = null
@@ -210,11 +207,9 @@ export function CalendarView({
     oldEvent: { start: Date | null }
     revert: () => void
   }) {
-    const fcDelta =
-      arg.event.start && arg.oldEvent.start
-        ? arg.event.start.getTime() - arg.oldEvent.start.getTime()
-        : 0
-    const deltaMs = pendingDeltaRef.current ?? fcDelta
+    // Prefer the grab-corrected preview delta. FC's event/oldEvent delta
+    // includes the useEventCenter jump and must not be committed as-is.
+    const deltaMs = pendingDeltaRef.current ?? 0
     // Undo FC's single-event mutation; we commit the whole stack via anchor.
     arg.revert()
     finalizeStackDrag(deltaMs)
@@ -222,11 +217,14 @@ export function CalendarView({
 
   function handleEventAllow(span: DateSpanApi, movingEvent: EventApi | null) {
     if (movingEvent?.extendedProps.source !== 'task') return true
-    const origin = dragOriginStartRef.current
-    if (origin == null || !span.start) return true
-    // Preview only — calendar event data stays on the committed anchor so FC
-    // still sees a real drop. Sidebar follows via displayAnchor.
-    publishPreview(span.start.getTime() - origin)
+    if (dragOriginStartRef.current == null || !span.start) return true
+    // FullCalendar defaults to useEventCenter, which shifts the event on the
+    // first hit so the center (not the grab point) sits under the pointer.
+    // Treat the first span.start as zero so preview/commit only follow movement.
+    if (dragSpanOriginRef.current == null) {
+      dragSpanOriginRef.current = span.start.getTime()
+    }
+    publishPreview(span.start.getTime() - dragSpanOriginRef.current)
     return true
   }
 
@@ -355,24 +353,6 @@ export function CalendarView({
     setMenuOpen(false)
   }
 
-  function handleEventResize(arg: EventResizeDoneArg) {
-    const taskId = arg.event.extendedProps.taskId as string | undefined
-    const groupId = arg.event.extendedProps.groupId as string | undefined
-    if (!taskId || !groupId || !arg.event.start || !arg.event.end) {
-      arg.revert()
-      return
-    }
-    const durationMinutes = Math.max(
-      1,
-      Math.round(
-        (arg.event.end.getTime() - arg.event.start.getTime()) / 60_000,
-      ),
-    )
-    // Duration change reflows the whole stack via resolveStack.
-    arg.revert()
-    onTaskDurationChange(groupId, taskId, durationMinutes)
-  }
-
   function handleSelect(arg: DateSelectArg) {
     const groupId = groups.find((g) => !g.hidden)?.id
     if (groupId) onSelectSlot(groupId, arg.start, arg.end)
@@ -459,7 +439,7 @@ export function CalendarView({
           selectable
           selectMirror
           eventStartEditable
-          eventDurationEditable
+          eventDurationEditable={false}
           // Immediate drag on touch (skip the default 1s long-press).
           longPressDelay={0}
           eventLongPressDelay={0}
@@ -469,7 +449,6 @@ export function CalendarView({
           eventDragStart={handleDragStart}
           eventDragStop={handleDragStop}
           eventDrop={handleDrop}
-          eventResize={handleEventResize}
           select={handleSelect}
           eventClick={handleEventClick}
           eventContent={handleEventContent}

@@ -1254,6 +1254,8 @@ function TaskFieldsForm({
   const [durationMinutes, setDurationMinutes] = useState<number | ''>(
     initialDuration,
   )
+  const durationRef = useRef(durationMinutes)
+  durationRef.current = durationMinutes
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -1268,6 +1270,66 @@ function TaskFieldsForm({
   function parseDuration(value: number | ''): number {
     if (value === '') return 15
     return Math.max(5, Math.round(value) || 15)
+  }
+
+  function beginDurationScrub(e: React.PointerEvent<HTMLInputElement>) {
+    if (e.button !== 0) return
+    const input = e.currentTarget
+    const startY = e.clientY
+    const startX = e.clientX
+    const pointerId = e.pointerId
+    let active = false
+    let lastTick = 0
+    const origin = parseDuration(durationRef.current)
+
+    try {
+      input.setPointerCapture(pointerId)
+    } catch {
+      /* ignore */
+    }
+
+    function onMove(ev: PointerEvent) {
+      if (ev.pointerId !== pointerId) return
+      const dx = ev.clientX - startX
+      const dy = ev.clientY - startY
+      if (!active) {
+        if (Math.abs(dy) < ANCHOR_SCRUB_ACTIVATE_PX) return
+        if (Math.abs(dy) < Math.abs(dx)) {
+          cleanup()
+          return
+        }
+        active = true
+        document.body.classList.add('is-datetime-scrubbing')
+      }
+      ev.preventDefault()
+      const tick = Math.trunc(-dy / ANCHOR_SCRUB_PX)
+      if (tick === lastTick) return
+      lastTick = tick
+      setDurationMinutes(Math.max(5, origin + tick * 5))
+    }
+
+    function cleanup() {
+      document.removeEventListener('pointermove', onMove)
+      document.removeEventListener('pointerup', onUp)
+      document.removeEventListener('pointercancel', onUp)
+      document.body.classList.remove('is-datetime-scrubbing')
+      try {
+        if (input.hasPointerCapture(pointerId)) {
+          input.releasePointerCapture(pointerId)
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+
+    function onUp(ev: PointerEvent) {
+      if (ev.pointerId !== pointerId) return
+      cleanup()
+    }
+
+    document.addEventListener('pointermove', onMove, { passive: false })
+    document.addEventListener('pointerup', onUp)
+    document.addEventListener('pointercancel', onUp)
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -1295,7 +1357,7 @@ function TaskFieldsForm({
           <input
             type="number"
             min={5}
-            step="any"
+            step={5}
             value={durationMinutes}
             onChange={(e) => {
               const raw = e.target.value
@@ -1309,6 +1371,7 @@ function TaskFieldsForm({
             onBlur={() => {
               setDurationMinutes(parseDuration(durationMinutes))
             }}
+            onPointerDown={beginDurationScrub}
             onKeyDown={(e) => {
               if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
                 e.preventDefault()

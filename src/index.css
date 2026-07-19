@@ -429,6 +429,8 @@ body.is-datetime-scrubbing .stack-anchor-time input {
 .task-form-duration input {
   padding: 0.3rem 0.25rem;
   border-radius: 8px;
+  cursor: ns-resize;
+  touch-action: none;
 }
 
 .checkbox-row {
@@ -1172,11 +1174,24 @@ body.is-task-reordering .task-sidebar {
 
 .calendar-shell .fc .fc-timegrid-event.task-event,
 .calendar-shell .fc .fc-daygrid-event.task-event {
-  cursor: pointer;
+  cursor: grab;
   border-style: dashed;
   font-weight: 600;
   opacity: 0.8;
   touch-action: none;
+}
+
+/* Prefer the pointer-following drag mirror (keeps grab offset) over the
+   snapped grid mirror that FullCalendar shows after useEventCenter jumps. */
+body.is-cal-stack-dragging .fc-event-dragging {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 0.8;
+}
+
+body.is-cal-stack-dragging .fc-event-mirror.task-event {
+  opacity: 0 !important;
+  pointer-events: none;
 }
 
 /* Draw local tasks above Google events when they overlap. */

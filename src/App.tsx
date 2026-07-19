@@ -283,7 +283,6 @@ export default function App() {
                 }
                 setStackDragPreview({ groupId, deltaMs })
               }}
-              onTaskDurationChange={plan.setTaskDuration}
               onSelectSlot={plan.addFromSlot}
               onTaskClick={setEditingTaskId}
               busy={busy}

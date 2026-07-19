@@ -10,19 +10,35 @@ type StackDragState = {
   taskId: string
   groupId: string
   subjectEl: HTMLElement
+  /** Event top/left at drag start (viewport coords). */
   originTop: number
   originLeft: number
-  /** Horizontal placement of the subject harness (FC uses % left/right). */
-  harnessLeft: string
-  harnessRight: string
+  /** Pointer offset within the event at grab time. */
+  grabOffsetX: number
+  grabOffsetY: number
+  pointerX: number
+  pointerY: number
+  clearMoveListeners: () => void
 }
 
 type UseTaskStackDragOptions = {
   shellRef: RefObject<HTMLElement | null>
 }
 
+function clientPoint(ev: Event): { x: number; y: number } | null {
+  if ('clientX' in ev && typeof (ev as PointerEvent).clientX === 'number') {
+    const e = ev as PointerEvent
+    return { x: e.clientX, y: e.clientY }
+  }
+  const t =
+    (ev as TouchEvent).touches?.[0] ?? (ev as TouchEvent).changedTouches?.[0]
+  if (t) return { x: t.clientX, y: t.clientY }
+  return null
+}
+
 /**
  * Visually moves one group's task stack while dragging a block in that group.
+ * Tracks grab offset so the stack follows the finger/cursor without jumping.
  * Time commits happen in CalendarView via that group's stack anchor.
  */
 export function useTaskStackDrag({ shellRef }: UseTaskStackDragOptions) {
@@ -38,11 +54,14 @@ export function useTaskStackDrag({ shellRef }: UseTaskStackDragOptions) {
   }
 
   function stopStackDragTracking() {
+    const drag = stackDragRef.current
+    drag?.clearMoveListeners()
     stackDragRef.current = null
     if (stackDragRafRef.current !== null) {
       cancelAnimationFrame(stackDragRafRef.current)
       stackDragRafRef.current = null
     }
+    document.body.classList.remove('is-cal-stack-dragging')
   }
 
   function cancelStackDrag() {
@@ -55,32 +74,23 @@ export function useTaskStackDrag({ shellRef }: UseTaskStackDragOptions) {
     const drag = stackDragRef.current
     if (!shell || !drag) return
 
-    const mirror = shell.querySelector<HTMLElement>('.fc-event-mirror')
-    if (!mirror) return
-
-    // FC forces mirrors to left:0/right:0 (full column). Restore the
-    // subject's horizontal size so it matches the rest of the stack.
-    const mirrorHarness = mirror.closest<HTMLElement>(
-      '.fc-timegrid-event-harness',
-    )
-    if (mirrorHarness) {
-      mirrorHarness.style.left = drag.harnessLeft
-      mirrorHarness.style.right = drag.harnessRight
-      mirrorHarness.style.width = ''
-    }
-
-    const rect = mirror.getBoundingClientRect()
-    const deltaX = rect.left - drag.originLeft
-    const deltaY = rect.top - drag.originTop
+    // Place the stack from the live pointer minus where we grabbed inside the event.
+    const deltaX = drag.pointerX - drag.grabOffsetX - drag.originLeft
+    const deltaY = drag.pointerY - drag.grabOffsetY - drag.originTop
     if (Math.abs(deltaX) < 0.5 && Math.abs(deltaY) < 0.5) {
       clearStackDragTransforms()
       return
     }
 
+    const floating = document.querySelector<HTMLElement>('.fc-event-dragging')
+    if (floating) {
+      floating.style.width = `${drag.subjectEl.getBoundingClientRect().width}px`
+    }
+
     shell.querySelectorAll<HTMLElement>(`.${TASK_STACK_CLASS}`).forEach((el) => {
-      if (el.classList.contains('fc-event-mirror') || el === drag.subjectEl) {
-        return
-      }
+      if (el.classList.contains('fc-event-dragging')) return
+      if (el.classList.contains('fc-event-mirror')) return
+      if (el === drag.subjectEl) return
       if (el.dataset.groupId !== drag.groupId) return
       el.style.transform = `translate(${deltaX}px, ${deltaY}px)`
     })
@@ -94,6 +104,7 @@ export function useTaskStackDrag({ shellRef }: UseTaskStackDragOptions) {
         cancelAnimationFrame(rafRef.current)
         rafRef.current = null
       }
+      document.body.classList.remove('is-cal-stack-dragging')
       shell.current
         ?.querySelectorAll<HTMLElement>(`.${TASK_STACK_CLASS}`)
         .forEach((el) => {
@@ -108,17 +119,38 @@ export function useTaskStackDrag({ shellRef }: UseTaskStackDragOptions) {
     if (!taskId || !groupId) return
 
     const rect = arg.el.getBoundingClientRect()
-    const harness = arg.el.closest<HTMLElement>('.fc-timegrid-event-harness')
+    const point = clientPoint(arg.jsEvent) ?? {
+      x: rect.left + rect.width / 2,
+      y: rect.top + rect.height / 2,
+    }
     arg.el.dataset.groupId = groupId
+
+    const onPointerMove = (ev: Event) => {
+      const drag = stackDragRef.current
+      const next = clientPoint(ev)
+      if (!drag || !next) return
+      drag.pointerX = next.x
+      drag.pointerY = next.y
+    }
+    document.addEventListener('pointermove', onPointerMove)
+    document.addEventListener('touchmove', onPointerMove, { passive: true })
+
     stackDragRef.current = {
       taskId,
       groupId,
       subjectEl: arg.el,
       originTop: rect.top,
       originLeft: rect.left,
-      harnessLeft: harness?.style.left || '0%',
-      harnessRight: harness?.style.right || '0%',
+      grabOffsetX: point.x - rect.left,
+      grabOffsetY: point.y - rect.top,
+      pointerX: point.x,
+      pointerY: point.y,
+      clearMoveListeners: () => {
+        document.removeEventListener('pointermove', onPointerMove)
+        document.removeEventListener('touchmove', onPointerMove)
+      },
     }
+    document.body.classList.add('is-cal-stack-dragging')
 
     const tick = () => {
       if (!stackDragRef.current) return
