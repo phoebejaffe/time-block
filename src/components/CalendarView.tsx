@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import FullCalendar from '@fullcalendar/react'
 import type {
   DateSelectArg,
+  DateSpanApi,
   DatesSetArg,
+  EventApi,
   EventClickArg,
   EventContentArg,
   EventInput,
@@ -43,6 +45,8 @@ type CalendarViewProps = {
   anchor: StackAnchor
   onDatesSet: (start: Date, end: Date) => void
   onStackShift: (deltaMs: number) => void
+  /** Live stack time shift while dragging (null when drag ends). */
+  onStackShiftPreview?: (deltaMs: number | null) => void
   onTaskDurationChange: (taskId: string, durationMinutes: number) => void
   onSelectSlot: (start: Date, end: Date) => void
   onTaskClick: (taskId: string) => void
@@ -69,6 +73,7 @@ export function CalendarView({
   anchor,
   onDatesSet,
   onStackShift,
+  onStackShiftPreview,
   onTaskDurationChange,
   onSelectSlot,
   onTaskClick,
@@ -79,6 +84,10 @@ export function CalendarView({
   const calendarBodyRef = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const calendarsMenuRef = useRef<HTMLDivElement>(null)
+  const dragOriginStartRef = useRef<number | null>(null)
+  const lastPreviewDeltaRef = useRef<number | null>(null)
+  const onStackShiftPreviewRef = useRef(onStackShiftPreview)
+  onStackShiftPreviewRef.current = onStackShiftPreview
 
   const [narrow, setNarrow] = useState(false)
   const [title, setTitle] = useState('')
@@ -95,6 +104,38 @@ export function CalendarView({
 
   const { handleEventDragStart, handleEventDragStop, handleEventDrop } =
     useTaskStackDrag({ shellRef, onStackShift })
+
+  function publishPreview(deltaMs: number | null) {
+    if (lastPreviewDeltaRef.current === deltaMs) return
+    lastPreviewDeltaRef.current = deltaMs
+    onStackShiftPreviewRef.current?.(deltaMs)
+  }
+
+  function handleDragStart(arg: Parameters<typeof handleEventDragStart>[0]) {
+    dragOriginStartRef.current = arg.event.start?.getTime() ?? null
+    lastPreviewDeltaRef.current = null
+    handleEventDragStart(arg)
+  }
+
+  function handleDragStop(arg: Parameters<typeof handleEventDragStop>[0]) {
+    handleEventDragStop(arg)
+    dragOriginStartRef.current = null
+    publishPreview(null)
+  }
+
+  function handleDrop(arg: Parameters<typeof handleEventDrop>[0]) {
+    handleEventDrop(arg)
+    dragOriginStartRef.current = null
+    publishPreview(null)
+  }
+
+  function handleEventAllow(span: DateSpanApi, movingEvent: EventApi | null) {
+    if (movingEvent?.extendedProps.source !== 'task') return true
+    const origin = dragOriginStartRef.current
+    if (origin == null || !span.start) return true
+    publishPreview(span.start.getTime() - origin)
+    return true
+  }
 
   useEffect(() => {
     const el = shellRef.current
@@ -321,9 +362,10 @@ export function CalendarView({
           eventDurationEditable
           events={events}
           datesSet={handleDatesSet}
-          eventDragStart={handleEventDragStart}
-          eventDragStop={handleEventDragStop}
-          eventDrop={handleEventDrop}
+          eventAllow={handleEventAllow}
+          eventDragStart={handleDragStart}
+          eventDragStop={handleDragStop}
+          eventDrop={handleDrop}
           eventResize={handleEventResize}
           select={handleSelect}
           eventClick={handleEventClick}

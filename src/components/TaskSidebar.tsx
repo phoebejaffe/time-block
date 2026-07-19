@@ -26,6 +26,39 @@ const NEW_EDIT_ID = '__new__'
 const TOUCH_LONG_PRESS_MS = 320
 const TOUCH_CANCEL_MOVE_PX = 12
 const MOUSE_ACTIVATE_PX = 5
+const ANCHOR_SCRUB_PX = 25
+const ANCHOR_SCRUB_ACTIVATE_PX = 8
+
+type AnchorField = 'year' | 'month' | 'day' | 'hour' | 'minute'
+
+function readSelectionStart(input: HTMLInputElement): number | null {
+  try {
+    return input.selectionStart
+  } catch {
+    return null
+  }
+}
+
+function anchorFieldFromSelection(start: number | null): AnchorField {
+  // Value shape: YYYY-MM-DDTHH:mm — same segments as native arrow keys.
+  if (start == null) return 'minute'
+  if (start <= 4) return 'year'
+  if (start <= 7) return 'month'
+  if (start <= 10) return 'day'
+  if (start <= 13) return 'hour'
+  return 'minute'
+}
+
+function shiftAnchorIso(iso: string, field: AnchorField, dir: 1 | -1): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso
+  if (field === 'year') d.setFullYear(d.getFullYear() + dir)
+  else if (field === 'month') d.setMonth(d.getMonth() + dir)
+  else if (field === 'day') d.setDate(d.getDate() + dir)
+  else if (field === 'hour') d.setHours(d.getHours() + dir)
+  else d.setMinutes(d.getMinutes() + dir * 5)
+  return d.toISOString()
+}
 
 type TaskSidebarProps = {
   tasks: Task[]
@@ -92,11 +125,15 @@ export function TaskSidebar({
   const [dropLineIndex, setDropLineIndex] = useState<number | null>(null)
   const [modal, setModal] = useState<'save' | 'restore' | 'commit' | null>(null)
   const [pushEpoch, setPushEpoch] = useState(0)
+  const [listMenuOpen, setListMenuOpen] = useState(false)
 
   const listRef = useRef<HTMLUListElement>(null)
+  const listMenuRef = useRef<HTMLDivElement>(null)
   const dropLineIndexRef = useRef<number | null>(null)
   const suppressClickRef = useRef(false)
   const tasksLengthRef = useRef(tasks.length)
+  const anchorRef = useRef(anchor)
+  anchorRef.current = anchor
   useEffect(() => {
     dropLineIndexRef.current = dropLineIndex
   }, [dropLineIndex])
@@ -116,6 +153,29 @@ export function TaskSidebar({
     )
     card?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
   }, [editingId, tasks, onEditingIdChange])
+
+  useEffect(() => {
+    if (!listMenuOpen) return
+
+    function handlePointerDown(event: MouseEvent) {
+      const target = event.target
+      if (!(target instanceof Node)) return
+      if (listMenuRef.current && !listMenuRef.current.contains(target)) {
+        setListMenuOpen(false)
+      }
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') setListMenuOpen(false)
+    }
+
+    document.addEventListener('mousedown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [listMenuOpen])
 
   const resolved = useMemo(
     () => resolveStack(tasks, anchor),
@@ -162,6 +222,79 @@ export function TaskSidebar({
     const ok = await onCommit(selectedCommitId)
     setPushEpoch((n) => n + 1)
     if (ok) setModal(null)
+  }
+
+  function beginAnchorScrub(e: React.PointerEvent<HTMLInputElement>) {
+    if (e.button !== 0) return
+    const input = e.currentTarget
+    const startY = e.clientY
+    const startX = e.clientX
+    const pointerId = e.pointerId
+    let active = false
+    let lastTick = 0
+    let field: AnchorField = 'minute'
+
+    function currentIso(): string {
+      if (input.value) {
+        const parsed = fromLocalInputValue(input.value)
+        if (!Number.isNaN(new Date(parsed).getTime())) return parsed
+      }
+      return anchorRef.current.at
+    }
+
+    function applyTicks(from: number, to: number) {
+      if (to === from) return
+      const dir: 1 | -1 = to > from ? 1 : -1
+      let steps = Math.abs(to - from)
+      let at = currentIso()
+      while (steps > 0) {
+        at = shiftAnchorIso(at, field, dir)
+        steps -= 1
+      }
+      onAnchorChange({ ...anchorRef.current, at })
+    }
+
+    function onMove(ev: PointerEvent) {
+      const dx = ev.clientX - startX
+      const dy = ev.clientY - startY
+      if (!active) {
+        if (Math.abs(dy) < ANCHOR_SCRUB_ACTIVATE_PX) return
+        if (Math.abs(dy) < Math.abs(dx)) {
+          cleanup()
+          return
+        }
+        active = true
+        field = anchorFieldFromSelection(readSelectionStart(input))
+        document.body.classList.add('is-datetime-scrubbing')
+        try {
+          input.setPointerCapture(pointerId)
+        } catch {
+          /* ignore */
+        }
+      }
+      ev.preventDefault()
+      // Drag up → increase (same as ArrowUp).
+      const tick = Math.trunc(-dy / ANCHOR_SCRUB_PX)
+      if (tick !== lastTick) {
+        applyTicks(lastTick, tick)
+        lastTick = tick
+      }
+    }
+
+    function cleanup() {
+      document.removeEventListener('pointermove', onMove)
+      document.removeEventListener('pointerup', onUp)
+      document.removeEventListener('pointercancel', onUp)
+      document.body.classList.remove('is-datetime-scrubbing')
+    }
+
+    function onUp() {
+      cleanup()
+    }
+
+    document.addEventListener('pointermove', onMove)
+    document.addEventListener('pointerup', onUp)
+    document.addEventListener('pointercancel', onUp)
   }
 
   function handleSaveList(e: React.FormEvent) {
@@ -395,6 +528,7 @@ export function TaskSidebar({
                   at: fromLocalInputValue(e.target.value),
                 })
               }}
+              onPointerDown={beginAnchorScrub}
             />
           </label>
         </div>
@@ -527,60 +661,95 @@ export function TaskSidebar({
               }}
             />
           ) : (
-            <button
-              type="button"
-              className="task-new-trigger"
-              onClick={() => onEditingIdChange(NEW_EDIT_ID)}
-              disabled={busy}
-            >
-              New block +
-            </button>
+            <div className="task-new-row">
+              <button
+                type="button"
+                className="task-new-trigger"
+                onClick={() => onEditingIdChange(NEW_EDIT_ID)}
+                disabled={busy}
+              >
+                New block +
+              </button>
+              <div className="task-new-list-actions">
+                <div className="task-new-menu" ref={listMenuRef}>
+                  <button
+                    type="button"
+                    className="btn btn-text btn-icon task-new-menu-btn"
+                    aria-label="Block list options"
+                    aria-expanded={listMenuOpen}
+                    aria-haspopup="true"
+                    disabled={busy}
+                    onClick={() => setListMenuOpen((open) => !open)}
+                  >
+                    ···
+                  </button>
+                  {listMenuOpen && (
+                    <div className="task-new-menu-dropdown" role="menu">
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="calendar-menu-item"
+                        disabled={busy || tasks.length === 0}
+                        onClick={() => {
+                          setListMenuOpen(false)
+                          setModal('save')
+                        }}
+                      >
+                        Save blocks
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="calendar-menu-item"
+                        disabled={busy}
+                        onClick={() => {
+                          setListMenuOpen(false)
+                          openRestoreModal()
+                        }}
+                      >
+                        Restore blocks
+                      </button>
+                      <div className="calendar-menu-sep" role="separator" />
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="calendar-menu-item"
+                        disabled={busy || tasks.length === 0}
+                        onClick={() => {
+                          setListMenuOpen(false)
+                          onClear()
+                        }}
+                      >
+                        Clear blocks
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm task-new-commit"
+                  onClick={() => setModal('commit')}
+                  disabled={busy || tasks.length === 0}
+                >
+                  {isUpdate ? 'Update' : 'Add'}
+                  <CalendarIcon />
+                </button>
+              </div>
+            </div>
           )}
         </li>
       </ul>
 
-      <div className="sidebar-actions">
-        <button
-          type="button"
-          className="btn btn-ghost btn-sm"
-          onClick={() => setModal('save')}
-          disabled={busy || tasks.length === 0}
-        >
-          Save blocks
-        </button>
-        <button
-          type="button"
-          className="btn btn-ghost btn-sm"
-          onClick={openRestoreModal}
-          disabled={busy}
-        >
-          Restore blocks
-        </button>
-        <button
-          type="button"
-          className="btn btn-ghost btn-sm"
-          onClick={onClear}
-          disabled={busy || tasks.length === 0}
-        >
-          Clear
-        </button>
-        <button
-          type="button"
-          className="btn btn-primary btn-sm sidebar-action-commit"
-          onClick={() => setModal('commit')}
-          disabled={busy || tasks.length === 0}
-        >
-          {isUpdate ? 'Update' : 'Create'}
-        </button>
-        {notice && !modal && (
+      {notice && !modal && (
+        <div className="sidebar-actions">
           <p
             className={`notice notice-${notice.kind}`}
             role={notice.kind === 'error' ? 'alert' : 'status'}
           >
             {notice.text}
           </p>
-        )}
-      </div>
+        </div>
+      )}
 
       {modal === 'save' && (
         <Modal title="Save block list" onClose={() => setModal(null)}>
@@ -668,7 +837,7 @@ export function TaskSidebar({
 
       {modal === 'commit' && (
         <Modal
-          title={isUpdate ? 'Update calendar' : 'Create calendar events'}
+          title={isUpdate ? 'Update calendar' : 'Add to calendar'}
           onClose={() => setModal(null)}
         >
           <div className="modal-form">
@@ -707,17 +876,18 @@ export function TaskSidebar({
               </button>
               <button
                 type="button"
-                className="btn btn-primary btn-sm"
+                className="btn btn-primary btn-sm task-new-commit"
                 onClick={() => void handleCommit()}
                 disabled={busy || tasks.length === 0 || !selectedCommitId}
               >
                 {busy
                   ? isUpdate
                     ? 'Updating…'
-                    : 'Creating…'
+                    : 'Adding…'
                   : isUpdate
                     ? 'Update'
-                    : 'Create'}
+                    : 'Add'}
+                {!busy && <CalendarIcon />}
               </button>
             </div>
             {notice && (
@@ -780,6 +950,27 @@ function Modal({
         <div className="modal-body">{children}</div>
       </div>
     </div>
+  )
+}
+
+function CalendarIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden
+    >
+      <path
+        d="M3 9H21M17 13.0014L7 13M10.3333 17.0005L7 17M7 3V5M17 3V5M6.2 21H17.8C18.9201 21 19.4802 21 19.908 20.782C20.2843 20.5903 20.5903 20.2843 20.782 19.908C21 19.4802 21 18.9201 21 17.8V8.2C21 7.07989 21 6.51984 20.782 6.09202C20.5903 5.71569 20.2843 5.40973 19.908 5.21799C19.4802 5 18.9201 5 17.8 5H6.2C5.0799 5 4.51984 5 4.09202 5.21799C3.71569 5.40973 3.40973 5.71569 3.21799 6.09202C3 6.51984 3 7.07989 3 8.2V17.8C3 18.9201 3 19.4802 3.21799 19.908C3.40973 20.2843 3.71569 20.5903 4.09202 20.782C4.51984 21 5.07989 21 6.2 21Z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   )
 }
 

@@ -1,14 +1,16 @@
-import { useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { AuthButton } from './components/AuthButton'
 import { CalendarView } from './components/CalendarView'
+import { MobileSplitHandle } from './components/MobileSplitHandle'
 import { TaskSidebar } from './components/TaskSidebar'
 import { useCalendarEvents } from './hooks/useCalendarEvents'
 import { useGoogleSession } from './hooks/useGoogleSession'
+import { useMobileSplit } from './hooks/useMobileSplit'
 import { useNotice } from './hooks/useNotice'
 import { usePlan } from './hooks/usePlan'
 import { syncTasksToCalendar } from './lib/calendarApi'
 import { ensureWriteScope } from './lib/google'
-import { type Task } from './lib/tasks'
+import { shiftAnchor, type Task } from './lib/tasks'
 
 export default function App() {
   const { notice, show, clear } = useNotice()
@@ -21,8 +23,18 @@ export default function App() {
 
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
   const [commitBusy, setCommitBusy] = useState(false)
+  const [stackDragDeltaMs, setStackDragDeltaMs] = useState<number | null>(null)
+  const appBodyRef = useRef<HTMLDivElement>(null)
+  const { setSplitPercent, splitStyle } = useMobileSplit()
 
   const busy = session.busy || calendars.busy || commitBusy
+  const sidebarAnchor = useMemo(
+    () =>
+      stackDragDeltaMs != null
+        ? shiftAnchor(plan.plan.anchor, stackDragDeltaMs)
+        : plan.plan.anchor,
+    [plan.plan.anchor, stackDragDeltaMs],
+  )
 
   async function handleSignIn() {
     clear()
@@ -123,16 +135,19 @@ export default function App() {
         </div>
       )}
 
-      <div className="app-body">
+      <div className="app-body" ref={appBodyRef} style={splitStyle}>
         <TaskSidebar
           tasks={plan.plan.tasks}
-          anchor={plan.plan.anchor}
+          anchor={sidebarAnchor}
           writableCalendars={calendars.writableCalendars}
           onAdd={handleAddTask}
           onUpdate={plan.updateTask}
           onRemove={plan.removeTask}
           onReorder={plan.reorderTasks}
-          onAnchorChange={plan.setAnchor}
+          onAnchorChange={(next) => {
+            setStackDragDeltaMs(null)
+            plan.setAnchor(next)
+          }}
           onReplaceTasks={handleReplaceTasks}
           onClear={handleClearBlocks}
           onCommit={handleCommit}
@@ -142,6 +157,11 @@ export default function App() {
           notice={notice}
           signedIn={session.signedIn}
           onSignOut={handleSignOut}
+        />
+
+        <MobileSplitHandle
+          bodyRef={appBodyRef}
+          onSplitChange={setSplitPercent}
         />
 
         <main className="main-panel">
@@ -168,7 +188,11 @@ export default function App() {
               tasks={plan.plan.tasks}
               anchor={plan.plan.anchor}
               onDatesSet={calendars.setDates}
-              onStackShift={plan.shiftStack}
+              onStackShift={(deltaMs) => {
+                setStackDragDeltaMs(null)
+                plan.shiftStack(deltaMs)
+              }}
+              onStackShiftPreview={setStackDragDeltaMs}
               onTaskDurationChange={plan.setTaskDuration}
               onSelectSlot={plan.addFromSlot}
               onTaskClick={setEditingTaskId}
