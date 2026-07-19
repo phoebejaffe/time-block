@@ -23,7 +23,7 @@ import {
   isPushUnchanged,
   stackPushFingerprint,
 } from '../lib/pushedEvents'
-import { SignOutButton } from './AuthButton'
+import { SettingsMenu } from './SettingsMenu'
 
 const timeFmt = new Intl.DateTimeFormat(undefined, {
   hour: 'numeric',
@@ -241,9 +241,11 @@ export function TaskSidebar({
           <h3>Timeblock</h3>
         </div>
         <div className="task-list-meta">
-          {signedIn && onSignOut && (
-            <SignOutButton busy={busy} onSignOut={onSignOut} />
-          )}
+          <SettingsMenu
+            busy={busy}
+            signedIn={signedIn}
+            onSignOut={onSignOut}
+          />
         </div>
       </div>
 

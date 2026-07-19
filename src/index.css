@@ -1189,6 +1189,51 @@ body.is-task-reordering .task-sidebar {
   cursor: default;
 }
 
+.settings-menu {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.settings-menu > .btn-icon {
+  letter-spacing: 0.05em;
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.settings-menu-dropdown {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  right: 0;
+  z-index: 40;
+  min-width: 12.5rem;
+  padding: 0.35rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: #fffcf6;
+  box-shadow: var(--shadow);
+}
+
+.settings-menu-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.45rem 0.65rem 0.55rem;
+}
+
+.settings-menu-meta-label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.settings-menu-meta-value {
+  font-size: 0.8rem;
+  color: var(--ink);
+  line-height: 1.3;
+}
+
 .calendar-menu {
   position: relative;
   flex-shrink: 0;

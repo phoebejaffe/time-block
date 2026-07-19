@@ -7,6 +7,9 @@ export default defineConfig({
   plugins: [react()],
   // Relative asset paths so the build works at any URL (e.g. GitHub Pages subpath).
   base: './',
+  define: {
+    __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
+  },
   test: {
     environment: 'happy-dom',
   },
