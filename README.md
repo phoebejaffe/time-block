@@ -50,10 +50,11 @@ If the OAuth app is in **Testing** mode, add your Google account as a test user.
 | -------------- | ------------------------ |
 | `npm run dev`  | Local development server |
 | `npm run build`| Typecheck + production build |
+| `npm run test` | Unit tests (Vitest) |
 | `npm run preview` | Preview the production build |
 
 ## Stack
 
 - Vite + React + TypeScript
-- FullCalendar (`timeGrid` / `dayGrid`)
+- FullCalendar (`timeGrid`)
 - Google Identity Services + `gapi.client` Calendar v3

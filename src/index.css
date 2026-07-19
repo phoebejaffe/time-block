@@ -230,6 +230,12 @@ select {
   width: 100%;
 }
 
+.stack-anchor-warning {
+  margin: 0.35rem 0 0;
+  font-size: 0.75rem;
+  color: #9a5b1a;
+}
+
 .sidebar-actions {
   margin-top: auto;
   padding-top: 0.75rem;
@@ -906,6 +912,7 @@ body.is-task-reordering .task-sidebar {
 
 .calendar-shell .fc .fc-timegrid-event.task-event,
 .calendar-shell .fc .fc-daygrid-event.task-event {
+  cursor: pointer;
   border-style: dashed;
   font-weight: 600;
   opacity: 0.8;
@@ -924,6 +931,7 @@ body.is-task-reordering .task-sidebar {
 .calendar-shell .fc .fc-timegrid-event {
   margin: 0;
   border-radius: 2px;
+  font-size: calc(0.6em + 2px);
 }
 
 .calendar-shell .fc .fc-timegrid-event .fc-event-main {
@@ -953,6 +961,40 @@ body.is-task-reordering .task-sidebar {
 
 .calendar-shell .fc .fc-timegrid-event-short .fc-event-main {
   padding: 0 3px;
+}
+
+/* Short events get tighter padding: <30 min, and <=10 min tighter still. */
+.calendar-shell .fc .fc-timegrid-event.event-sm .fc-event-main {
+  padding: 0 2px;
+}
+
+.calendar-shell .fc .fc-timegrid-event.event-xs .fc-event-main {
+  padding: 0 1px;
+  line-height: 1.05;
+}
+
+/* 5‑min events: let label paint above the short block when zoomed out. */
+.calendar-shell .fc .fc-timegrid-event-harness:has(.event-xxs) {
+  overflow: visible;
+  z-index: 9 !important;
+}
+
+.calendar-shell .fc .fc-timegrid-event.event-xxs,
+.calendar-shell .fc .fc-timegrid-event.event-xxs .fc-event-main,
+.calendar-shell .fc .fc-timegrid-event.event-xxs .fc-event-main-frame {
+  overflow: visible;
+}
+
+.calendar-shell .fc .fc-timegrid-event.event-xxs .fc-event-main {
+  line-height: 1;
+  /* -2px base; up to -1px more as zoom goes from 1 → 0.7 (zoom floor). */
+  transform: translateY(
+    calc(-2px + min(0px, (max(0.7, var(--cal-zoom)) - 1) * (10px / 3)))
+  );
+}
+
+.calendar-shell .fc .fc-timegrid-event.event-xxs .fc-event-title {
+  font-size: 0.85em;
 }
 
 .calendar-shell .fc .fc-timegrid-event:not(.task-event) {

@@ -12,6 +12,7 @@ import {
   tasksFromSavedList,
   toLocalInputValue,
 } from '../lib/tasks'
+import type { Notice } from '../lib/notice'
 import { SignOutButton } from './AuthButton'
 
 const timeFmt = new Intl.DateTimeFormat(undefined, {
@@ -34,11 +35,30 @@ type TaskSidebarProps = {
   onReorder: (fromIndex: number, toIndex: number) => void
   onAnchorChange: (anchor: StackAnchor) => void
   onReplaceTasks: (tasks: Task[]) => void
+  onClear: () => void
   onCommit: (calendarId: string) => Promise<void>
+  editingId: string | null
+  onEditingIdChange: (id: string | null) => void
   busy?: boolean
-  notice?: { kind: 'success' | 'error' | 'info'; text: string } | null
+  notice?: Notice | null
   signedIn?: boolean
   onSignOut?: () => void
+}
+
+function isTodayOrTomorrow(iso: string): boolean {
+  const target = new Date(iso)
+  if (Number.isNaN(target.getTime())) return true
+  const startOfDay = (d: Date) => {
+    const x = new Date(d)
+    x.setHours(0, 0, 0, 0)
+    return x.getTime()
+  }
+  const today = startOfDay(new Date())
+  const tomorrowDate = new Date()
+  tomorrowDate.setDate(tomorrowDate.getDate() + 1)
+  const tomorrow = startOfDay(tomorrowDate)
+  const day = startOfDay(target)
+  return day === today || day === tomorrow
 }
 
 export function TaskSidebar({
@@ -51,14 +71,16 @@ export function TaskSidebar({
   onReorder,
   onAnchorChange,
   onReplaceTasks,
+  onClear,
   onCommit,
+  editingId,
+  onEditingIdChange,
   busy,
   notice,
   signedIn,
   onSignOut,
 }: TaskSidebarProps) {
   const [commitCalendarId, setCommitCalendarId] = useState(loadTargetCalendarId)
-  const [editingId, setEditingId] = useState<string | null>(null)
   const [savedLists, setSavedLists] = useState<SavedTaskList[]>(() =>
     loadSavedLists(),
   )
@@ -79,6 +101,18 @@ export function TaskSidebar({
   useEffect(() => {
     tasksLengthRef.current = tasks.length
   }, [tasks.length])
+
+  useEffect(() => {
+    if (!editingId || editingId === NEW_EDIT_ID) return
+    if (!tasks.some((t) => t.id === editingId)) {
+      onEditingIdChange(null)
+      return
+    }
+    const card = listRef.current?.querySelector(
+      `[data-task-id="${CSS.escape(editingId)}"]`,
+    )
+    card?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }, [editingId, tasks, onEditingIdChange])
 
   const resolved = useMemo(
     () => resolveStack(tasks, anchor),
@@ -109,6 +143,7 @@ export function TaskSidebar({
       : `${timeFmt.format(resolved[0]!.start)} – ${timeFmt.format(resolved[resolved.length - 1]!.end)}`
 
   const adding = editingId === NEW_EDIT_ID
+  const anchorFarFromToday = !isTodayOrTomorrow(anchor.at)
 
   async function handleCommit() {
     if (!selectedCommitId) return
@@ -349,6 +384,11 @@ export function TaskSidebar({
             />
           </label>
         </div>
+        {anchorFarFromToday && (
+          <p className="stack-anchor-warning" role="status">
+            Not today or tomorrow
+          </p>
+        )}
       </section>
 
       <ul className="task-list" ref={listRef}>
@@ -364,6 +404,7 @@ export function TaskSidebar({
             <li
               key={task.id}
               data-task-index={index}
+              data-task-id={task.id}
               className={[
                 'task-card',
                 dragIndex === index ? 'is-dragging' : '',
@@ -383,14 +424,14 @@ export function TaskSidebar({
                   initialDuration={task.durationMinutes}
                   submitLabel="Save"
                   busy={busy}
-                  onCancel={() => setEditingId(null)}
+                  onCancel={() => onEditingIdChange(null)}
                   onSubmit={(next) => {
                     onUpdate({
                       ...task,
                       title: next.title,
                       durationMinutes: next.durationMinutes,
                     })
-                    setEditingId(null)
+                    onEditingIdChange(null)
                   }}
                 />
               ) : (
@@ -412,7 +453,7 @@ export function TaskSidebar({
                       title="Edit"
                       onClick={() => {
                         if (suppressClickRef.current) return
-                        setEditingId(task.id)
+                        onEditingIdChange(task.id)
                       }}
                     >
                       <EditIcon />
@@ -463,17 +504,17 @@ export function TaskSidebar({
               initialDuration={30}
               submitLabel="Add"
               busy={busy}
-              onCancel={() => setEditingId(null)}
+              onCancel={() => onEditingIdChange(null)}
               onSubmit={(next) => {
                 onAdd(next)
-                setEditingId(null)
+                onEditingIdChange(null)
               }}
             />
           ) : (
             <button
               type="button"
               className="task-new-trigger"
-              onClick={() => setEditingId(NEW_EDIT_ID)}
+              onClick={() => onEditingIdChange(NEW_EDIT_ID)}
               disabled={busy}
             >
               New block +
@@ -498,6 +539,14 @@ export function TaskSidebar({
           disabled={busy}
         >
           Restore blocks
+        </button>
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm"
+          onClick={onClear}
+          disabled={busy || tasks.length === 0}
+        >
+          Clear
         </button>
         <button
           type="button"
@@ -764,6 +813,16 @@ function TaskFieldsForm({
     initialDuration,
   )
 
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key !== 'Escape') return
+      e.preventDefault()
+      onCancel()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [onCancel])
+
   function parseDuration(value: number | ''): number {
     if (value === '') return 15
     return Math.max(5, Math.round(value) || 15)
@@ -794,7 +853,7 @@ function TaskFieldsForm({
           <input
             type="number"
             min={5}
-            step={5}
+            step="any"
             value={durationMinutes}
             onChange={(e) => {
               const raw = e.target.value
@@ -807,6 +866,22 @@ function TaskFieldsForm({
             }}
             onBlur={() => {
               setDurationMinutes(parseDuration(durationMinutes))
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                e.preventDefault()
+                const current = parseDuration(durationMinutes)
+                const next =
+                  e.key === 'ArrowUp'
+                    ? current + 5
+                    : Math.max(5, current - 5)
+                setDurationMinutes(next)
+                return
+              }
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                e.currentTarget.form?.requestSubmit()
+              }
             }}
             aria-label="Duration in minutes"
           />

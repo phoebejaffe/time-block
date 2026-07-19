@@ -58,7 +58,8 @@ export function fromLocalInputValue(value: string): string {
   return new Date(value).toISOString()
 }
 
-function migrateLegacy(raw: unknown): Plan | null {
+/** Normalize stored plan shapes (current + legacy Task[]). Exported for tests. */
+export function migratePlan(raw: unknown): Plan | null {
   if (!raw || typeof raw !== 'object') return null
 
   // New shape: { tasks, anchor }
@@ -119,7 +120,7 @@ export function loadPlan(): Plan {
       // Prefer legacy key if present
       const legacy = localStorage.getItem('time-blocking.tasks')
       if (legacy) {
-        const migrated = migrateLegacy(JSON.parse(legacy))
+        const migrated = migratePlan(JSON.parse(legacy))
         if (migrated) {
           savePlan(migrated)
           localStorage.removeItem('time-blocking.tasks')
@@ -128,7 +129,7 @@ export function loadPlan(): Plan {
       }
       return defaultPlan()
     }
-    return migrateLegacy(JSON.parse(raw)) ?? defaultPlan()
+    return migratePlan(JSON.parse(raw)) ?? defaultPlan()
   } catch {
     return defaultPlan()
   }
