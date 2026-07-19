@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   canUpdateCalendar,
+  hasPushedGroupOnDay,
   isPushUnchanged,
   loadPushedEvents,
   prunePushedEvents,
@@ -79,7 +80,11 @@ describe('pushedEvents', () => {
     expect(canUpdateCalendar('cal', 'group-2', '2026-07-18')).toBe(false)
     expect(canUpdateCalendar('cal', 'group-1', '2026-07-19')).toBe(false)
     expect(canUpdateCalendar('other', 'group-1', '2026-07-18')).toBe(false)
+    expect(hasPushedGroupOnDay('group-1', '2026-07-18')).toBe(true)
+    expect(hasPushedGroupOnDay('group-2', '2026-07-18')).toBe(false)
+    expect(hasPushedGroupOnDay('group-1', '2026-07-19')).toBe(false)
   })
+
 
   it('disables update when the stack fingerprint matches the last push', () => {
     const start = new Date('2026-07-18T15:00:00.000Z')

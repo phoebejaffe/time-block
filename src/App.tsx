@@ -14,7 +14,7 @@ import { useSidebarWidth } from './hooks/useSidebarWidth'
 import { syncTasksToCalendar } from './lib/calendarApi'
 import { formatError } from './lib/errors'
 import { ensureWriteScope } from './lib/google'
-import { canUpdateCalendar } from './lib/pushedEvents'
+import { hasPushedGroupOnDay } from './lib/pushedEvents'
 import {
   anchorOnDay,
   localDateKey,
@@ -155,7 +155,7 @@ export default function App() {
     if (!group) return false
     const anchor = anchorOnDay(group.anchor, viewDate)
     const dayKey = localDateKey(anchor.at)
-    const isUpdate = canUpdateCalendar(calendarId, groupId, dayKey)
+    const isUpdate = hasPushedGroupOnDay(groupId, dayKey)
     if (group.tasks.length === 0 && !isUpdate) {
       show('info', 'Add at least one block before adding to a calendar.')
       return false

@@ -19,7 +19,7 @@ import {
   toLocalTimeValue,
 } from '../lib/tasks'
 import {
-  canUpdateCalendar,
+  hasPushedGroupOnDay,
   isPushUnchanged,
   stackPushFingerprint,
 } from '../lib/pushedEvents'
@@ -216,7 +216,7 @@ export function TaskSidebar({
   const modalIsUpdate =
     pushEpoch >= 0 &&
     Boolean(modalGroupId) &&
-    canUpdateCalendar(selectedCommitId, modalGroupId || '', modalDayKey)
+    hasPushedGroupOnDay(modalGroupId || '', modalDayKey)
   const modalPushUnchanged =
     modalIsUpdate &&
     modalGroup != null &&
@@ -583,8 +583,7 @@ function BlockGroupPanel({
       : `${timeFmt.format(resolved[0]!.start)} – ${timeFmt.format(resolved[resolved.length - 1]!.end)}`
   const dayKey = localDateKey(anchor.at)
   const isUpdate =
-    pushEpoch >= 0 &&
-    canUpdateCalendar(selectedCommitId, group.id, dayKey)
+    pushEpoch >= 0 && hasPushedGroupOnDay(group.id, dayKey)
   const pushUnchanged =
     isUpdate &&
     isPushUnchanged(

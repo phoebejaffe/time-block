@@ -98,6 +98,14 @@ export function canUpdateCalendar(
   )
 }
 
+/** True when this group was pushed for this day on any calendar. */
+export function hasPushedGroupOnDay(groupId: string, dayKey: string): boolean {
+  if (!groupId || !dayKey) return false
+  return loadPushedEvents().some(
+    (e) => e.groupId === groupId && e.dayKey === dayKey,
+  )
+}
+
 /** Stable fingerprint of what a sync would write for this stack. */
 export function stackPushFingerprint(
   anchor: { kind: string; at: string },

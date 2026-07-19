@@ -1371,7 +1371,16 @@ body.is-task-reordering .task-sidebar {
   touch-action: none;
 }
 
-/* Hide FC's free-follow drag clone; the snapped grid mirror is the visual. */
+/* Durations are edited in the sidebar — never via calendar edge handles. */
+.calendar-shell .fc .task-event .fc-event-resizer {
+  display: none !important;
+  pointer-events: none !important;
+}
+
+/*
+ * Hide FC's free-follow drag clone. The snapped grid mirror (.fc-event-mirror)
+ * is the dragged block; siblings are shifted via useTaskStackDrag.
+ */
 .calendar-shell .fc-event-dragging:not(.fc-event-mirror) {
   visibility: hidden !important;
 }

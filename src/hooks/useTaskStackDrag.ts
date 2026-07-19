@@ -5,13 +5,22 @@ import type {
 } from '@fullcalendar/interaction'
 
 const TASK_STACK_CLASS = 'task-event'
+/** Must match FullCalendar `slotDuration` in CalendarView. */
+const SLOT_MS = 15 * 60_000
+
+export type StackDragVisual = {
+  /** Grab-corrected stack shift in ms (same value used on drop). */
+  deltaMs: number | null
+  /**
+   * Constant pixel correction for FC's grid mirror so it lines up with
+   * siblings (cancels the first-frame useEventCenter / snap jump).
+   */
+  mirrorNudgeMs: number
+}
 
 type StackDragState = {
   taskId: string
   groupId: string
-  subjectEl: HTMLElement
-  /** First snapped mirror top — movement is relative to this (vertical only). */
-  baselineTop: number | null
   /** Horizontal placement of the subject harness (FC uses % left/right). */
   harnessLeft: string
   harnessRight: string
@@ -19,16 +28,24 @@ type StackDragState = {
 
 type UseTaskStackDragOptions = {
   shellRef: RefObject<HTMLElement | null>
+  getVisual: () => StackDragVisual
 }
 
 /**
  * Visually moves one group's task stack while dragging a block in that group.
- * Follows FullCalendar's snapped mirror (5-minute steps), vertical only.
- * Time commits happen in CalendarView via that group's stack anchor.
+ *
+ * FullCalendar hides the source and shows a snapped `.fc-event-mirror` for the
+ * dragged block. Siblings (and a constant mirror nudge) are positioned from the
+ * same grab-corrected deltaMs so preview matches commit and scroll can't desync.
  */
-export function useTaskStackDrag({ shellRef }: UseTaskStackDragOptions) {
+export function useTaskStackDrag({
+  shellRef,
+  getVisual,
+}: UseTaskStackDragOptions) {
   const stackDragRef = useRef<StackDragState | null>(null)
   const stackDragRafRef = useRef<number | null>(null)
+  const getVisualRef = useRef(getVisual)
+  getVisualRef.current = getVisual
 
   function clearStackDragTransforms() {
     shellRef.current
@@ -51,46 +68,55 @@ export function useTaskStackDrag({ shellRef }: UseTaskStackDragOptions) {
     clearStackDragTransforms()
   }
 
+  function slotHeightPx(shell: HTMLElement): number | null {
+    const slot = shell.querySelector<HTMLElement>(
+      '.fc-timegrid-body .fc-timegrid-slot',
+    )
+    if (!slot) return null
+    const h = slot.getBoundingClientRect().height
+    return h > 0 ? h : null
+  }
+
+  function msToTranslateY(deltaMs: number, slotH: number): string {
+    const deltaY = (deltaMs / SLOT_MS) * slotH
+    return Math.abs(deltaY) < 0.5 ? '' : `translateY(${deltaY}px)`
+  }
+
   function syncStackDragTransforms() {
     const shell = shellRef.current
     const drag = stackDragRef.current
     if (!shell || !drag) return
 
+    const { deltaMs, mirrorNudgeMs } = getVisualRef.current()
+    const slotH = slotHeightPx(shell)
+    if (slotH == null) {
+      clearStackDragTransforms()
+      return
+    }
+
+    const siblingTransform =
+      deltaMs == null ? '' : msToTranslateY(deltaMs, slotH)
+    const mirrorTransform = msToTranslateY(mirrorNudgeMs, slotH)
+
     const mirror = shell.querySelector<HTMLElement>('.fc-event-mirror')
-    if (!mirror) return
-
-    // FC forces mirrors to left:0/right:0 (full column). Restore the
-    // subject's horizontal size so it matches the rest of the stack.
-    const mirrorHarness = mirror.closest<HTMLElement>(
-      '.fc-timegrid-event-harness',
-    )
-    if (mirrorHarness) {
-      mirrorHarness.style.left = drag.harnessLeft
-      mirrorHarness.style.right = drag.harnessRight
-      mirrorHarness.style.width = ''
-    }
-
-    const rect = mirror.getBoundingClientRect()
-    if (drag.baselineTop == null) {
-      // First snapped frame (may include useEventCenter jump) — treat as zero.
-      drag.baselineTop = rect.top
-      clearStackDragTransforms()
-      return
-    }
-
-    const deltaY = rect.top - drag.baselineTop
-    if (Math.abs(deltaY) < 0.5) {
-      clearStackDragTransforms()
-      return
-    }
-
-    // Vertical only — never slide sideways with the pointer.
-    shell.querySelectorAll<HTMLElement>(`.${TASK_STACK_CLASS}`).forEach((el) => {
-      if (el.classList.contains('fc-event-mirror') || el === drag.subjectEl) {
-        return
+    if (mirror) {
+      // FC forces mirrors to left:0/right:0 (full column). Restore the
+      // subject's horizontal size so it matches the rest of the stack.
+      const mirrorHarness = mirror.closest<HTMLElement>(
+        '.fc-timegrid-event-harness',
+      )
+      if (mirrorHarness) {
+        mirrorHarness.style.left = drag.harnessLeft
+        mirrorHarness.style.right = drag.harnessRight
+        mirrorHarness.style.width = ''
       }
+      mirror.style.transform = mirrorTransform
+    }
+
+    shell.querySelectorAll<HTMLElement>(`.${TASK_STACK_CLASS}`).forEach((el) => {
+      if (el.classList.contains('fc-event-mirror')) return
       if (el.dataset.groupId !== drag.groupId) return
-      el.style.transform = `translateY(${deltaY}px)`
+      el.style.transform = siblingTransform
     })
   }
 
@@ -120,8 +146,6 @@ export function useTaskStackDrag({ shellRef }: UseTaskStackDragOptions) {
     stackDragRef.current = {
       taskId,
       groupId,
-      subjectEl: arg.el,
-      baselineTop: null,
       harnessLeft: harness?.style.left || '0%',
       harnessRight: harness?.style.right || '0%',
     }
@@ -134,7 +158,7 @@ export function useTaskStackDrag({ shellRef }: UseTaskStackDragOptions) {
     stackDragRafRef.current = requestAnimationFrame(tick)
   }
 
-  /** Stops mirror tracking; keep transforms until finalize clears them. */
+  /** Stops tracking; keep transforms until finalize clears them. */
   function handleEventDragStop(_arg: EventDragStopArg) {
     stopStackDragTracking()
   }

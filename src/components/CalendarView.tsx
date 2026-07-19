@@ -99,6 +99,8 @@ export function CalendarView({
   const dragOriginStartRef = useRef<number | null>(null)
   /** First FC span.start during a drag — cancels useEventCenter jump. */
   const dragSpanOriginRef = useRef<number | null>(null)
+  /** originStart − spanOrigin — nudges FC's grid mirror onto the sibling timeline. */
+  const mirrorNudgeMsRef = useRef(0)
   const dragOriginAnchorRef = useRef<StackAnchor | null>(null)
   const dragGroupIdRef = useRef<string | null>(null)
   const pendingDeltaRef = useRef<number | null>(null)
@@ -120,7 +122,13 @@ export function CalendarView({
   const [farFromTodayOrTomorrow, setFarFromTodayOrTomorrow] = useState(false)
 
   const { handleEventDragStart, handleEventDragStop, cancelStackDrag } =
-    useTaskStackDrag({ shellRef })
+    useTaskStackDrag({
+      shellRef,
+      getVisual: () => ({
+        deltaMs: pendingDeltaRef.current,
+        mirrorNudgeMs: mirrorNudgeMsRef.current,
+      }),
+    })
 
   const { zoom, pinchingRef } = useCalendarZoom({
     bodyRef: calendarBodyRef,
@@ -129,6 +137,7 @@ export function CalendarView({
       // Two fingers: zoom only — never create or commit a stack move.
       discardDragRef.current = true
       pendingDeltaRef.current = 0
+      mirrorNudgeMsRef.current = 0
       cancelStackDrag()
       syncStackPreviewTimes(null)
       onStackShiftPreviewRef.current?.(null, null)
@@ -144,8 +153,8 @@ export function CalendarView({
     if (!shell || !groupId) return
 
     shell.querySelectorAll<HTMLElement>(`.${TASK_STACK_CLASS}`).forEach((el) => {
-      if (el.dataset.groupId !== groupId) return
-      if (el.classList.contains('fc-event-mirror')) return
+      const isMirror = el.classList.contains('fc-event-mirror')
+      if (!isMirror && el.dataset.groupId !== groupId) return
 
       const startMs = Number(el.dataset.startMs)
       const timeEl = el.querySelector('.fc-event-time')
@@ -177,6 +186,7 @@ export function CalendarView({
     dragOriginAnchorRef.current = null
     dragOriginStartRef.current = null
     dragSpanOriginRef.current = null
+    mirrorNudgeMsRef.current = 0
     dragGroupIdRef.current = null
     discardDragRef.current = false
 
@@ -197,6 +207,7 @@ export function CalendarView({
     discardDragRef.current = false
     dragOriginStartRef.current = arg.event.start?.getTime() ?? null
     dragSpanOriginRef.current = null
+    mirrorNudgeMsRef.current = 0
     dragOriginAnchorRef.current = group?.anchor ?? null
     dragGroupIdRef.current = groupId ?? null
     pendingDeltaRef.current = null
@@ -218,12 +229,16 @@ export function CalendarView({
     oldEvent: { start: Date | null }
     revert: () => void
   }) {
-    // Prefer the grab-corrected preview delta. FC's event/oldEvent delta
-    // includes the useEventCenter jump and must not be committed as-is.
+    // Prefer the grab-corrected preview delta over FC's event/oldEvent delta.
     const deltaMs = pendingDeltaRef.current ?? 0
     // Undo FC's single-event mutation; we commit the whole stack via anchor.
     arg.revert()
     finalizeStackDrag(deltaMs)
+  }
+
+  function handleEventResize(arg: { revert: () => void }) {
+    // Durations are owned by the plan; never accept calendar resize.
+    arg.revert()
   }
 
   function handleEventAllow(span: DateSpanApi, movingEvent: EventApi | null) {
@@ -242,12 +257,23 @@ export function CalendarView({
       return false
     }
 
-    // FullCalendar defaults to useEventCenter, which shifts the event on the
-    // first hit so the center (not the grab point) sits under the pointer.
-    // Treat the first span.start as zero so preview/commit only follow movement.
-    // Deltas are already snapped via snapDuration (5 minutes).
+    // Refuse duration changes (resize hits have a different end delta).
+    if (span.end && movingEvent.end) {
+      const originEnd = movingEvent.end.getTime()
+      const originStart = movingEvent.start?.getTime()
+      if (originStart != null) {
+        const originDur = originEnd - originStart
+        const nextDur = span.end.getTime() - span.start.getTime()
+        if (Math.abs(nextDur - originDur) > 500) return false
+      }
+    }
+
+    // Anchor preview/commit to the first allowed span so only pointer movement
+    // counts. Nudge the FC mirror back by any first-frame snap/center jump so
+    // it stays aligned with siblings. Deltas are snapped via snapDuration.
     if (dragSpanOriginRef.current == null) {
       dragSpanOriginRef.current = span.start.getTime()
+      mirrorNudgeMsRef.current = originMs - span.start.getTime()
     }
     publishPreview(span.start.getTime() - dragSpanOriginRef.current)
     return true
@@ -337,7 +363,9 @@ export function CalendarView({
           end: task.end.toISOString(),
           backgroundColor: TASK_COLOR,
           borderColor: TASK_BORDER,
-          editable: true,
+          // Move only — `editable: true` would re-enable duration resize.
+          startEditable: true,
+          durationEditable: false,
           order: 0,
           classNames: [
             TASK_STACK_CLASS,
@@ -466,6 +494,7 @@ export function CalendarView({
           eventDragStart={handleDragStart}
           eventDragStop={handleDragStop}
           eventDrop={handleDrop}
+          eventResize={handleEventResize}
           eventClick={handleEventClick}
           eventContent={handleEventContent}
           eventDidMount={(info) => {
