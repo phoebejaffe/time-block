@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { notice as makeNotice, type Notice, type NoticeKind } from '../lib/notice'
+import {
+  notice as makeNotice,
+  type Notice,
+  type NoticeKind,
+  type NoticeOptions,
+} from '../lib/notice'
 
 const AUTO_CLEAR_MS = 5_000
 
@@ -24,15 +29,16 @@ export function useNotice() {
   }, [clearTimer])
 
   const show = useCallback(
-    (kind: NoticeKind, text: string) => {
+    (kind: NoticeKind, text: string, options?: NoticeOptions) => {
       clearTimer()
-      const next = makeNotice(kind, text)
+      const next = makeNotice(kind, text, options)
       setNotice(next)
       if (kind !== 'error') {
+        const ms = options?.progressMs ?? AUTO_CLEAR_MS
         timerRef.current = setTimeout(() => {
           timerRef.current = null
           setNotice(null)
-        }, AUTO_CLEAR_MS)
+        }, ms)
       }
     },
     [clearTimer],

@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react'
 import { AuthButton } from './components/AuthButton'
 import { CalendarView } from './components/CalendarView'
 import { MobileSplitHandle } from './components/MobileSplitHandle'
+import { NoticeToast } from './components/NoticeToast'
 import { SidebarResizeHandle } from './components/SidebarResizeHandle'
 import { TaskSidebar } from './components/TaskSidebar'
 import { useCalendarEvents } from './hooks/useCalendarEvents'
@@ -93,6 +94,25 @@ export default function App() {
   function handleAddTask(groupId: string, input: Omit<Task, 'id'>) {
     plan.addTask(groupId, input)
     clear()
+  }
+
+  function handleRemoveTask(groupId: string, taskId: string) {
+    const group = plan.plan.groups.find((g) => g.id === groupId)
+    const index = group?.tasks.findIndex((t) => t.id === taskId) ?? -1
+    const task = index >= 0 ? group!.tasks[index] : undefined
+    if (!task) return
+
+    plan.removeTask(groupId, taskId)
+    if (editingTaskId === taskId) setEditingTaskId(null)
+
+    show('info', 'Block deleted', {
+      actionLabel: 'Undo',
+      progressMs: 5_000,
+      onAction: () => {
+        plan.insertTaskAt(groupId, task, index)
+        clear()
+      },
+    })
   }
 
   function handleReplaceTasks(groupId: string, tasks: Task[]) {
@@ -214,7 +234,7 @@ export default function App() {
           writableCalendars={calendars.writableCalendars}
           onAdd={handleAddTask}
           onUpdate={plan.updateTask}
-          onRemove={plan.removeTask}
+          onRemove={handleRemoveTask}
           onReorder={plan.reorderTasks}
           onAnchorChange={(groupId, next) => {
             setStackDragPreview(null)
@@ -234,7 +254,6 @@ export default function App() {
           editingId={editingTaskId}
           onEditingIdChange={setEditingTaskId}
           busy={busy}
-          notice={notice}
           signedIn={session.signedIn}
           onSignOut={handleSignOut}
         />
@@ -290,6 +309,8 @@ export default function App() {
           )}
         </main>
       </div>
+
+      {notice && <NoticeToast notice={notice} />}
     </div>
   )
 }

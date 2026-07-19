@@ -90,6 +90,21 @@ export function usePlan() {
     [updatePlan],
   )
 
+  const insertTaskAt = useCallback(
+    (groupId: string, task: Task, index: number) => {
+      updatePlan((prev) => ({
+        groups: mapGroup(prev.groups, groupId, (g) => {
+          if (g.tasks.some((t) => t.id === task.id)) return g
+          const tasks = [...g.tasks]
+          const at = Math.max(0, Math.min(index, tasks.length))
+          tasks.splice(at, 0, task)
+          return { ...g, tasks }
+        }),
+      }))
+    },
+    [updatePlan],
+  )
+
   const reorderTasks = useCallback(
     (groupId: string, fromIndex: number, toIndex: number) => {
       updatePlan((prev) => ({
@@ -223,6 +238,7 @@ export function usePlan() {
     addTask,
     updateTask,
     removeTask,
+    insertTaskAt,
     reorderTasks,
     setAnchor,
     replaceTasks,

@@ -18,7 +18,6 @@ import {
   tasksFromSavedList,
   toLocalTimeValue,
 } from '../lib/tasks'
-import type { Notice } from '../lib/notice'
 import {
   canUpdateCalendar,
   isPushUnchanged,
@@ -85,7 +84,6 @@ type TaskSidebarProps = {
   editingId: string | null
   onEditingIdChange: (id: string | null) => void
   busy?: boolean
-  notice?: Notice | null
   signedIn?: boolean
   onSignOut?: () => void
 }
@@ -109,7 +107,6 @@ export function TaskSidebar({
   editingId,
   onEditingIdChange,
   busy,
-  notice,
   signedIn,
   onSignOut,
 }: TaskSidebarProps) {
@@ -298,17 +295,6 @@ export function TaskSidebar({
         </button>
       </div>
 
-      {notice && !modal && (
-        <div className="sidebar-actions">
-          <p
-            className={`notice notice-${notice.kind}`}
-            role={notice.kind === 'error' ? 'alert' : 'status'}
-          >
-            {notice.text}
-          </p>
-        </div>
-      )}
-
       {modal === 'hide' && modalGroup && (
         <Modal title="Hide block group" onClose={closeModal}>
           <form className="modal-form" onSubmit={handleHideGroup}>
@@ -481,17 +467,10 @@ export function TaskSidebar({
                 {!busy && <CalendarIcon />}
               </button>
             </div>
-            {notice && (
-              <p
-                className={`notice notice-${notice.kind}`}
-                role={notice.kind === 'error' ? 'alert' : 'status'}
-              >
-                {notice.text}
-              </p>
-            )}
           </div>
         </Modal>
       )}
+
     </aside>
   )
 }
@@ -960,18 +939,10 @@ function BlockGroupPanel({
                       type="button"
                       className="icon-btn"
                       aria-label={`Remove ${task.title}`}
-                      title="Remove (⌘-click to skip confirm)"
-                      onClick={(e) => {
+                      title="Remove"
+                      onClick={() => {
                         if (suppressClickRef.current) return
-                        const skipConfirm = e.metaKey || e.ctrlKey
-                        if (
-                          skipConfirm ||
-                          window.confirm(
-                            `Remove “${task.title}” from the list?`,
-                          )
-                        ) {
-                          onRemove(task.id)
-                        }
+                        onRemove(task.id)
                       }}
                     >
                       <TrashIcon />
