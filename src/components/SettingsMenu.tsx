@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 type SettingsMenuProps = {
   busy?: boolean
   signedIn?: boolean
+  onSignIn?: () => void
   onSignOut?: () => void
 }
 
@@ -20,6 +21,7 @@ function formatBuildTime(iso: string): string {
 export function SettingsMenu({
   busy,
   signedIn,
+  onSignIn,
   onSignOut,
 }: SettingsMenuProps) {
   const [open, setOpen] = useState(false)
@@ -74,20 +76,35 @@ export function SettingsMenu({
           >
             Reload App
           </button>
-          {signedIn && onSignOut && (
-            <button
-              type="button"
-              role="menuitem"
-              className="calendar-menu-item"
-              disabled={busy}
-              onClick={() => {
-                setOpen(false)
-                onSignOut()
-              }}
-            >
-              Log out
-            </button>
-          )}
+          {signedIn
+            ? onSignOut && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="calendar-menu-item"
+                  disabled={busy}
+                  onClick={() => {
+                    setOpen(false)
+                    onSignOut()
+                  }}
+                >
+                  Log out
+                </button>
+              )
+            : onSignIn && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="calendar-menu-item"
+                  disabled={busy}
+                  onClick={() => {
+                    setOpen(false)
+                    onSignIn()
+                  }}
+                >
+                  Log in
+                </button>
+              )}
           <p className="settings-menu-build">{buildTime}</p>
         </div>
       )}

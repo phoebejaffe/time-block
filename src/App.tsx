@@ -255,6 +255,7 @@ export default function App() {
           onEditingIdChange={setEditingTaskId}
           busy={busy}
           signedIn={session.signedIn}
+          onSignIn={() => void handleSignIn()}
           onSignOut={handleSignOut}
         />
 

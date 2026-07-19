@@ -507,6 +507,11 @@ body.is-datetime-scrubbing .task-form-duration input {
   cursor: not-allowed;
 }
 
+/* Looks disabled but stays clickable (e.g. Update when already in sync). */
+.btn.is-appearance-disabled {
+  opacity: 0.55;
+}
+
 .btn-primary {
   background: var(--accent);
   color: var(--accent-ink);

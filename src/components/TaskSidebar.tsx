@@ -77,6 +77,7 @@ type TaskSidebarProps = {
   onEditingIdChange: (id: string | null) => void
   busy?: boolean
   signedIn?: boolean
+  onSignIn?: () => void
   onSignOut?: () => void
 }
 
@@ -100,6 +101,7 @@ export function TaskSidebar({
   onEditingIdChange,
   busy,
   signedIn,
+  onSignIn,
   onSignOut,
 }: TaskSidebarProps) {
   const [commitCalendarId, setCommitCalendarId] = useState(loadTargetCalendarId)
@@ -236,6 +238,7 @@ export function TaskSidebar({
           <SettingsMenu
             busy={busy}
             signedIn={signedIn}
+            onSignIn={onSignIn}
             onSignOut={onSignOut}
           />
         </div>
@@ -1082,16 +1085,17 @@ function BlockGroupPanel({
                 </div>
                 <button
                   type="button"
-                  className="btn btn-primary btn-sm task-new-commit"
+                  className={[
+                    'btn btn-primary btn-sm task-new-commit',
+                    pushUnchanged ? 'is-appearance-disabled' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
                   onClick={onOpenCommit}
-                  disabled={
-                    busy ||
-                    pushUnchanged ||
-                    (!isUpdate && tasks.length === 0)
-                  }
+                  disabled={busy || (!isUpdate && tasks.length === 0)}
                   title={
                     pushUnchanged
-                      ? 'Calendar already matches this list'
+                      ? 'Already up to date — open to change calendar'
                       : undefined
                   }
                 >
