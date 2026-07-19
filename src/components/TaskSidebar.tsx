@@ -72,7 +72,6 @@ export function TaskSidebar({
   const dropLineIndexRef = useRef<number | null>(null)
   const suppressClickRef = useRef(false)
   const tasksLengthRef = useRef(tasks.length)
-
   useEffect(() => {
     dropLineIndexRef.current = dropLineIndex
   }, [dropLineIndex])
@@ -145,16 +144,6 @@ export function TaskSidebar({
   function openRestoreModal() {
     refreshSavedLists()
     setModal('restore')
-  }
-
-  function handleAnchorKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return
-    e.preventDefault()
-    const deltaMs = (e.key === 'ArrowUp' ? 5 : -5) * 60_000
-    onAnchorChange({
-      ...anchor,
-      at: new Date(new Date(anchor.at).getTime() + deltaMs).toISOString(),
-    })
   }
 
   function refreshSavedLists(preferId?: string) {
@@ -311,7 +300,7 @@ export function TaskSidebar({
       <div className="task-list-header">
         <div className="task-list-brand">
           <span className="brand-mark brand-mark-sm" aria-hidden />
-          <h3>Timeblock tasks</h3>
+          <h3>Timeblock</h3>
         </div>
         <div className="task-list-meta">
           {stackSummary && (
@@ -349,13 +338,14 @@ export function TaskSidebar({
               type="datetime-local"
               step={300}
               value={toLocalInputValue(anchor.at)}
-              onChange={(e) =>
+              onChange={(e) => {
+                // Ignore transient empty values while typing segments.
+                if (!e.target.value) return
                 onAnchorChange({
                   ...anchor,
                   at: fromLocalInputValue(e.target.value),
                 })
-              }
-              onKeyDown={handleAnchorKeyDown}
+              }}
             />
           </label>
         </div>
@@ -486,7 +476,7 @@ export function TaskSidebar({
               onClick={() => setEditingId(NEW_EDIT_ID)}
               disabled={busy}
             >
-              New +
+              New block +
             </button>
           )}
         </li>
@@ -499,7 +489,7 @@ export function TaskSidebar({
           onClick={() => setModal('save')}
           disabled={busy || tasks.length === 0}
         >
-          Save tasks
+          Save blocks
         </button>
         <button
           type="button"
@@ -507,7 +497,7 @@ export function TaskSidebar({
           onClick={openRestoreModal}
           disabled={busy}
         >
-          Restore tasks
+          Restore blocks
         </button>
         <button
           type="button"
@@ -528,7 +518,7 @@ export function TaskSidebar({
       </div>
 
       {modal === 'save' && (
-        <Modal title="Save task list" onClose={() => setModal(null)}>
+        <Modal title="Save block list" onClose={() => setModal(null)}>
           <form className="modal-form" onSubmit={handleSaveList}>
             <label>
               <span>List name</span>
@@ -561,9 +551,9 @@ export function TaskSidebar({
       )}
 
       {modal === 'restore' && (
-        <Modal title="Restore task list" onClose={() => setModal(null)}>
+        <Modal title="Restore block list" onClose={() => setModal(null)}>
           {savedLists.length === 0 ? (
-            <p className="muted">No saved task lists yet.</p>
+            <p className="muted">No saved block lists yet.</p>
           ) : (
             <div className="modal-form">
               <label>
