@@ -1269,11 +1269,14 @@ function TaskFieldsForm({
 
   function parseDuration(value: number | ''): number {
     if (value === '') return 15
-    return Math.max(5, Math.round(value) || 15)
+    return Math.max(1, Math.round(value) || 15)
   }
 
   function beginDurationScrub(e: React.PointerEvent<HTMLInputElement>) {
     if (e.button !== 0) return
+    // Claim the gesture so the number input doesn't start a text-drag.
+    // Focus is restored on a plain click (no scrub) in onUp.
+    e.preventDefault()
     const input = e.currentTarget
     const startY = e.clientY
     const startX = e.clientX
@@ -1295,7 +1298,7 @@ function TaskFieldsForm({
       if (!active) {
         if (Math.abs(dy) < ANCHOR_SCRUB_ACTIVATE_PX) return
         if (Math.abs(dy) < Math.abs(dx)) {
-          cleanup()
+          cleanup(false)
           return
         }
         active = true
@@ -1305,13 +1308,13 @@ function TaskFieldsForm({
       const tick = Math.trunc(-dy / ANCHOR_SCRUB_PX)
       if (tick === lastTick) return
       lastTick = tick
-      setDurationMinutes(Math.max(5, origin + tick * 5))
+      setDurationMinutes(Math.max(1, origin + tick * 5))
     }
 
-    function cleanup() {
-      document.removeEventListener('pointermove', onMove)
-      document.removeEventListener('pointerup', onUp)
-      document.removeEventListener('pointercancel', onUp)
+    function cleanup(focusForTyping: boolean) {
+      input.removeEventListener('pointermove', onMove)
+      input.removeEventListener('pointerup', onUp)
+      input.removeEventListener('pointercancel', onUp)
       document.body.classList.remove('is-datetime-scrubbing')
       try {
         if (input.hasPointerCapture(pointerId)) {
@@ -1320,16 +1323,21 @@ function TaskFieldsForm({
       } catch {
         /* ignore */
       }
+      if (focusForTyping) {
+        input.focus()
+        input.select()
+      }
     }
 
     function onUp(ev: PointerEvent) {
       if (ev.pointerId !== pointerId) return
-      cleanup()
+      cleanup(!active)
     }
 
-    document.addEventListener('pointermove', onMove, { passive: false })
-    document.addEventListener('pointerup', onUp)
-    document.addEventListener('pointercancel', onUp)
+    // Listen on the capture target — with setPointerCapture, moves go here.
+    input.addEventListener('pointermove', onMove, { passive: false })
+    input.addEventListener('pointerup', onUp)
+    input.addEventListener('pointercancel', onUp)
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -1356,8 +1364,8 @@ function TaskFieldsForm({
         <div className="task-form-duration">
           <input
             type="number"
-            min={5}
-            step={5}
+            min={1}
+            step="any"
             value={durationMinutes}
             onChange={(e) => {
               const raw = e.target.value
@@ -1379,7 +1387,7 @@ function TaskFieldsForm({
                 const next =
                   e.key === 'ArrowUp'
                     ? current + 5
-                    : Math.max(5, current - 5)
+                    : Math.max(1, current - 5)
                 setDurationMinutes(next)
                 return
               }

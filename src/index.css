@@ -431,6 +431,12 @@ body.is-datetime-scrubbing .stack-anchor-time input {
   border-radius: 8px;
   cursor: ns-resize;
   touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+body.is-datetime-scrubbing .task-form-duration input {
+  cursor: ns-resize;
 }
 
 .checkbox-row {
