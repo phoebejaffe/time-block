@@ -460,6 +460,9 @@ export function CalendarView({
           selectMirror
           eventStartEditable
           eventDurationEditable
+          // Immediate drag on touch (skip the default 1s long-press).
+          longPressDelay={0}
+          eventLongPressDelay={0}
           events={events}
           datesSet={handleDatesSet}
           eventAllow={handleEventAllow}

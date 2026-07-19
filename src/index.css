@@ -589,12 +589,14 @@ body.is-datetime-scrubbing .stack-anchor-time input {
   gap: 0;
   min-height: 0;
   cursor: grab;
+  touch-action: none;
 }
 
 .task-card.is-editing,
 .task-card-new {
   padding-right: 0.5rem;
   cursor: default;
+  touch-action: auto;
 }
 
 .task-card-new:not(.is-editing) {
@@ -1174,6 +1176,7 @@ body.is-task-reordering .task-sidebar {
   border-style: dashed;
   font-weight: 600;
   opacity: 0.8;
+  touch-action: none;
 }
 
 /* Draw local tasks above Google events when they overlap. */

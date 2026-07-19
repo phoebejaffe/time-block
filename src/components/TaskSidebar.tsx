@@ -32,9 +32,7 @@ const timeFmt = new Intl.DateTimeFormat(undefined, {
 })
 
 const NEW_EDIT_ID = '__new__'
-const TOUCH_LONG_PRESS_MS = 320
-const TOUCH_CANCEL_MOVE_PX = 12
-const MOUSE_ACTIVATE_PX = 5
+const DRAG_ACTIVATE_PX = 5
 const ANCHOR_SCRUB_PX = 25
 const ANCHOR_SCRUB_ACTIVATE_PX = 8
 
@@ -630,6 +628,13 @@ function BlockGroupPanel({
     let lastTick = 0
     let field: AnchorField = 'minute'
 
+    // Claim the gesture immediately so the sidebar doesn't scroll instead.
+    try {
+      input.setPointerCapture(pointerId)
+    } catch {
+      /* ignore */
+    }
+
     function currentIso(): string {
       if (input.value) {
         const parsed = fromLocalTimeValue(input.value, anchorRef.current.at)
@@ -651,6 +656,7 @@ function BlockGroupPanel({
     }
 
     function onMove(ev: PointerEvent) {
+      if (ev.pointerId !== pointerId) return
       const dx = ev.clientX - startX
       const dy = ev.clientY - startY
       if (!active) {
@@ -662,11 +668,6 @@ function BlockGroupPanel({
         active = true
         field = anchorFieldFromSelection(readSelectionStart(input))
         document.body.classList.add('is-datetime-scrubbing')
-        try {
-          input.setPointerCapture(pointerId)
-        } catch {
-          /* ignore */
-        }
       }
       ev.preventDefault()
       const tick = Math.trunc(-dy / ANCHOR_SCRUB_PX)
@@ -681,13 +682,21 @@ function BlockGroupPanel({
       document.removeEventListener('pointerup', onUp)
       document.removeEventListener('pointercancel', onUp)
       document.body.classList.remove('is-datetime-scrubbing')
+      try {
+        if (input.hasPointerCapture(pointerId)) {
+          input.releasePointerCapture(pointerId)
+        }
+      } catch {
+        /* ignore */
+      }
     }
 
-    function onUp() {
+    function onUp(ev: PointerEvent) {
+      if (ev.pointerId !== pointerId) return
       cleanup()
     }
 
-    document.addEventListener('pointermove', onMove)
+    document.addEventListener('pointermove', onMove, { passive: false })
     document.addEventListener('pointerup', onUp)
     document.addEventListener('pointercancel', onUp)
   }
@@ -724,10 +733,15 @@ function BlockGroupPanel({
     const pointerId = e.pointerId
     const startX = e.clientX
     const startY = e.clientY
-    const pointerType = e.pointerType
     let active = false
-    let longPressTimer: number | null = null
     let cancelled = false
+
+    // Immediate drag on touch/mouse — sidebar won't scroll from this card.
+    try {
+      card.setPointerCapture(pointerId)
+    } catch {
+      /* ignore */
+    }
 
     const endReorderSession = () => {
       document.body.classList.remove('is-task-reordering')
@@ -739,11 +753,6 @@ function BlockGroupPanel({
     const activate = () => {
       if (cancelled || active) return
       active = true
-      try {
-        card.setPointerCapture(pointerId)
-      } catch {
-        /* ignore */
-      }
       dropLineIndexRef.current = index
       setDragIndex(index)
       setDropLineIndex(index)
@@ -760,16 +769,8 @@ function BlockGroupPanel({
       const dist = Math.hypot(dx, dy)
 
       if (!active) {
-        if (pointerType === 'touch') {
-          if (dist > TOUCH_CANCEL_MOVE_PX) {
-            cancelled = true
-            if (longPressTimer !== null) window.clearTimeout(longPressTimer)
-            cleanupListeners()
-          }
-          return
-        }
-        if (dist >= MOUSE_ACTIVATE_PX) activate()
-        return
+        if (dist < DRAG_ACTIVATE_PX) return
+        activate()
       }
 
       ev.preventDefault()
@@ -782,7 +783,6 @@ function BlockGroupPanel({
 
     const onUp = (ev: PointerEvent) => {
       if (ev.pointerId !== pointerId) return
-      if (longPressTimer !== null) window.clearTimeout(longPressTimer)
       if (active) {
         suppressClickRef.current = true
         window.setTimeout(() => {
@@ -798,7 +798,6 @@ function BlockGroupPanel({
 
     const cleanupListeners = () => {
       cancelled = true
-      if (longPressTimer !== null) window.clearTimeout(longPressTimer)
       document.removeEventListener('pointermove', onMove)
       document.removeEventListener('pointerup', onUp)
       document.removeEventListener('pointercancel', onUp)
@@ -814,16 +813,6 @@ function BlockGroupPanel({
     document.addEventListener('pointermove', onMove, { passive: false })
     document.addEventListener('pointerup', onUp)
     document.addEventListener('pointercancel', onUp)
-
-    if (pointerType === 'touch') {
-      longPressTimer = window.setTimeout(activate, TOUCH_LONG_PRESS_MS)
-    } else {
-      try {
-        card.setPointerCapture(pointerId)
-      } catch {
-        /* ignore */
-      }
-    }
   }
 
   if (group.hidden) {
