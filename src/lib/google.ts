@@ -9,6 +9,10 @@ const REMEMBER_KEY = 'time-blocking.google-remember'
 /** Refresh a few minutes before Google's ~1h access token expires. */
 const REFRESH_BEFORE_MS = 5 * 60_000
 const REFRESH_CHECK_MS = 60_000
+/** Silent (prompt: none) calls should finish instantly or fail — never hang ready. */
+const SILENT_TOKEN_TIMEOUT_MS = 4_000
+/** Interactive login can wait for the popup. */
+const INTERACTIVE_TOKEN_TIMEOUT_MS = 5 * 60_000
 
 type StoredSession = {
   access_token: string
@@ -63,6 +67,7 @@ let tokenClient: google.accounts.oauth2.TokenClient | null = null
 let tokenCallback:
   | ((response: google.accounts.oauth2.TokenResponse) => void)
   | null = null
+let tokenErrorCallback: ((message: string) => void) | null = null
 let grantedScopes = new Set<string>()
 let initPromise: Promise<void> | null = null
 let restorePromise: Promise<boolean> | null = null
@@ -119,7 +124,11 @@ function shouldRemember(): boolean {
 function restoreTokenFromStorage(): boolean {
   const session = readStoredSession()
   if (!session) return false
-  if (Date.now() >= session.expires_at) return false
+  if (Date.now() >= session.expires_at) {
+    // Keep REMEMBER_KEY so the next user-clicked Log in can soft-prompt.
+    clearStoredToken()
+    return false
+  }
   gapi.client.setToken({ access_token: session.access_token })
   applyScopes(session.scope)
   return true
@@ -145,6 +154,9 @@ function stopTokenRefreshLoop(): void {
  * While the tab stays open, quietly refresh before expiry (prompt: none).
  * Also refreshes when the tab becomes visible again (background timers throttle).
  * Never opens a visible login UI — if Google needs interaction, we skip.
+ *
+ * Note: GIS often requires a prior user gesture for token requests. Quiet
+ * refresh is best-effort and always timed out so it cannot hang the app.
  */
 function startTokenRefreshLoop(): void {
   stopTokenRefreshLoop()
@@ -161,15 +173,11 @@ async function maybeRefreshTokenQuietly(opts?: {
   forceIfExpired?: boolean
 }): Promise<boolean> {
   const session = readStoredSession()
-  if (!session) {
-    // No token in storage — only attempt if we still expect a remembered session
-    // (e.g. expired token was cleared mid-refresh).
-    if (!shouldRemember() || !opts?.forceIfExpired) return false
-  } else {
-    const msLeft = session.expires_at - Date.now()
-    if (msLeft > REFRESH_BEFORE_MS) return true
-    if (msLeft <= 0 && !opts?.forceIfExpired && !shouldRemember()) return false
-  }
+  if (!session) return false
+
+  const msLeft = session.expires_at - Date.now()
+  if (msLeft > REFRESH_BEFORE_MS) return true
+  if (msLeft <= 0 && !opts?.forceIfExpired) return false
 
   if (refreshInFlight) return refreshInFlight
 
@@ -178,10 +186,7 @@ async function maybeRefreshTokenQuietly(opts?: {
       await initGoogle()
       const latest = readStoredSession()
       const scope =
-        [...grantedScopes].join(' ') ||
-        latest?.scope ||
-        READ_SCOPES
-      // 'none' = fail silently if Google would need a popup / consent UI.
+        [...grantedScopes].join(' ') || latest?.scope || READ_SCOPES
       await requestToken(scope, 'none')
       return true
     } catch {
@@ -194,24 +199,6 @@ async function maybeRefreshTokenQuietly(opts?: {
   })()
 
   return refreshInFlight
-}
-
-/**
- * Best-effort silent restore when the stored access token expired but the user
- * previously signed in. Uses prompt: 'none' — never shows a login UI.
- */
-async function trySilentRestore(): Promise<boolean> {
-  if (!shouldRemember()) return false
-  const session = readStoredSession()
-  const scope =
-    [...grantedScopes].join(' ') || session?.scope || READ_SCOPES
-  try {
-    await requestToken(scope, 'none')
-    return true
-  } catch {
-    clearStoredToken()
-    return false
-  }
 }
 
 async function ensureGapi(): Promise<void> {
@@ -237,6 +224,17 @@ async function ensureGis(): Promise<void> {
     scope: READ_SCOPES,
     callback: (response) => {
       tokenCallback?.(response)
+    },
+    error_callback: (err) => {
+      const message =
+        (err && typeof err === 'object' && 'message' in err
+          ? String((err as { message?: string }).message)
+          : null) ||
+        (err && typeof err === 'object' && 'type' in err
+          ? String((err as { type?: string }).type)
+          : null) ||
+        'Authorization failed'
+      tokenErrorCallback?.(message)
     },
   })
   gisReady = true
@@ -270,45 +268,82 @@ function requestToken(
     return Promise.reject(new Error('Google Identity Services not initialized'))
   }
 
+  const silent = prompt === 'none'
+  const timeoutMs = silent
+    ? SILENT_TOKEN_TIMEOUT_MS
+    : INTERACTIVE_TOKEN_TIMEOUT_MS
+
   return new Promise((resolve, reject) => {
-    tokenCallback = (response) => {
+    let settled = false
+    const timer = setTimeout(() => {
+      if (settled) return
+      settled = true
       tokenCallback = null
-      if (response.error) {
-        reject(
-          new Error(
-            response.error_description ||
-              response.error ||
-              'Authorization failed',
-          ),
-        )
-        return
-      }
-      persistSession(response)
-      resolve(response)
+      tokenErrorCallback = null
+      reject(
+        new Error(
+          silent
+            ? 'Silent authorization timed out'
+            : 'Authorization timed out',
+        ),
+      )
+    }, timeoutMs)
+
+    const finish = (fn: () => void) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      tokenCallback = null
+      tokenErrorCallback = null
+      fn()
     }
-    tokenClient!.requestAccessToken({
-      scope,
-      prompt,
-      include_granted_scopes: true,
-    })
+
+    tokenCallback = (response) => {
+      finish(() => {
+        if (response.error) {
+          reject(
+            new Error(
+              response.error_description ||
+                response.error ||
+                'Authorization failed',
+            ),
+          )
+          return
+        }
+        persistSession(response)
+        resolve(response)
+      })
+    }
+
+    tokenErrorCallback = (message) => {
+      finish(() => reject(new Error(message)))
+    }
+
+    try {
+      tokenClient!.requestAccessToken({
+        scope,
+        prompt,
+        include_granted_scopes: true,
+      })
+    } catch (err) {
+      finish(() =>
+        reject(err instanceof Error ? err : new Error(String(err))),
+      )
+    }
   })
 }
 
 /**
  * Restore a previous session after refresh / revisit.
- * Uses a still-valid stored access token when possible; otherwise tries a
- * silent GIS refresh (prompt: none). Never pops a login UI — if Google needs
- * interaction, returns false and the user signs in with the button.
+ * Only reuses a still-valid stored access token. GIS Token Client generally
+ * needs a user gesture to mint a new token, so we do not call requestAccessToken
+ * on page load (that hangs with no callback). After expiry, the user clicks Log in.
  */
 export function restoreSession(): Promise<boolean> {
   if (!restorePromise) {
     restorePromise = (async () => {
       await initGoogle()
       if (restoreTokenFromStorage()) {
-        startTokenRefreshLoop()
-        return true
-      }
-      if (await trySilentRestore()) {
         startTokenRefreshLoop()
         return true
       }
@@ -322,6 +357,7 @@ export function restoreSession(): Promise<boolean> {
 export async function signIn(): Promise<void> {
   await initGoogle()
   // Returning users: skip full consent when Google still has the grant.
+  // Empty prompt still requires this click (user gesture) — that is expected.
   const prompt = shouldRemember() || hasAccessToken() ? '' : 'consent'
   await requestToken(READ_SCOPES, prompt)
   restorePromise = Promise.resolve(true)

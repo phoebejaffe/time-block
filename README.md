@@ -39,7 +39,7 @@ If the OAuth app is in **Testing** mode, add your Google account as a test user.
 
 ## How it works
 
-1. **Sign in** — Google Identity Services issues an access token in the browser (no server). On revisit, a still-valid token is restored from `localStorage`; if it expired, the app tries a silent refresh (`prompt: none`) and never auto-opens a login UI. If Google needs interaction, click **Log in**. While the tab stays open (and when it becomes visible again), the app quietly refreshes before the ~1 hour access token expires.
+1. **Sign in** — Google Identity Services issues an access token in the browser (no server). Still-valid tokens are restored from `localStorage` on refresh. Minting a **new** token requires a user click (GIS Token Client limitation) — after ~1 hour, click **Log in** again (returning users get a soft prompt, not full consent). While the tab stays open, the app best-effort quietly refreshes before expiry; silent refresh is timed out so it cannot hang the UI.
 2. **Calendars** — Toggle which calendars appear. Events load for the visible FullCalendar range.
 3. **Plan** — Build an ordered task list, then set **Ends at** / **Starts at** for the whole stack. Save and reload named lists anytime.
 4. **Add to calendar** — Push the stacked tasks to a Google calendar. The local list stays put. You’ll get a warning if you already pushed a list for that day.
