@@ -847,19 +847,22 @@ function BlockGroupPanel({
           >
             <button
               type="button"
-              className={anchor.kind === 'end' ? 'active' : ''}
-              onClick={() => onAnchorChange({ ...anchor, kind: 'end' })}
-            >
-              Ends
-            </button>
-            <button
-              type="button"
               className={anchor.kind === 'start' ? 'active' : ''}
               onClick={() => onAnchorChange({ ...anchor, kind: 'start' })}
             >
               Starts
             </button>
+            <button
+              type="button"
+              className={anchor.kind === 'end' ? 'active' : ''}
+              onClick={() => onAnchorChange({ ...anchor, kind: 'end' })}
+            >
+              Ends
+            </button>
           </div>
+          <span className="muted stack-anchor-at" aria-hidden="true">
+            at
+          </span>
           <label className="stack-anchor-time">
             <span className="sr-only">
               {anchor.kind === 'end' ? 'List ends at' : 'List starts at'}
