@@ -296,6 +296,52 @@ export function CalendarView({
     return () => observer.disconnect()
   }, [])
 
+  // FullCalendar with height="100%" often lays out at 0 after sign-in (OAuth
+  // popup / flex swap). Resize fixes it — call updateSize when the body
+  // actually has dimensions, and again on focus/visibility.
+  useEffect(() => {
+    const body = calendarBodyRef.current
+    if (!body) return
+
+    let raf1 = 0
+    let raf2 = 0
+
+    function refreshSize() {
+      const el = calendarBodyRef.current
+      const api = calendarRef.current?.getApi()
+      if (!el || !api) return
+      if (el.clientHeight < 2 || el.clientWidth < 2) return
+      api.updateSize()
+    }
+
+    raf1 = requestAnimationFrame(() => {
+      refreshSize()
+      raf2 = requestAnimationFrame(refreshSize)
+    })
+    const delayed = window.setTimeout(refreshSize, 100)
+
+    const observer = new ResizeObserver(() => {
+      refreshSize()
+    })
+    observer.observe(body)
+
+    function onShow() {
+      if (document.visibilityState === 'hidden') return
+      raf1 = requestAnimationFrame(refreshSize)
+    }
+    window.addEventListener('focus', onShow)
+    document.addEventListener('visibilitychange', onShow)
+
+    return () => {
+      cancelAnimationFrame(raf1)
+      cancelAnimationFrame(raf2)
+      window.clearTimeout(delayed)
+      observer.disconnect()
+      window.removeEventListener('focus', onShow)
+      document.removeEventListener('visibilitychange', onShow)
+    }
+  }, [])
+
   useEffect(() => {
     if (!narrow) return
     if (viewType !== 'timeGridWeek') return

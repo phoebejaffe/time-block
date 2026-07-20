@@ -15,7 +15,7 @@ function formatBuildTime(iso: string): string {
     hour: 'numeric',
     minute: '2-digit',
   }).format(d)
-  return `App built on ${date} at ${time}`
+  return `Build time: ${date} at ${time}`
 }
 
 export function SettingsMenu({
