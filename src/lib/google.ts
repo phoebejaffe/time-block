@@ -119,13 +119,17 @@ function shouldRemember(): boolean {
 function restoreTokenFromStorage(): boolean {
   const session = readStoredSession()
   if (!session) return false
-  if (Date.now() >= session.expires_at) {
-    clearStoredToken()
-    return false
-  }
+  if (Date.now() >= session.expires_at) return false
   gapi.client.setToken({ access_token: session.access_token })
   applyScopes(session.scope)
   return true
+}
+
+function onVisibilityOrFocusRefresh(): void {
+  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+    return
+  }
+  void maybeRefreshTokenQuietly({ forceIfExpired: true })
 }
 
 function stopTokenRefreshLoop(): void {
@@ -133,10 +137,13 @@ function stopTokenRefreshLoop(): void {
     clearInterval(refreshTimer)
     refreshTimer = null
   }
+  document.removeEventListener('visibilitychange', onVisibilityOrFocusRefresh)
+  window.removeEventListener('focus', onVisibilityOrFocusRefresh)
 }
 
 /**
  * While the tab stays open, quietly refresh before expiry (prompt: none).
+ * Also refreshes when the tab becomes visible again (background timers throttle).
  * Never opens a visible login UI — if Google needs interaction, we skip.
  */
 function startTokenRefreshLoop(): void {
@@ -144,32 +151,67 @@ function startTokenRefreshLoop(): void {
   refreshTimer = setInterval(() => {
     void maybeRefreshTokenQuietly()
   }, REFRESH_CHECK_MS)
+  document.addEventListener('visibilitychange', onVisibilityOrFocusRefresh)
+  window.addEventListener('focus', onVisibilityOrFocusRefresh)
   void maybeRefreshTokenQuietly()
 }
 
-async function maybeRefreshTokenQuietly(): Promise<void> {
+async function maybeRefreshTokenQuietly(opts?: {
+  /** When true, also refresh if the stored token is already past expires_at. */
+  forceIfExpired?: boolean
+}): Promise<boolean> {
   const session = readStoredSession()
-  if (!session) return
-  const msLeft = session.expires_at - Date.now()
-  if (msLeft > REFRESH_BEFORE_MS) return
-  if (refreshInFlight) return
+  if (!session) {
+    // No token in storage — only attempt if we still expect a remembered session
+    // (e.g. expired token was cleared mid-refresh).
+    if (!shouldRemember() || !opts?.forceIfExpired) return false
+  } else {
+    const msLeft = session.expires_at - Date.now()
+    if (msLeft > REFRESH_BEFORE_MS) return true
+    if (msLeft <= 0 && !opts?.forceIfExpired && !shouldRemember()) return false
+  }
+
+  if (refreshInFlight) return refreshInFlight
 
   refreshInFlight = (async () => {
     try {
       await initGoogle()
+      const latest = readStoredSession()
       const scope =
-        [...grantedScopes].join(' ') || session.scope || READ_SCOPES
+        [...grantedScopes].join(' ') ||
+        latest?.scope ||
+        READ_SCOPES
       // 'none' = fail silently if Google would need a popup / consent UI.
       await requestToken(scope, 'none')
       return true
     } catch {
+      // Keep REMEMBER_KEY so the next button click can use a soft prompt.
+      clearStoredToken()
       return false
     } finally {
       refreshInFlight = null
     }
   })()
 
-  await refreshInFlight
+  return refreshInFlight
+}
+
+/**
+ * Best-effort silent restore when the stored access token expired but the user
+ * previously signed in. Uses prompt: 'none' — never shows a login UI.
+ */
+async function trySilentRestore(): Promise<boolean> {
+  if (!shouldRemember()) return false
+  const session = readStoredSession()
+  const scope =
+    [...grantedScopes].join(' ') || session?.scope || READ_SCOPES
+  try {
+    await requestToken(scope, 'none')
+    return true
+  } catch {
+    clearStoredToken()
+    return false
+  }
 }
 
 async function ensureGapi(): Promise<void> {
@@ -254,14 +296,19 @@ function requestToken(
 
 /**
  * Restore a previous session after refresh / revisit.
- * Only uses a still-valid stored access token — never pops a login UI.
- * If the token expired, the user signs in again with the button.
+ * Uses a still-valid stored access token when possible; otherwise tries a
+ * silent GIS refresh (prompt: none). Never pops a login UI — if Google needs
+ * interaction, returns false and the user signs in with the button.
  */
 export function restoreSession(): Promise<boolean> {
   if (!restorePromise) {
     restorePromise = (async () => {
       await initGoogle()
       if (restoreTokenFromStorage()) {
+        startTokenRefreshLoop()
+        return true
+      }
+      if (await trySilentRestore()) {
         startTokenRefreshLoop()
         return true
       }
