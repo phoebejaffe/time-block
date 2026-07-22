@@ -57,6 +57,35 @@ type CalendarViewProps = {
   busy?: boolean
 }
 
+type ResolvedTaskEvent = {
+  taskId: string
+  groupId: string
+  title: string
+  start: Date
+  end: Date
+}
+
+/** Lay out visible groups once; calendar UI reads times from here. */
+function buildResolvedTaskEvents(groups: BlockGroup[]): ResolvedTaskEvent[] {
+  return groups
+    .filter((group) => !group.hidden)
+    .flatMap((group) =>
+      resolveStack(group.tasks, group.anchor).map((task) => ({
+        taskId: task.id,
+        groupId: group.id,
+        title: task.title,
+        start: task.start,
+        end: task.end,
+      })),
+    )
+}
+
+function resolvedTaskEventMap(
+  events: ResolvedTaskEvent[],
+): Map<string, ResolvedTaskEvent> {
+  return new Map(events.map((event) => [event.taskId, event]))
+}
+
 /** Tighter layout for short events: <30 min, <=10 min, and <=5 min. */
 function durationClass(start: Date | string, end: Date | string): string[] {
   const ms = new Date(end).getTime() - new Date(start).getTime()
@@ -112,6 +141,13 @@ export function CalendarView({
   onAnchorCommitRef.current = onAnchorCommit
   onStackShiftPreviewRef.current = onStackShiftPreview
 
+  const resolvedTaskEvents = useMemo(
+    () => buildResolvedTaskEvents(groups),
+    [groups],
+  )
+  const resolvedTaskEventsRef = useRef(resolvedTaskEvents)
+  resolvedTaskEventsRef.current = resolvedTaskEvents
+
   const [narrow, setNarrow] = useState(false)
   const [title, setTitle] = useState('')
   const [viewType, setViewType] = useState<CalendarViewType>('timeGridDay')
@@ -139,29 +175,46 @@ export function CalendarView({
       pendingDeltaRef.current = 0
       mirrorNudgeMsRef.current = 0
       cancelStackDrag()
-      syncStackPreviewTimes(null)
+      syncTaskEventTimes(null)
       onStackShiftPreviewRef.current?.(null, null)
     },
   })
 
-  /** Live-update time labels on the whole stack while one event is dragged. */
-  function syncStackPreviewTimes(
+  /** Keep task block labels and FC dates aligned with the resolved stack. */
+  function syncTaskEventTimes(
     deltaMs: number | null,
-    groupId = dragGroupIdRef.current,
+    previewGroupId: string | null = null,
   ) {
     const shell = shellRef.current
-    if (!shell || !groupId) return
+    const resolvedByTaskId = resolvedTaskEventsRef.current
+    if (!shell || resolvedByTaskId.length === 0) return
+
+    const timesByTaskId = resolvedTaskEventMap(resolvedByTaskId)
 
     shell.querySelectorAll<HTMLElement>(`.${TASK_STACK_CLASS}`).forEach((el) => {
       const isMirror = el.classList.contains('fc-event-mirror')
-      if (!isMirror && el.dataset.groupId !== groupId) return
+      const elGroupId = el.dataset.groupId
+      if (previewGroupId != null && !isMirror && elGroupId !== previewGroupId) {
+        return
+      }
 
-      const startMs = Number(el.dataset.startMs)
+      const taskId = el.dataset.taskId
+      if (!taskId) return
+      const resolved = timesByTaskId.get(taskId)
+      if (!resolved) return
+
+      const startMs = resolved.start.getTime()
+      el.dataset.startMs = String(startMs)
+
       const timeEl = el.querySelector('.fc-event-time')
-      if (!timeEl || !Number.isFinite(startMs)) return
+      if (!timeEl) return
 
-      const next =
-        deltaMs == null || deltaMs === 0 ? startMs : startMs + deltaMs
+      const applyDelta =
+        previewGroupId != null &&
+        deltaMs != null &&
+        deltaMs !== 0 &&
+        (isMirror || elGroupId === previewGroupId)
+      const next = applyDelta ? startMs + deltaMs : startMs
       timeEl.textContent = `${formatTaskEventTime(new Date(next))}\u00a0\u00a0`
     })
   }
@@ -169,7 +222,7 @@ export function CalendarView({
   function publishPreview(deltaMs: number | null) {
     if (pendingDeltaRef.current === deltaMs) return
     pendingDeltaRef.current = deltaMs
-    syncStackPreviewTimes(deltaMs)
+    syncTaskEventTimes(deltaMs, dragGroupIdRef.current)
     onStackShiftPreviewRef.current?.(dragGroupIdRef.current, deltaMs)
   }
 
@@ -194,7 +247,7 @@ export function CalendarView({
       // Leave preview times in place until FC remounts with the commit.
       onAnchorCommitRef.current(groupId, shiftAnchor(origin, deltaMs))
     } else {
-      syncStackPreviewTimes(null, groupId)
+      syncTaskEventTimes(null, groupId)
       onStackShiftPreviewRef.current?.(null, null)
     }
   }
@@ -382,6 +435,31 @@ export function CalendarView({
     }
   }, [menuOpen, calendarsOpen])
 
+  // FullCalendar can keep stale start/end on existing task ids after reorder or
+  // anchor edits. Reconcile FC's internal dates and DOM labels from resolveStack.
+  useEffect(() => {
+    if (dragGroupIdRef.current != null) return
+
+    const api = calendarRef.current?.getApi()
+    if (api) {
+      for (const task of resolvedTaskEvents) {
+        const event = api.getEventById(`task:${task.taskId}`)
+        if (!event?.start || !event.end) continue
+        if (
+          event.start.getTime() !== task.start.getTime() ||
+          event.end.getTime() !== task.end.getTime()
+        ) {
+          event.setDates(task.start, task.end)
+        }
+      }
+    }
+
+    const frame = requestAnimationFrame(() => {
+      syncTaskEventTimes(null)
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [resolvedTaskEvents])
+
   const events = useMemo((): EventInput[] => {
     const google: EventInput[] = googleEvents
       .filter((e) => showAllDay || !e.allDay)
@@ -399,34 +477,27 @@ export function CalendarView({
         extendedProps: e.extendedProps,
       }))
 
-    const local: EventInput[] = groups
-      .filter((group) => !group.hidden)
-      .flatMap((group) =>
-        resolveStack(group.tasks, group.anchor).map((task) => ({
-          id: `task:${task.id}`,
-          title: task.title,
-          start: task.start.toISOString(),
-          end: task.end.toISOString(),
-          backgroundColor: TASK_COLOR,
-          borderColor: TASK_BORDER,
-          // Move only — `editable: true` would re-enable duration resize.
-          startEditable: true,
-          durationEditable: false,
-          order: 0,
-          classNames: [
-            TASK_STACK_CLASS,
-            ...durationClass(task.start, task.end),
-          ],
-          extendedProps: {
-            source: 'task',
-            taskId: task.id,
-            groupId: group.id,
-          },
-        })),
-      )
+    const local: EventInput[] = resolvedTaskEvents.map((task) => ({
+      id: `task:${task.taskId}`,
+      title: task.title,
+      start: task.start.toISOString(),
+      end: task.end.toISOString(),
+      backgroundColor: TASK_COLOR,
+      borderColor: TASK_BORDER,
+      // Move only — `editable: true` would re-enable duration resize.
+      startEditable: true,
+      durationEditable: false,
+      order: 0,
+      classNames: [TASK_STACK_CLASS, ...durationClass(task.start, task.end)],
+      extendedProps: {
+        source: 'task',
+        taskId: task.taskId,
+        groupId: task.groupId,
+      },
+    }))
 
     return [...google, ...local]
-  }, [googleEvents, groups, showAllDay])
+  }, [googleEvents, resolvedTaskEvents, showAllDay])
 
   function handleDatesSet(arg: DatesSetArg) {
     setTitle(arg.view.title)
@@ -460,7 +531,11 @@ export function CalendarView({
   function handleEventContent(arg: EventContentArg) {
     if (arg.event.extendedProps.source !== 'task') return true
 
-    const start = arg.event.start
+    const taskId = arg.event.extendedProps.taskId as string | undefined
+    const resolved = taskId
+      ? resolvedTaskEventsRef.current.find((task) => task.taskId === taskId)
+      : undefined
+    const start = resolved?.start ?? arg.event.start
     const timeText = start ? formatTaskEventTime(start) : ''
 
     return (
@@ -545,14 +620,20 @@ export function CalendarView({
           eventContent={handleEventContent}
           eventDidMount={(info) => {
             const groupId = info.event.extendedProps.groupId
+            const taskId = info.event.extendedProps.taskId
             if (typeof groupId === 'string') {
               info.el.dataset.groupId = groupId
             }
-            if (
-              info.event.extendedProps.source === 'task' &&
-              info.event.start
-            ) {
-              info.el.dataset.startMs = String(info.event.start.getTime())
+            if (typeof taskId === 'string') {
+              info.el.dataset.taskId = taskId
+              const resolved = resolvedTaskEventsRef.current.find(
+                (task) => task.taskId === taskId,
+              )
+              if (resolved) {
+                info.el.dataset.startMs = String(resolved.start.getTime())
+              } else if (info.event.start) {
+                info.el.dataset.startMs = String(info.event.start.getTime())
+              }
             }
           }}
           slotMinTime="05:00:00"

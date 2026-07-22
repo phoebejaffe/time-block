@@ -47,6 +47,20 @@ describe('resolveStack', () => {
     expect(resolved[0]!.end.toISOString()).toBe('2026-07-18T09:30:00.000Z')
   })
 
+  it('reassigns times when task order changes under the same anchor', () => {
+    const anchor: StackAnchor = {
+      kind: 'start',
+      at: '2026-07-18T09:00:00.000Z',
+    }
+    const original = resolveStack(tasks, anchor)
+    const reordered = resolveStack([tasks[1]!, tasks[0]!, tasks[2]!], anchor)
+
+    expect(reordered.map((task) => task.id)).toEqual(['b', 'a', 'c'])
+    expect(reordered[0]!.start.toISOString()).toBe('2026-07-18T09:00:00.000Z')
+    expect(reordered[1]!.start.toISOString()).toBe('2026-07-18T09:15:00.000Z')
+    expect(original[1]!.start.toISOString()).toBe('2026-07-18T09:30:00.000Z')
+  })
+
   it('returns empty for no tasks or invalid anchor', () => {
     expect(resolveStack([], { kind: 'start', at: '2026-07-18T09:00:00.000Z' })).toEqual(
       [],
