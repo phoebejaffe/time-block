@@ -30,12 +30,25 @@ const NEW_EDIT_ID = '__new__'
 const DRAG_ACTIVATE_PX = 5
 const ANCHOR_SCRUB_PX = 25
 const ANCHOR_SCRUB_ACTIVATE_PX = 8
+const DOUBLE_TAP_MS = 350
+const DOUBLE_TAP_PX = 24
+const DURATION_PRESETS = Array.from({ length: 48 }, (_, i) => (i + 1) * 5)
 
 type AnchorField = 'hour' | 'minute'
 type ModalKind = 'save' | 'restore' | 'commit'
 
 function blockCountLabel(count: number): string {
   return count === 1 ? '1 Block' : `${count} Blocks`
+}
+
+function isFinePointer(): boolean {
+  return window.matchMedia('(pointer: fine)').matches
+}
+
+function durationPickerOptions(current: number): number[] {
+  const values = new Set(DURATION_PRESETS)
+  values.add(Math.max(1, Math.round(current)))
+  return [...values].sort((a, b) => a - b)
 }
 
 function readSelectionStart(input: HTMLInputElement): number | null {
@@ -478,6 +491,10 @@ function BlockGroupPanel({
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   const [dropLineIndex, setDropLineIndex] = useState<number | null>(null)
   const [listMenuOpen, setListMenuOpen] = useState(false)
+  const [durationPickerTaskId, setDurationPickerTaskId] = useState<string | null>(
+    null,
+  )
+  const [pickerMinutes, setPickerMinutes] = useState(30)
 
   const listRef = useRef<HTMLUListElement>(null)
   const listMenuRef = useRef<HTMLDivElement>(null)
@@ -546,6 +563,28 @@ function BlockGroupPanel({
       dayKey,
       stackPushFingerprint(anchor, resolved),
     )
+  const durationPickerTask = durationPickerTaskId
+    ? tasks.find((t) => t.id === durationPickerTaskId)
+    : null
+
+  function openDurationPicker(task: Task) {
+    setPickerMinutes(task.durationMinutes)
+    setDurationPickerTaskId(task.id)
+  }
+
+  function closeDurationPicker() {
+    setDurationPickerTaskId(null)
+  }
+
+  function saveDurationPicker(e: React.FormEvent) {
+    e.preventDefault()
+    if (!durationPickerTask) return
+    onUpdate({
+      ...durationPickerTask,
+      durationMinutes: Math.max(1, Math.round(pickerMinutes) || 1),
+    })
+    closeDurationPicker()
+  }
   function beginAnchorScrub(e: React.PointerEvent<HTMLInputElement>) {
     if (e.button !== 0) return
     const input = e.currentTarget
@@ -630,6 +669,20 @@ function BlockGroupPanel({
       } catch {
         /* ignore */
       }
+      if (active) {
+        input.blur()
+        // iOS fires a synthetic click after scrubbing that re-opens the picker.
+        const suppressClick = (ev: Event) => {
+          ev.preventDefault()
+          ev.stopImmediatePropagation()
+        }
+        input.addEventListener('click', suppressClick, true)
+        window.setTimeout(
+          () => input.removeEventListener('click', suppressClick, true),
+          500,
+        )
+        return
+      }
       if (!openPicker || !isTouch) return
       input.focus()
       try {
@@ -641,6 +694,7 @@ function BlockGroupPanel({
 
     function onUp(ev: PointerEvent) {
       if (ev.pointerId !== pointerId) return
+      if (active) ev.preventDefault()
       cleanup(!active)
     }
 
@@ -911,16 +965,24 @@ function BlockGroupPanel({
               ) : (
                 <>
                   <div
-                    className="task-card-main task-card-drag"
-                    onPointerDown={(e) => beginTaskDrag(e, index)}
+                    className="task-card-main"
                   >
-                    <span className="task-title">
-                      {task.title}
-                      <span className="muted task-duration">
-                        {' '}
-                        · {task.durationMinutes} min
-                      </span>
-                    </span>
+                    <div
+                      className="task-card-line"
+                    >
+                      <div
+                        className="task-card-drag"
+                        onPointerDown={(e) => beginTaskDrag(e, index)}
+                      >
+                        <span className="task-title">{task.title}</span>
+                      </div>
+                      <DurationTrigger
+                        minutes={task.durationMinutes}
+                        disabled={busy}
+                        onDesktopEdit={() => onEditingIdChange(task.id)}
+                        onMobilePicker={() => openDurationPicker(task)}
+                      />
+                    </div>
                   </div>
                   <div className="task-card-icons">
                     <button
@@ -1079,7 +1141,127 @@ function BlockGroupPanel({
           )}
         </li>
       </ul>
+
+      {durationPickerTask && (
+        <DurationPickerModal
+          minutes={pickerMinutes}
+          options={durationPickerOptions(durationPickerTask.durationMinutes)}
+          onMinutesChange={setPickerMinutes}
+          onClose={closeDurationPicker}
+          onSubmit={saveDurationPicker}
+        />
+      )}
     </section>
+  )
+}
+
+function DurationTrigger({
+  minutes,
+  disabled,
+  onDesktopEdit,
+  onMobilePicker,
+}: {
+  minutes: number
+  disabled?: boolean
+  onDesktopEdit: () => void
+  onMobilePicker: () => void
+}) {
+  const lastTapRef = useRef<{ t: number; x: number; y: number } | null>(null)
+
+  function handlePointerDown(e: React.PointerEvent<HTMLButtonElement>) {
+    e.stopPropagation()
+    if (disabled || e.pointerType === 'mouse') return
+
+    const now = performance.now()
+    const last = lastTapRef.current
+    if (
+      last &&
+      now - last.t < DOUBLE_TAP_MS &&
+      Math.hypot(e.clientX - last.x, e.clientY - last.y) < DOUBLE_TAP_PX
+    ) {
+      e.preventDefault()
+      lastTapRef.current = null
+      onMobilePicker()
+      return
+    }
+    lastTapRef.current = { t: now, x: e.clientX, y: e.clientY }
+  }
+
+  return (
+    <button
+      type="button"
+      className="task-duration-trigger muted"
+      disabled={disabled}
+      aria-label={`Duration ${minutes} minutes; double-tap to change`}
+      onDoubleClick={(e) => {
+        e.stopPropagation()
+        if (disabled || !isFinePointer()) return
+        onDesktopEdit()
+      }}
+      onPointerDown={handlePointerDown}
+    >
+      · {minutes} min
+    </button>
+  )
+}
+
+function DurationPickerModal({
+  minutes,
+  options,
+  onMinutesChange,
+  onClose,
+  onSubmit,
+}: {
+  minutes: number
+  options: number[]
+  onMinutesChange: (minutes: number) => void
+  onClose: () => void
+  onSubmit: (e: React.FormEvent) => void
+}) {
+  const selectRef = useRef<HTMLSelectElement>(null)
+
+  useEffect(() => {
+    const el = selectRef.current
+    if (!el) return
+    el.focus()
+    try {
+      el.showPicker?.()
+    } catch {
+      /* ignore — not supported or requires a user gesture */
+    }
+  }, [])
+
+  return (
+    <Modal title="Duration" onClose={onClose}>
+      <form className="modal-form" onSubmit={onSubmit}>
+        <label>
+          <span>Minutes</span>
+          <select
+            ref={selectRef}
+            value={minutes}
+            onChange={(e) => onMinutesChange(Number(e.target.value))}
+          >
+            {options.map((m) => (
+              <option key={m} value={m}>
+                {m} min
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="modal-actions">
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={onClose}
+          >
+            Cancel
+          </button>
+          <button type="submit" className="btn btn-primary btn-sm">
+            Done
+          </button>
+        </div>
+      </form>
+    </Modal>
   )
 }
 
