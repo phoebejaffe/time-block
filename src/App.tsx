@@ -227,11 +227,11 @@ export default function App() {
 
   return (
     <div className="app">
-      {(session.error || missingClientId) && (
+      {(session.error || userData.syncError || missingClientId) && (
         <div className="banner banner-error" role="alert">
           {missingClientId
             ? 'Set VITE_GOOGLE_CLIENT_ID in a .env file (see README), then restart the dev server.'
-            : session.error}
+            : session.error || userData.syncError}
         </div>
       )}
 

@@ -19,9 +19,10 @@ Open [http://localhost:5173](http://localhost:5173).
 ### 2. Google Cloud Console
 
 1. Create a project (or pick an existing one) in the [Google Cloud Console](https://console.cloud.google.com/).
-2. Enable the **Google Calendar API**.
+2. Enable the **Google Calendar API** and **Google Drive API**.
 3. Configure the [OAuth consent screen](https://console.cloud.google.com/apis/credentials/consent) (External is fine for personal use). Add scopes:
    - `https://www.googleapis.com/auth/calendar.readonly`
+   - `https://www.googleapis.com/auth/drive.appdata` (used to sync your plan across devices)
    - `https://www.googleapis.com/auth/calendar.events` (requested only when you tap **Add to calendar**)
 4. Create credentials → **OAuth client ID** → Application type **Web application**.
 5. Under **Authorized JavaScript origins**, add:

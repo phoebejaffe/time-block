@@ -96,6 +96,21 @@ function applyScopes(scope: string): void {
   }
 }
 
+/** Union scope strings so incremental auth never drops previously granted scopes. */
+export function mergeScopeStrings(...parts: Array<string | undefined>): string {
+  const scopes = new Set<string>()
+  for (const part of parts) {
+    for (const scope of part?.split(/\s+/).filter(Boolean) ?? []) {
+      scopes.add(scope)
+    }
+  }
+  return [...scopes].join(' ')
+}
+
+export function sessionHasDriveScope(scope: string | undefined): boolean {
+  return scope?.split(/\s+/).includes(DRIVE_SCOPE) ?? false
+}
+
 function readStoredSession(): StoredSession | null {
   try {
     const raw = localStorage.getItem(SESSION_KEY)
@@ -118,7 +133,7 @@ function writeStoredSession(session: StoredSession): void {
 function persistTokenPayload(payload: TokenPayload): StoredSession {
   const previous = readStoredSession()
   const expiresInSec = Number(payload.expires_in) || 3600
-  const scope = payload.scope || previous?.scope || READ_SCOPES
+  const scope = mergeScopeStrings(previous?.scope, payload.scope, READ_SCOPES)
   const session: StoredSession = {
     access_token: payload.access_token || '',
     // Refresh a minute early to avoid edge-of-expiry API failures.
@@ -207,6 +222,7 @@ function requestAuthCode(scope: string): Promise<string> {
       const client = google.accounts.oauth2.initCodeClient({
         client_id: getClientId(),
         scope,
+        include_granted_scopes: true,
         ux_mode: 'popup',
         callback: (response) => {
           finish(() => {
@@ -381,6 +397,13 @@ export function restoreSession(): Promise<boolean> {
       const session = readStoredSession()
       if (!session) return false
 
+      // Sessions from before Drive sync was added lack drive.appdata — the
+      // access token can't read/write app data, so force a fresh sign-in.
+      if (!sessionHasDriveScope(session.scope)) {
+        clearStoredSession()
+        return false
+      }
+
       if (Date.now() < session.expires_at) {
         setGapiToken(session.access_token)
         applyScopes(session.scope)
@@ -416,7 +439,7 @@ export async function signIn(): Promise<void> {
 export async function ensureWriteScope(): Promise<void> {
   await initGoogle()
   if (grantedScopes.has(WRITE_SCOPE)) return
-  const code = await requestAuthCode(`${READ_SCOPES} ${WRITE_SCOPE}`)
+  const code = await requestAuthCode(`${READ_SCOPES} ${WRITE_SCOPE} ${DRIVE_SCOPE}`)
   await exchangeCode(code)
   startTokenRefreshLoop()
 }

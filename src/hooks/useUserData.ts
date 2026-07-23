@@ -44,8 +44,9 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
   const [targetCalendarId, setTargetCalendarIdState] = useState('')
   const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState<SyncStatus>('idle')
+  const [syncError, setSyncError] = useState<string | null>(null)
 
-  const initializedRef = useRef(false)
+  const loadGenerationRef = useRef(0)
   const loadingRef = useRef(false)
   const skipNextPushRef = useRef(false)
   const pushPendingRef = useRef(false)
@@ -87,20 +88,19 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
   // Initial fetch, once per sign-in (including a restored session on cold load).
   useEffect(() => {
     if (!signedIn) {
-      initializedRef.current = false
       setLoading(false)
       return
     }
-    if (initializedRef.current) return
-    initializedRef.current = true
 
+    const generation = ++loadGenerationRef.current
     let cancelled = false
     ;(async () => {
       setLoading(true)
       setStatus('syncing')
+      setSyncError(null)
       try {
         const remote = await downloadState()
-        if (cancelled) return
+        if (cancelled || generation !== loadGenerationRef.current) return
         if (remote) {
           applyRemote(remote)
         } else {
@@ -109,11 +109,20 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
           await pushNow()
           skipNextPushRef.current = true
         }
-        if (!cancelled) setStatus('synced')
-      } catch {
-        if (!cancelled) setStatus('error')
+        if (!cancelled && generation === loadGenerationRef.current) {
+          setStatus('synced')
+        }
+      } catch (err) {
+        if (!cancelled && generation === loadGenerationRef.current) {
+          setStatus('error')
+          setSyncError(
+            err instanceof Error ? err.message : 'Could not sync with Google Drive',
+          )
+        }
       } finally {
-        if (!cancelled) setLoading(false)
+        if (!cancelled && generation === loadGenerationRef.current) {
+          setLoading(false)
+        }
       }
     })()
 
@@ -124,7 +133,7 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
 
   // Debounced push whenever the plan, saved lists, or target calendar change.
   useEffect(() => {
-    if (!signedIn || !initializedRef.current || loading) return
+    if (!signedIn || loading) return
     if (skipNextPushRef.current) {
       skipNextPushRef.current = false
       return
@@ -135,9 +144,15 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
     pushTimerRef.current = setTimeout(() => {
       pushPendingRef.current = false
       setStatus('syncing')
+      setSyncError(null)
       pushNow()
         .then(() => setStatus('synced'))
-        .catch(() => setStatus('error'))
+        .catch((err) => {
+          setStatus('error')
+          setSyncError(
+            err instanceof Error ? err.message : 'Could not save to Google Drive',
+          )
+        })
     }, PUSH_DEBOUNCE_MS)
 
     return () => {
@@ -152,7 +167,7 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
     let cancelled = false
 
     async function checkRemote() {
-      if (cancelled || !initializedRef.current || loadingRef.current) return
+      if (cancelled || loadingRef.current) return
       // A local edit is about to be pushed — don't risk clobbering it with
       // a stale-looking remote read that raced ahead of our own write.
       if (pushPendingRef.current) return
@@ -204,7 +219,7 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
 
   /** Reset to blank, in-memory only — call on sign-out. */
   const reset = useCallback(() => {
-    initializedRef.current = false
+    loadGenerationRef.current += 1
     skipNextPushRef.current = false
     pushPendingRef.current = false
     if (pushTimerRef.current) clearTimeout(pushTimerRef.current)
@@ -212,6 +227,7 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
     setSavedLists([])
     setTargetCalendarIdState('')
     setStatus('idle')
+    setSyncError(null)
     setLoading(false)
     resetDriveSyncCache()
   }, [])
@@ -221,6 +237,7 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
     targetCalendarId,
     loading,
     status,
+    syncError,
     saveList,
     deleteList,
     setTargetCalendarId,
