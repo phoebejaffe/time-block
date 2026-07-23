@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { AuthButton } from './components/AuthButton'
 import { CalendarView } from './components/CalendarView'
 import { MobileSplitHandle } from './components/MobileSplitHandle'
