@@ -66,6 +66,7 @@ async function handleExchange(req, res) {
     expires_in: data.expires_in,
     refresh_token: data.refresh_token,
     scope: data.scope,
+    id_token: data.id_token,
   })
 }
 

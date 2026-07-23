@@ -1,7 +1,10 @@
+import { GoogleAuthProvider, signInWithCredential, signOut as firebaseSignOut } from 'firebase/auth'
+import { getFirebaseAuth, isFirebaseConfigured } from './firebase'
+
 const READ_SCOPES = 'https://www.googleapis.com/auth/calendar.readonly'
 const WRITE_SCOPE = 'https://www.googleapis.com/auth/calendar.events'
-/** Hidden per-app storage in the user's own Drive — used to sync plan data. */
-const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata'
+/** Needed so the token exchange returns an ID token for Firebase Auth. */
+const OPENID_SCOPES = 'openid email profile'
 const DISCOVERY_DOC =
   'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'
 
@@ -32,6 +35,7 @@ type TokenPayload = {
   expires_in?: number
   refresh_token?: string
   scope?: string
+  id_token?: string
   error?: string
   error_description?: string
 }
@@ -107,10 +111,6 @@ export function mergeScopeStrings(...parts: Array<string | undefined>): string {
   return [...scopes].join(' ')
 }
 
-export function sessionHasDriveScope(scope: string | undefined): boolean {
-  return scope?.split(/\s+/).includes(DRIVE_SCOPE) ?? false
-}
-
 function readStoredSession(): StoredSession | null {
   try {
     const raw = localStorage.getItem(SESSION_KEY)
@@ -154,6 +154,26 @@ function clearStoredSession(): void {
 
 function setGapiToken(accessToken: string): void {
   gapi.client.setToken({ access_token: accessToken })
+}
+
+/** Link the Google OAuth session to Firebase Auth for Firestore access. */
+async function signInToFirebase(
+  idToken: string | undefined,
+  accessToken: string,
+): Promise<void> {
+  if (!isFirebaseConfigured()) return
+  if (!idToken) {
+    throw new Error(
+      'Google sign-in did not return an ID token. Sign out, then sign in again.',
+    )
+  }
+  const credential = GoogleAuthProvider.credential(idToken, accessToken)
+  await signInWithCredential(getFirebaseAuth(), credential)
+}
+
+async function signOutFirebase(): Promise<void> {
+  if (!isFirebaseConfigured()) return
+  await firebaseSignOut(getFirebaseAuth())
 }
 
 async function ensureGapi(): Promise<void> {
@@ -278,8 +298,12 @@ async function postAuth(
     })
     const data = (await resp.json().catch(() => ({}))) as TokenPayload
     if (!resp.ok) {
-      const message =
+      let message =
         data.error_description || data.error || `Auth request failed (${resp.status})`
+      if (data.error === 'unauthorized_client') {
+        message =
+          'OAuth client mismatch: the auth backend client ID must match VITE_GOOGLE_CLIENT_ID in .env.'
+      }
       const error = new Error(message) as Error & { status?: number }
       error.status = resp.status
       throw error
@@ -298,6 +322,7 @@ async function exchangeCode(code: string): Promise<StoredSession> {
   }
   const session = persistTokenPayload(payload)
   setGapiToken(session.access_token)
+  await signInToFirebase(payload.id_token, session.access_token)
   return session
 }
 
@@ -397,13 +422,6 @@ export function restoreSession(): Promise<boolean> {
       const session = readStoredSession()
       if (!session) return false
 
-      // Sessions from before Drive sync was added lack drive.appdata — the
-      // access token can't read/write app data, so force a fresh sign-in.
-      if (!sessionHasDriveScope(session.scope)) {
-        clearStoredSession()
-        return false
-      }
-
       if (Date.now() < session.expires_at) {
         setGapiToken(session.access_token)
         applyScopes(session.scope)
@@ -423,13 +441,11 @@ export function restoreSession(): Promise<boolean> {
 
 /**
  * Sign in with calendar read access (user-initiated only). Also requests
- * Drive appdata up front — cross-device sync runs from background effects
- * with no user gesture, so it can't pop its own consent screen later; it
- * needs this scope granted here, in the one interactive step we have.
+ * OpenID scopes so the backend can return an ID token for Firebase Auth.
  */
 export async function signIn(): Promise<void> {
   await initGoogle()
-  const code = await requestAuthCode(`${READ_SCOPES} ${DRIVE_SCOPE}`)
+  const code = await requestAuthCode(`${READ_SCOPES} ${OPENID_SCOPES}`)
   await exchangeCode(code)
   restorePromise = Promise.resolve(true)
   startTokenRefreshLoop()
@@ -439,20 +455,7 @@ export async function signIn(): Promise<void> {
 export async function ensureWriteScope(): Promise<void> {
   await initGoogle()
   if (grantedScopes.has(WRITE_SCOPE)) return
-  const code = await requestAuthCode(`${READ_SCOPES} ${WRITE_SCOPE} ${DRIVE_SCOPE}`)
-  await exchangeCode(code)
-  startTokenRefreshLoop()
-}
-
-/**
- * Request Drive appdata scope (incremental) for cross-device plan sync.
- * `include_granted_scopes` defaults to true on the code client, so this
- * keeps any previously granted calendar scopes on the resulting token.
- */
-export async function ensureDriveScope(): Promise<void> {
-  await initGoogle()
-  if (grantedScopes.has(DRIVE_SCOPE)) return
-  const code = await requestAuthCode(`${READ_SCOPES} ${DRIVE_SCOPE}`)
+  const code = await requestAuthCode(`${READ_SCOPES} ${WRITE_SCOPE} ${OPENID_SCOPES}`)
   await exchangeCode(code)
   startTokenRefreshLoop()
 }
@@ -471,10 +474,12 @@ export function signOut(): void {
     }
   }
 
+  void signOutFirebase()
+
   gapi.client.setToken(null)
   grantedScopes.clear()
   clearStoredSession()
   restorePromise = Promise.resolve(false)
 }
 
-export { READ_SCOPES, WRITE_SCOPE, DRIVE_SCOPE }
+export { READ_SCOPES, WRITE_SCOPE, OPENID_SCOPES }

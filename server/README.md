@@ -28,6 +28,18 @@ The client secret comes from Google Cloud console → APIs & Services →
 Credentials → the OAuth 2.0 web client. `ALLOWED_ORIGINS` is a comma-separated
 CORS allowlist (the `^@^` prefix switches gcloud's env-var delimiter to `@`).
 
+The `/exchange` response includes `id_token` when the client requests OpenID scopes
+(`openid email profile`). The SPA uses that to sign into Firebase Auth for Firestore sync.
+
+## Firebase (Firestore sync)
+
+Cross-device plan data lives in Firestore (`users/{uid}`), not Google Drive.
+After deploying this function, also:
+
+1. Enable **Google** under Firebase → Authentication → Sign-in method, using the same Web client ID.
+2. Deploy Firestore rules: `firebase deploy --only firestore:rules --project time-blocker-502417`
+3. Set `VITE_FIREBASE_*` in the SPA `.env` (see root `.env.example`).
+
 ## Local dev
 
 ```bash

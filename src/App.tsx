@@ -13,6 +13,7 @@ import { usePlan } from './hooks/usePlan'
 import { useSidebarWidth } from './hooks/useSidebarWidth'
 import { useUserData } from './hooks/useUserData'
 import { syncTasksToCalendar } from './lib/calendarApi'
+import { isFirebaseConfigured } from './lib/firebase'
 import { formatError } from './lib/errors'
 import { ensureWriteScope } from './lib/google'
 import { hasPushedGroupOnDay } from './lib/pushedEvents'
@@ -224,14 +225,20 @@ export default function App() {
   const missingClientId =
     !import.meta.env.VITE_GOOGLE_CLIENT_ID ||
     String(import.meta.env.VITE_GOOGLE_CLIENT_ID).includes('your-client-id')
+  const missingFirebase = !isFirebaseConfigured()
 
   return (
     <div className="app">
-      {(session.error || userData.syncError || missingClientId) && (
+      {(session.error ||
+        userData.syncError ||
+        missingClientId ||
+        missingFirebase) && (
         <div className="banner banner-error" role="alert">
           {missingClientId
             ? 'Set VITE_GOOGLE_CLIENT_ID in a .env file (see README), then restart the dev server.'
-            : session.error || userData.syncError}
+            : missingFirebase
+              ? 'Set VITE_FIREBASE_* vars in .env (see README), then restart the dev server.'
+              : session.error || userData.syncError}
         </div>
       )}
 
@@ -253,7 +260,7 @@ export default function App() {
             </p>
             <AuthButton
               signedIn={false}
-              busy={busy || missingClientId}
+              busy={busy || missingClientId || missingFirebase}
               onSignIn={() => void handleSignIn()}
               onSignOut={handleSignOut}
             />

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { downloadState, resetDriveSyncCache, uploadState } from '../lib/driveSync'
+import { onAuthStateChanged, type User } from 'firebase/auth'
+import { getFirebaseAuth, isFirebaseConfigured } from '../lib/firebase'
+import { saveUserState, subscribeUserState } from '../lib/userDataSync'
 import {
   defaultPlan,
   migratePlan,
@@ -13,8 +15,6 @@ import {
 
 /** Wait for a pause in edits before pushing — most edits arrive in bursts. */
 const PUSH_DEBOUNCE_MS = 2_000
-/** How often to check Drive for changes made from another device. */
-const POLL_INTERVAL_MS = 20_000
 
 export type SyncStatus = 'idle' | 'syncing' | 'synced' | 'error'
 
@@ -26,18 +26,13 @@ type UseUserDataOptions = {
 
 /**
  * Owns everything that syncs across devices — the plan (via the caller's
- * `onRemotePlan`), saved lists, and the target-calendar choice — backed
- * entirely by the user's own Drive appDataFolder. Nothing here touches
- * localStorage: Drive is the single source of truth, so on sign-in the app
- * waits (`loading`) for the initial fetch instead of reading a local copy.
+ * `onRemotePlan`), saved lists, and the target-calendar choice — backed by
+ * Firestore under `users/{uid}`. A real-time listener applies remote edits
+ * instantly; local edits are debounced and written back with last-write-wins
+ * on `updatedAt`.
  *
- * While signed in, also polls Drive every `POLL_INTERVAL_MS` (and on tab
- * focus/visibility) so edits made on another device show up here quickly,
- * without waiting for a full reload.
- *
- * Assumes the Drive appdata scope was already granted during sign-in (see
- * `signIn` in lib/google.ts) — this runs from background effects with no
- * user gesture, so it must never itself try to pop a consent screen.
+ * Requires Firebase Auth (see `signInToFirebase` in lib/google.ts), which
+ * runs after the Google OAuth exchange using the returned ID token.
  */
 export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions) {
   const [savedLists, setSavedLists] = useState<SavedTaskList[]>([])
@@ -45,95 +40,115 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
   const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState<SyncStatus>('idle')
   const [syncError, setSyncError] = useState<string | null>(null)
+  const [firebaseUser, setFirebaseUser] = useState<User | null>(null)
 
-  const loadGenerationRef = useRef(0)
-  const loadingRef = useRef(false)
   const skipNextPushRef = useRef(false)
   const pushPendingRef = useRef(false)
   const pushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastSyncedAtRef = useRef<string | null>(null)
+  const seededRef = useRef(false)
 
-  // Mirrors the latest state into a ref so pushNow/poll (called from
-  // effects/timers) always see current values without re-subscribing.
   const stateRef = useRef({ plan, savedLists, targetCalendarId })
   stateRef.current = { plan, savedLists, targetCalendarId }
-  loadingRef.current = loading
 
   const onRemotePlanRef = useRef(onRemotePlan)
   onRemotePlanRef.current = onRemotePlan
 
-  const applyRemote = useCallback((remote: {
-    updatedAt: string
-    plan: unknown
-    savedLists: unknown
-    targetCalendarId: unknown
-  }) => {
-    skipNextPushRef.current = true
-    const migrated = migratePlan(remote.plan)
-    onRemotePlanRef.current(migrated ?? defaultPlan())
-    setSavedLists(normalizeSavedLists(remote.savedLists))
-    setTargetCalendarIdState(
-      typeof remote.targetCalendarId === 'string' ? remote.targetCalendarId : '',
-    )
-    lastSyncedAtRef.current = remote.updatedAt
-  }, [])
+  useEffect(() => {
+    if (!signedIn || !isFirebaseConfigured()) {
+      setFirebaseUser(null)
+      return
+    }
+    return onAuthStateChanged(getFirebaseAuth(), setFirebaseUser)
+  }, [signedIn])
 
-  const pushNow = useCallback(async () => {
+  const applyRemote = useCallback(
+    (remote: {
+      updatedAt: string
+      plan: unknown
+      savedLists: unknown
+      targetCalendarId: unknown
+    }) => {
+      skipNextPushRef.current = true
+      const migrated = migratePlan(remote.plan)
+      onRemotePlanRef.current(migrated ?? defaultPlan())
+      setSavedLists(normalizeSavedLists(remote.savedLists))
+      setTargetCalendarIdState(
+        typeof remote.targetCalendarId === 'string' ? remote.targetCalendarId : '',
+      )
+      lastSyncedAtRef.current = remote.updatedAt
+    },
+    [],
+  )
+
+  const pushNow = useCallback(async (uid: string) => {
     const { plan: p, savedLists: sl, targetCalendarId: tc } = stateRef.current
     const updatedAt = new Date().toISOString()
-    await uploadState({ updatedAt, plan: p, savedLists: sl, targetCalendarId: tc })
+    await saveUserState(uid, {
+      updatedAt,
+      plan: p,
+      savedLists: sl,
+      targetCalendarId: tc,
+    })
     lastSyncedAtRef.current = updatedAt
   }, [])
 
-  // Initial fetch, once per sign-in (including a restored session on cold load).
+  // Real-time Firestore subscription for this user.
   useEffect(() => {
-    if (!signedIn) {
-      setLoading(false)
+    if (!signedIn || !firebaseUser) {
+      seededRef.current = false
+      if (!signedIn) setLoading(false)
       return
     }
 
-    const generation = ++loadGenerationRef.current
-    let cancelled = false
-    ;(async () => {
-      setLoading(true)
-      setStatus('syncing')
-      setSyncError(null)
-      try {
-        const remote = await downloadState()
-        if (cancelled || generation !== loadGenerationRef.current) return
+    setLoading(true)
+    setStatus('syncing')
+    setSyncError(null)
+
+    const uid = firebaseUser.uid
+    const unsubscribe = subscribeUserState(
+      uid,
+      (remote) => {
         if (remote) {
-          applyRemote(remote)
-        } else {
-          // Nothing synced yet for this account — seed Drive with the
-          // (empty) starting state so this device's next push has a target.
-          await pushNow()
-          skipNextPushRef.current = true
-        }
-        if (!cancelled && generation === loadGenerationRef.current) {
+          const isNewer =
+            !lastSyncedAtRef.current ||
+            new Date(remote.updatedAt) > new Date(lastSyncedAtRef.current)
+          if (isNewer) applyRemote(remote)
           setStatus('synced')
-        }
-      } catch (err) {
-        if (!cancelled && generation === loadGenerationRef.current) {
-          setStatus('error')
-          setSyncError(
-            err instanceof Error ? err.message : 'Could not sync with Google Drive',
-          )
-        }
-      } finally {
-        if (!cancelled && generation === loadGenerationRef.current) {
+          setLoading(false)
+        } else if (!seededRef.current) {
+          seededRef.current = true
+          skipNextPushRef.current = true
+          void pushNow(uid)
+            .then(() => setStatus('synced'))
+            .catch((err) => {
+              setStatus('error')
+              setSyncError(
+                err instanceof Error ? err.message : 'Could not save to Firestore',
+              )
+            })
+            .finally(() => setLoading(false))
+        } else {
+          setStatus('synced')
           setLoading(false)
         }
-      }
-    })()
+      },
+      (err) => {
+        setStatus('error')
+        setSyncError(err.message)
+        setLoading(false)
+      },
+    )
 
     return () => {
-      cancelled = true
+      unsubscribe()
+      seededRef.current = false
     }
-  }, [signedIn, applyRemote, pushNow])
+  }, [signedIn, firebaseUser, applyRemote, pushNow])
 
   // Debounced push whenever the plan, saved lists, or target calendar change.
   useEffect(() => {
-    if (!signedIn || loading) return
+    if (!signedIn || !firebaseUser || loading) return
     if (skipNextPushRef.current) {
       skipNextPushRef.current = false
       return
@@ -145,12 +160,12 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
       pushPendingRef.current = false
       setStatus('syncing')
       setSyncError(null)
-      pushNow()
+      pushNow(firebaseUser.uid)
         .then(() => setStatus('synced'))
         .catch((err) => {
           setStatus('error')
           setSyncError(
-            err instanceof Error ? err.message : 'Could not save to Google Drive',
+            err instanceof Error ? err.message : 'Could not save to Firestore',
           )
         })
     }, PUSH_DEBOUNCE_MS)
@@ -158,47 +173,7 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
     return () => {
       if (pushTimerRef.current) clearTimeout(pushTimerRef.current)
     }
-  }, [plan, savedLists, targetCalendarId, signedIn, loading, pushNow])
-
-  // Poll for changes from other devices while this tab is open.
-  useEffect(() => {
-    if (!signedIn) return
-
-    let cancelled = false
-
-    async function checkRemote() {
-      if (cancelled || loadingRef.current) return
-      // A local edit is about to be pushed — don't risk clobbering it with
-      // a stale-looking remote read that raced ahead of our own write.
-      if (pushPendingRef.current) return
-      try {
-        const remote = await downloadState()
-        if (cancelled || !remote) return
-        const isNewer =
-          !lastSyncedAtRef.current ||
-          new Date(remote.updatedAt) > new Date(lastSyncedAtRef.current)
-        if (isNewer) applyRemote(remote)
-      } catch {
-        /* best effort — next poll will retry */
-      }
-    }
-
-    const interval = setInterval(() => void checkRemote(), POLL_INTERVAL_MS)
-
-    function onVisibleOrFocus() {
-      if (document.visibilityState === 'hidden') return
-      void checkRemote()
-    }
-    document.addEventListener('visibilitychange', onVisibleOrFocus)
-    window.addEventListener('focus', onVisibleOrFocus)
-
-    return () => {
-      cancelled = true
-      clearInterval(interval)
-      document.removeEventListener('visibilitychange', onVisibleOrFocus)
-      window.removeEventListener('focus', onVisibleOrFocus)
-    }
-  }, [signedIn, applyRemote])
+  }, [plan, savedLists, targetCalendarId, signedIn, firebaseUser, loading, pushNow])
 
   const saveList = useCallback(
     (name: string, tasks: Task[], replaceId?: string): SavedTaskList => {
@@ -219,23 +194,23 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
 
   /** Reset to blank, in-memory only — call on sign-out. */
   const reset = useCallback(() => {
-    loadGenerationRef.current += 1
     skipNextPushRef.current = false
     pushPendingRef.current = false
     if (pushTimerRef.current) clearTimeout(pushTimerRef.current)
     lastSyncedAtRef.current = null
+    seededRef.current = false
     setSavedLists([])
     setTargetCalendarIdState('')
     setStatus('idle')
     setSyncError(null)
     setLoading(false)
-    resetDriveSyncCache()
+    setFirebaseUser(null)
   }, [])
 
   return {
     savedLists,
     targetCalendarId,
-    loading,
+    loading: loading || (signedIn && !firebaseUser && isFirebaseConfigured()),
     status,
     syncError,
     saveList,

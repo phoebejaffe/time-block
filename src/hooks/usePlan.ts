@@ -20,9 +20,9 @@ function mapGroup(
 
 /**
  * Plan state lives only in memory here — it's cross-device data, so the
- * source of truth is Drive (see `useUserData`), not this device's storage.
- * Starts empty; `replacePlan` fills it in once the initial Drive fetch (or a
- * later sign-in) resolves.
+ * source of truth is Firestore (see `useUserData`), not this device's storage.
+ * Starts empty; `replacePlan` fills it in once the initial Firestore load
+ * (or a later sign-in) resolves.
  */
 export function usePlan() {
   const [plan, setPlan] = useState<Plan>(() => defaultPlan())
