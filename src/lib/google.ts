@@ -398,10 +398,15 @@ export function restoreSession(): Promise<boolean> {
   return restorePromise
 }
 
-/** Sign in with calendar read access (user-initiated only). */
+/**
+ * Sign in with calendar read access (user-initiated only). Also requests
+ * Drive appdata up front — cross-device sync runs from background effects
+ * with no user gesture, so it can't pop its own consent screen later; it
+ * needs this scope granted here, in the one interactive step we have.
+ */
 export async function signIn(): Promise<void> {
   await initGoogle()
-  const code = await requestAuthCode(READ_SCOPES)
+  const code = await requestAuthCode(`${READ_SCOPES} ${DRIVE_SCOPE}`)
   await exchangeCode(code)
   restorePromise = Promise.resolve(true)
   startTokenRefreshLoop()

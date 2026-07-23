@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { downloadState, uploadState } from '../lib/driveSync'
-import { ensureDriveScope } from '../lib/google'
 import {
   loadSavedLists,
   loadTargetCalendarId,
@@ -33,6 +32,12 @@ type UseDriveSyncOptions = {
  * newer than what this device last synced; otherwise pushes local state.
  * After that, local edits are pushed with a short debounce. Best effort
  * throughout — sync failures never block using the app offline.
+ *
+ * Assumes the Drive appdata scope was already granted during sign-in
+ * (see `signIn` in lib/google.ts) — this runs from background effects with
+ * no user gesture, so it must never itself try to pop a consent screen.
+ * Sessions from before that scope was added will 403 here until the user
+ * signs out and back in once.
  */
 export function useDriveSync({
   signedIn,
@@ -76,7 +81,6 @@ export function useDriveSync({
     ;(async () => {
       setStatus('syncing')
       try {
-        await ensureDriveScope()
         const remote = await downloadState()
         if (cancelled) return
 
