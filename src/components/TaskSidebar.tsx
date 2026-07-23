@@ -821,24 +821,25 @@ function BlockGroupPanel({
             disabled={busy}
             onChange={onSetGroupEnabled}
           />
-          <div
-            className="segmented segmented-sm"
-            role="group"
-            aria-label="Stack anchor"
-          >
+          <div className="segmented segmented-sm segmented-single">
             <button
               type="button"
-              className={anchor.kind === 'start' ? 'active' : ''}
-              onClick={() => onAnchorChange({ ...anchor, kind: 'start' })}
+              className="active"
+              disabled={busy}
+              aria-pressed={anchor.kind === 'end'}
+              aria-label={
+                anchor.kind === 'end'
+                  ? 'Ends at selected time; tap to anchor from start'
+                  : 'Starts at selected time; tap to anchor from end'
+              }
+              onClick={() =>
+                onAnchorChange({
+                  ...anchor,
+                  kind: anchor.kind === 'start' ? 'end' : 'start',
+                })
+              }
             >
-              Starts
-            </button>
-            <button
-              type="button"
-              className={anchor.kind === 'end' ? 'active' : ''}
-              onClick={() => onAnchorChange({ ...anchor, kind: 'end' })}
-            >
-              Ends
+              {anchor.kind === 'start' ? 'Starts' : 'Ends'}
             </button>
           </div>
           <span className="muted stack-anchor-at" aria-hidden="true">
@@ -1036,7 +1037,7 @@ function BlockGroupPanel({
                           onCollapseGroup()
                         }}
                       >
-                        Collapse block group
+                        Collapse group
                       </button>
                       <div className="calendar-menu-sep" role="separator" />
                       <button

@@ -277,7 +277,8 @@ body.is-sidebar-resizing .main-panel {
 
 .stack-anchor-at {
   flex: 0 0 auto;
-  font-size: 0.92rem;
+  font-size: 0.85rem;
+  margin-inline: -0.12rem;
 }
 
 .stack-anchor-time input {
@@ -499,6 +500,10 @@ body.is-datetime-scrubbing .task-form-duration input {
   white-space: nowrap;
 }
 
+.segmented.segmented-single {
+  grid-template-columns: auto;
+}
+
 .btn {
   border: 1px solid transparent;
   border-radius: 999px;
@@ -697,15 +702,21 @@ body.is-datetime-scrubbing .task-form-duration input {
 
 .task-new-menu-dropdown {
   position: absolute;
-  top: calc(100% + 0.3rem);
+  bottom: calc(100% + 0.3rem);
   right: 0;
+  top: auto;
   z-index: 40;
   min-width: 10.5rem;
-  padding: 0.35rem;
+  padding: 0.3rem;
   border-radius: var(--radius);
   border: 1px solid var(--line);
   background: #fffcf6;
   box-shadow: var(--shadow);
+}
+
+.task-new-menu-dropdown .calendar-menu-item {
+  font-size: 0.78rem;
+  padding: 0.38rem 0.55rem;
 }
 
 .task-new-commit {
