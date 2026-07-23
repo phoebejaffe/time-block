@@ -1,0 +1,16 @@
+{
+  "name": "time-blocking-auth",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "main": "index.js",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "functions-framework --target=auth --port=8787"
+  },
+  "dependencies": {
+    "@google-cloud/functions-framework": "^4.0.0"
+  }
+}
