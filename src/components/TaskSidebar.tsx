@@ -79,6 +79,10 @@ type TaskSidebarProps = {
   signedIn?: boolean
   onSignIn?: () => void
   onSignOut?: () => void
+  /** Bumps when saved lists / target calendar change, locally or via sync. */
+  syncTick?: number
+  /** Notifies the caller after a local saved-list / target-calendar edit. */
+  onLocalDataChange?: () => void
 }
 
 export function TaskSidebar({
@@ -103,6 +107,8 @@ export function TaskSidebar({
   signedIn,
   onSignIn,
   onSignOut,
+  syncTick,
+  onLocalDataChange,
 }: TaskSidebarProps) {
   const [commitCalendarId, setCommitCalendarId] = useState(loadTargetCalendarId)
   const [savedLists, setSavedLists] = useState<SavedTaskList[]>(() =>
@@ -115,6 +121,16 @@ export function TaskSidebar({
   const [modalGroupId, setModalGroupId] = useState<string | null>(null)
   const [pushEpoch, setPushEpoch] = useState(0)
   const [addingGroupId, setAddingGroupId] = useState<string | null>(null)
+
+  // Re-read saved lists / target calendar after a sync pull overwrites them.
+  const lastSyncTickRef = useRef(syncTick)
+  useEffect(() => {
+    if (syncTick === undefined || syncTick === lastSyncTickRef.current) return
+    lastSyncTickRef.current = syncTick
+    refreshSavedLists()
+    setCommitCalendarId(loadTargetCalendarId())
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refreshSavedLists is stable enough for this effect
+  }, [syncTick])
 
   const modalGroup = groups.find((g) => g.id === modalGroupId) ?? null
   const selectedCommitId = useMemo(() => {
@@ -188,6 +204,7 @@ export function TaskSidebar({
     const saved = saveTaskList(saveName || 'Morning', modalGroup.tasks)
     setSaveName(saved.name)
     refreshSavedLists(saved.id)
+    onLocalDataChange?.()
     closeModal()
   }
 
@@ -207,6 +224,7 @@ export function TaskSidebar({
     if (!id) return
     deleteSavedList(id)
     refreshSavedLists()
+    onLocalDataChange?.()
   }
 
   const modalResolved = modalGroup
@@ -415,6 +433,7 @@ export function TaskSidebar({
                 onChange={(e) => {
                   setCommitCalendarId(e.target.value)
                   saveTargetCalendarId(e.target.value)
+                  onLocalDataChange?.()
                 }}
                 disabled={!writableCalendars.length || busy}
               >

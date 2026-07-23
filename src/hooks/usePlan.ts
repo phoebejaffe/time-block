@@ -214,6 +214,11 @@ export function usePlan() {
     setPlan(defaultPlan())
   }, [])
 
+  /** Apply a plan pulled from cross-device sync (already normalized). */
+  const replacePlan = useCallback((next: Plan) => {
+    setPlan(next)
+  }, [])
+
   const findGroupForTask = useCallback(
     (taskId: string): BlockGroup | undefined =>
       plan.groups.find((g) => g.tasks.some((t) => t.id === taskId)),
@@ -236,6 +241,7 @@ export function usePlan() {
     clearGroupTasks,
     setGroupHidden,
     clear,
+    replacePlan,
     findGroupForTask,
   }
 }

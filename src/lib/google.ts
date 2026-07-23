@@ -1,5 +1,7 @@
 const READ_SCOPES = 'https://www.googleapis.com/auth/calendar.readonly'
 const WRITE_SCOPE = 'https://www.googleapis.com/auth/calendar.events'
+/** Hidden per-app storage in the user's own Drive — used to sync plan data. */
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata'
 const DISCOVERY_DOC =
   'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'
 
@@ -414,6 +416,19 @@ export async function ensureWriteScope(): Promise<void> {
   startTokenRefreshLoop()
 }
 
+/**
+ * Request Drive appdata scope (incremental) for cross-device plan sync.
+ * `include_granted_scopes` defaults to true on the code client, so this
+ * keeps any previously granted calendar scopes on the resulting token.
+ */
+export async function ensureDriveScope(): Promise<void> {
+  await initGoogle()
+  if (grantedScopes.has(DRIVE_SCOPE)) return
+  const code = await requestAuthCode(`${READ_SCOPES} ${DRIVE_SCOPE}`)
+  await exchangeCode(code)
+  startTokenRefreshLoop()
+}
+
 export function signOut(): void {
   stopTokenRefreshLoop()
 
@@ -434,4 +449,4 @@ export function signOut(): void {
   restorePromise = Promise.resolve(false)
 }
 
-export { READ_SCOPES, WRITE_SCOPE }
+export { READ_SCOPES, WRITE_SCOPE, DRIVE_SCOPE }

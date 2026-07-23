@@ -6,6 +6,7 @@ import { NoticeToast } from './components/NoticeToast'
 import { SidebarResizeHandle } from './components/SidebarResizeHandle'
 import { TaskSidebar } from './components/TaskSidebar'
 import { useCalendarEvents } from './hooks/useCalendarEvents'
+import { useDriveSync } from './hooks/useDriveSync'
 import { useGoogleSession } from './hooks/useGoogleSession'
 import { useMobileSplit } from './hooks/useMobileSplit'
 import { useNotice } from './hooks/useNotice'
@@ -31,6 +32,17 @@ export default function App() {
   const calendars = useCalendarEvents({
     signedIn: session.signedIn,
     onError: (message) => session.setError(message),
+  })
+  /** Bumped by TaskSidebar on saved-list / target-calendar edits, and by
+   * useDriveSync after applying a remote pull — either way, tells
+   * TaskSidebar to re-read that (localStorage-backed) state. */
+  const [userDataVersion, setUserDataVersion] = useState(0)
+  useDriveSync({
+    signedIn: session.signedIn,
+    plan: plan.plan,
+    onRemotePlan: plan.replacePlan,
+    userDataVersion,
+    onRemoteUserData: () => setUserDataVersion((n) => n + 1),
   })
 
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
@@ -257,6 +269,8 @@ export default function App() {
           signedIn={session.signedIn}
           onSignIn={() => void handleSignIn()}
           onSignOut={handleSignOut}
+          syncTick={userDataVersion}
+          onLocalDataChange={() => setUserDataVersion((n) => n + 1)}
         />
 
         <SidebarResizeHandle

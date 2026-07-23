@@ -413,38 +413,41 @@ export type SavedTaskList = {
 
 const SAVED_LISTS_KEY = 'time-blocking.saved-lists'
 
+function normalizeSavedLists(raw: unknown): SavedTaskList[] {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .filter(
+      (item): item is SavedTaskList =>
+        Boolean(item) &&
+        typeof item === 'object' &&
+        typeof (item as SavedTaskList).id === 'string' &&
+        typeof (item as SavedTaskList).name === 'string' &&
+        Array.isArray((item as SavedTaskList).tasks),
+    )
+    .map((item) => ({
+      id: item.id,
+      name: item.name,
+      updatedAt: item.updatedAt || new Date().toISOString(),
+      tasks: item.tasks
+        .filter(
+          (t) =>
+            t &&
+            typeof t.title === 'string' &&
+            typeof t.durationMinutes === 'number',
+        )
+        .map((t) => ({
+          title: t.title,
+          durationMinutes: Math.max(1, Math.round(t.durationMinutes) || 1),
+        })),
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+}
+
 export function loadSavedLists(): SavedTaskList[] {
   try {
     const raw = localStorage.getItem(SAVED_LISTS_KEY)
     if (!raw) return []
-    const parsed = JSON.parse(raw) as unknown
-    if (!Array.isArray(parsed)) return []
-    return parsed
-      .filter(
-        (item): item is SavedTaskList =>
-          Boolean(item) &&
-          typeof item === 'object' &&
-          typeof (item as SavedTaskList).id === 'string' &&
-          typeof (item as SavedTaskList).name === 'string' &&
-          Array.isArray((item as SavedTaskList).tasks),
-      )
-      .map((item) => ({
-        id: item.id,
-        name: item.name,
-        updatedAt: item.updatedAt || new Date().toISOString(),
-        tasks: item.tasks
-          .filter(
-            (t) =>
-              t &&
-              typeof t.title === 'string' &&
-              typeof t.durationMinutes === 'number',
-          )
-          .map((t) => ({
-            title: t.title,
-            durationMinutes: Math.max(1, Math.round(t.durationMinutes) || 1),
-          })),
-      }))
-      .sort((a, b) => a.name.localeCompare(b.name))
+    return normalizeSavedLists(JSON.parse(raw))
   } catch {
     return []
   }
@@ -452,6 +455,13 @@ export function loadSavedLists(): SavedTaskList[] {
 
 function writeSavedLists(lists: SavedTaskList[]): void {
   localStorage.setItem(SAVED_LISTS_KEY, JSON.stringify(lists))
+}
+
+/** Overwrite saved lists with a synced copy (validated like any stored shape). */
+export function replaceSavedLists(raw: unknown): SavedTaskList[] {
+  const normalized = normalizeSavedLists(raw)
+  writeSavedLists(normalized)
+  return normalized
 }
 
 export function saveTaskList(
