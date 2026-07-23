@@ -223,9 +223,10 @@ export default function App() {
   }
 
   const missingClientId =
-    !import.meta.env.VITE_GOOGLE_CLIENT_ID ||
-    String(import.meta.env.VITE_GOOGLE_CLIENT_ID).includes('your-client-id')
-  const missingFirebase = !isFirebaseConfigured()
+    import.meta.env.DEV &&
+    (!import.meta.env.VITE_GOOGLE_CLIENT_ID ||
+      String(import.meta.env.VITE_GOOGLE_CLIENT_ID).includes('your-client-id'))
+  const missingFirebase = import.meta.env.DEV && !isFirebaseConfigured()
 
   return (
     <div className="app">

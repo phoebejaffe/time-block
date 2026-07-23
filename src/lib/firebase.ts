@@ -13,7 +13,15 @@ let app: FirebaseApp | null = null
 let auth: Auth | null = null
 let db: Firestore | null = null
 
-function readConfig(): FirebaseConfig | null {
+/** Public web SDK config for the deployed GitHub Pages app. */
+const PRODUCTION_FIREBASE: FirebaseConfig = {
+  apiKey: 'AIzaSyAlQTWVXXRsg9iHd-AUCvazJJvAWPOh-Z8',
+  authDomain: 'time-blocker-502417.firebaseapp.com',
+  projectId: 'time-blocker-502417',
+  appId: '1:597708660954:web:423dc9ab0248c4bce5c5e3',
+}
+
+function readEnvConfig(): FirebaseConfig | null {
   const apiKey = import.meta.env.VITE_FIREBASE_API_KEY as string | undefined
   const authDomain = import.meta.env.VITE_FIREBASE_AUTH_DOMAIN as string | undefined
   const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID as string | undefined
@@ -21,6 +29,13 @@ function readConfig(): FirebaseConfig | null {
   if (!apiKey || !authDomain || !projectId || !appId) return null
   if (apiKey.includes('your-') || projectId.includes('your-')) return null
   return { apiKey, authDomain, projectId, appId }
+}
+
+function readConfig(): FirebaseConfig | null {
+  const fromEnv = readEnvConfig()
+  if (fromEnv) return fromEnv
+  if (import.meta.env.PROD) return PRODUCTION_FIREBASE
+  return null
 }
 
 /** True when all VITE_FIREBASE_* vars needed by the web SDK are set. */

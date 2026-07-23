@@ -40,14 +40,21 @@ type TokenPayload = {
   error_description?: string
 }
 
+/** Must match the OAuth client ID on the deployed auth backend. */
+const PRODUCTION_CLIENT_ID =
+  '597708660954-lcc1jjlb2da9ffkgj3viaa5arkt4ktqj.apps.googleusercontent.com'
+
 function getClientId(): string {
-  const id = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined
-  if (!id || id.includes('your-client-id')) {
-    throw new Error(
-      'Missing VITE_GOOGLE_CLIENT_ID. Copy .env.example to .env and set your OAuth client ID.',
-    )
+  if (import.meta.env.DEV) {
+    const id = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined
+    if (!id || id.includes('your-client-id')) {
+      throw new Error(
+        'Missing VITE_GOOGLE_CLIENT_ID. Copy .env.example to .env and set your OAuth client ID.',
+      )
+    }
+    return id
   }
-  return id
+  return PRODUCTION_CLIENT_ID
 }
 
 function getAuthEndpoint(): string {
