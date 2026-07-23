@@ -187,22 +187,51 @@ export function usePlan() {
   )
 
   const setGroupHidden = useCallback(
-    (groupId: string, hidden: boolean, name?: string) => {
+    (groupId: string, hidden: boolean) => {
       updatePlan((prev) => ({
         groups: mapGroup(prev.groups, groupId, (g) => {
-          const nextName =
-            name !== undefined
-              ? name.trim() || undefined
-              : g.name
           const next: BlockGroup = {
             id: g.id,
             tasks: g.tasks,
             anchor: g.anchor,
-            ...(nextName ? { name: nextName } : {}),
+            ...(g.name ? { name: g.name } : {}),
+            ...(g.enabled === false ? { enabled: false } : {}),
             ...(hidden ? { hidden: true } : {}),
           }
           return next
         }),
+      }))
+    },
+    [updatePlan],
+  )
+
+  const setGroupEnabled = useCallback(
+    (groupId: string, enabled: boolean) => {
+      updatePlan((prev) => ({
+        groups: mapGroup(prev.groups, groupId, (g) => {
+          const next: BlockGroup = {
+            id: g.id,
+            tasks: g.tasks,
+            anchor: g.anchor,
+            ...(g.name ? { name: g.name } : {}),
+            ...(g.hidden ? { hidden: true } : {}),
+            ...(enabled ? {} : { enabled: false }),
+          }
+          return next
+        }),
+      }))
+    },
+    [updatePlan],
+  )
+
+  const collapseGroup = useCallback(
+    (groupId: string) => {
+      updatePlan((prev) => ({
+        groups: mapGroup(prev.groups, groupId, (g) => ({
+          ...g,
+          hidden: true,
+          enabled: false,
+        })),
       }))
     },
     [updatePlan],
@@ -239,6 +268,8 @@ export function usePlan() {
     setTaskDuration,
     clearGroupTasks,
     setGroupHidden,
+    setGroupEnabled,
+    collapseGroup,
     clear,
     replacePlan,
     findGroupForTask,

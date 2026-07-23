@@ -8,6 +8,7 @@ import type {
 } from '../lib/tasks'
 import {
   fromLocalTimeValue,
+  isGroupEnabled,
   localDateKey,
   resolveStack,
   tasksFromSavedList,
@@ -31,7 +32,7 @@ const ANCHOR_SCRUB_PX = 25
 const ANCHOR_SCRUB_ACTIVATE_PX = 8
 
 type AnchorField = 'hour' | 'minute'
-type ModalKind = 'save' | 'restore' | 'commit' | 'hide'
+type ModalKind = 'save' | 'restore' | 'commit'
 
 function blockCountLabel(count: number): string {
   return count === 1 ? '1 Block' : `${count} Blocks`
@@ -62,10 +63,10 @@ type TaskSidebarProps = {
   onReorder: (groupId: string, fromIndex: number, toIndex: number) => void
   onAnchorChange: (groupId: string, anchor: StackAnchor) => void
   onReplaceTasks: (groupId: string, tasks: Task[]) => void
-  onClear: (groupId: string) => void
   onDeleteGroup: (groupId: string) => void
   onAddGroup: () => void
-  onHideGroup: (groupId: string, name: string) => void
+  onCollapseGroup: (groupId: string) => void
+  onSetGroupEnabled: (groupId: string, enabled: boolean) => void
   onShowGroup: (groupId: string) => void
   onCommit: (groupId: string, calendarId: string) => Promise<boolean>
   editingId: string | null
@@ -92,10 +93,10 @@ export function TaskSidebar({
   onReorder,
   onAnchorChange,
   onReplaceTasks,
-  onClear,
   onDeleteGroup,
   onAddGroup,
-  onHideGroup,
+  onCollapseGroup,
+  onSetGroupEnabled,
   onShowGroup,
   onCommit,
   editingId,
@@ -111,7 +112,6 @@ export function TaskSidebar({
   onTargetCalendarChange,
 }: TaskSidebarProps) {
   const [saveName, setSaveName] = useState('')
-  const [hideName, setHideName] = useState('')
   const [selectedSavedId, setSelectedSavedId] = useState('')
   const [modal, setModal] = useState<ModalKind | null>(null)
   const [modalGroupId, setModalGroupId] = useState<string | null>(null)
@@ -152,18 +152,7 @@ export function TaskSidebar({
 
   function openModal(kind: ModalKind, groupId: string) {
     setModalGroupId(groupId)
-    if (kind === 'hide') {
-      const group = groups.find((g) => g.id === groupId)
-      setHideName(group?.name ?? '')
-    }
     setModal(kind)
-  }
-
-  function handleHideGroup(e: React.FormEvent) {
-    e.preventDefault()
-    if (!modalGroupId) return
-    onHideGroup(modalGroupId, hideName)
-    closeModal()
   }
 
   function closeModal() {
@@ -268,13 +257,13 @@ export function TaskSidebar({
             onRemove={(id) => onRemove(group.id, id)}
             onReorder={(from, to) => onReorder(group.id, from, to)}
             onAnchorChange={(anchor) => onAnchorChange(group.id, anchor)}
-            onClear={() => onClear(group.id)}
             onDeleteGroup={() => onDeleteGroup(group.id)}
             onShowGroup={() => onShowGroup(group.id)}
+            onSetGroupEnabled={(enabled) => onSetGroupEnabled(group.id, enabled)}
             onOpenSave={() => openModal('save', group.id)}
             onOpenRestore={() => openModal('restore', group.id)}
             onOpenCommit={() => openModal('commit', group.id)}
-            onOpenHide={() => openModal('hide', group.id)}
+            onCollapseGroup={() => onCollapseGroup(group.id)}
           />
         ))}
         <button
@@ -286,34 +275,6 @@ export function TaskSidebar({
           New group +
         </button>
       </div>
-
-      {modal === 'hide' && modalGroup && (
-        <Modal title="Hide block group" onClose={closeModal}>
-          <form className="modal-form" onSubmit={handleHideGroup}>
-            <label>
-              <span>Name (optional)</span>
-              <input
-                value={hideName}
-                onChange={(e) => setHideName(e.target.value)}
-                placeholder="Morning stack"
-                autoFocus
-              />
-            </label>
-            <div className="modal-actions">
-              <button
-                type="button"
-                className="btn btn-ghost btn-sm"
-                onClick={closeModal}
-              >
-                Cancel
-              </button>
-              <button type="submit" className="btn btn-primary btn-sm">
-                Hide
-              </button>
-            </div>
-          </form>
-        </Modal>
-      )}
 
       {modal === 'save' && modalGroup && (
         <Modal title="Save block list" onClose={closeModal}>
@@ -479,13 +440,13 @@ type BlockGroupPanelProps = {
   onRemove: (id: string) => void
   onReorder: (fromIndex: number, toIndex: number) => void
   onAnchorChange: (anchor: StackAnchor) => void
-  onClear: () => void
   onDeleteGroup: () => void
   onShowGroup: () => void
+  onSetGroupEnabled: (enabled: boolean) => void
   onOpenSave: () => void
   onOpenRestore: () => void
   onOpenCommit: () => void
-  onOpenHide: () => void
+  onCollapseGroup: () => void
 }
 
 function BlockGroupPanel({
@@ -504,15 +465,16 @@ function BlockGroupPanel({
   onRemove,
   onReorder,
   onAnchorChange,
-  onClear,
   onDeleteGroup,
   onShowGroup,
+  onSetGroupEnabled,
   onOpenSave,
   onOpenRestore,
   onOpenCommit,
-  onOpenHide,
+  onCollapseGroup,
 }: BlockGroupPanelProps) {
   const { tasks, anchor } = group
+  const enabled = isGroupEnabled(group)
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   const [dropLineIndex, setDropLineIndex] = useState<number | null>(null)
   const [listMenuOpen, setListMenuOpen] = useState(false)
@@ -803,35 +765,62 @@ function BlockGroupPanel({
   if (group.hidden) {
     const countText = ` (${blockCountLabel(tasks.length)})`
     return (
-      <section className="block-group block-group-collapsed">
-        <button
-          type="button"
-          className="block-group-collapsed-toggle"
-          onClick={onShowGroup}
-          disabled={busy}
-          aria-expanded={false}
-        >
-          {group.name ? (
-            <>
-              <span className="block-group-collapsed-title">{group.name}</span>
+      <section
+        className={[
+          'block-group',
+          'block-group-collapsed',
+          !enabled ? 'block-group-disabled' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+      >
+        <div className="block-group-collapsed-row">
+          <PowerToggle
+            enabled={enabled}
+            disabled={busy}
+            onChange={onSetGroupEnabled}
+          />
+          <button
+            type="button"
+            className="block-group-collapsed-toggle"
+            onClick={onShowGroup}
+            disabled={busy}
+            aria-expanded={false}
+          >
+            {group.name ? (
+              <>
+                <span className="block-group-collapsed-title">{group.name}</span>
+                <span className="muted block-group-collapsed-count">
+                  {countText}
+                </span>
+              </>
+            ) : (
               <span className="muted block-group-collapsed-count">
                 {countText}
               </span>
-            </>
-          ) : (
-            <span className="muted block-group-collapsed-count">
-              {countText}
-            </span>
-          )}
-        </button>
+            )}
+          </button>
+        </div>
       </section>
     )
   }
 
   return (
-    <section className="block-group">
+    <section
+      className={[
+        'block-group',
+        !enabled ? 'block-group-disabled' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+    >
       <div className="stack-anchor">
         <div className="stack-anchor-row">
+          <PowerToggle
+            enabled={enabled}
+            disabled={busy}
+            onChange={onSetGroupEnabled}
+          />
           <div
             className="segmented segmented-sm"
             role="group"
@@ -1041,25 +1030,13 @@ function BlockGroupPanel({
                         type="button"
                         role="menuitem"
                         className="calendar-menu-item"
-                        disabled={busy || tasks.length === 0}
-                        onClick={() => {
-                          setListMenuOpen(false)
-                          onClear()
-                        }}
-                      >
-                        Clear blocks
-                      </button>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className="calendar-menu-item"
                         disabled={busy}
                         onClick={() => {
                           setListMenuOpen(false)
-                          onOpenHide()
+                          onCollapseGroup()
                         }}
                       >
-                        Hide block group
+                        Collapse block group
                       </button>
                       <div className="calendar-menu-sep" role="separator" />
                       <button
@@ -1170,6 +1147,51 @@ function CalendarIcon() {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
+    </svg>
+  )
+}
+
+function PowerToggle({
+  enabled,
+  disabled,
+  onChange,
+}: {
+  enabled: boolean
+  disabled?: boolean
+  onChange: (enabled: boolean) => void
+}) {
+  return (
+    <button
+      type="button"
+      className={['power-toggle', enabled ? 'is-on' : ''].filter(Boolean).join(' ')}
+      aria-label={
+        enabled ? 'Hide blocks from calendar' : 'Show blocks on calendar'
+      }
+      aria-pressed={enabled}
+      title={enabled ? 'Hide from calendar' : 'Show on calendar'}
+      disabled={disabled}
+      onClick={() => onChange(!enabled)}
+    >
+      <PowerIcon />
+    </button>
+  )
+}
+
+function PowerIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M12 2v10" />
+      <path d="M18.4 6.6a9 9 0 1 1-12.77 0" />
     </svg>
   )
 }

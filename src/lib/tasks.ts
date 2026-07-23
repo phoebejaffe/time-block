@@ -16,8 +16,10 @@ export type BlockGroup = {
   anchor: StackAnchor
   /** Optional label shown when the group is collapsed. */
   name?: string
-  /** When true, the group is collapsed in the sidebar and omitted from the calendar. */
+  /** When true, the group is collapsed in the sidebar. */
   hidden?: boolean
+  /** When false, blocks are greyed out and omitted from the calendar. */
+  enabled?: boolean
 }
 
 export type Plan = {
@@ -34,7 +36,7 @@ function newId(): string {
 }
 
 export function createBlockGroup(
-  input?: Partial<Pick<BlockGroup, 'tasks' | 'anchor' | 'name' | 'hidden'>> & {
+  input?: Partial<Pick<BlockGroup, 'tasks' | 'anchor' | 'name' | 'hidden' | 'enabled'>> & {
     id?: string
   },
 ): BlockGroup {
@@ -44,7 +46,13 @@ export function createBlockGroup(
     anchor: input?.anchor ?? defaultAnchor(),
     ...(input?.name?.trim() ? { name: input.name.trim() } : {}),
     ...(input?.hidden ? { hidden: true } : {}),
+    ...(input?.enabled === false ? { enabled: false } : {}),
   }
+}
+
+/** False only when `enabled` is explicitly false. */
+export function isGroupEnabled(group: BlockGroup): boolean {
+  return group.enabled !== false
 }
 
 function pad(n: number): string {
@@ -110,12 +118,16 @@ function normalizeGroup(raw: unknown): BlockGroup | null {
   if (typeof g.id !== 'string' || !g.id) return null
   const name =
     typeof g.name === 'string' && g.name.trim() ? g.name.trim() : undefined
+  const hidden = g.hidden === true
+  const enabled =
+    g.enabled === false || (hidden && g.enabled !== true) ? false : undefined
   return {
     id: g.id,
     tasks: normalizeTasks(g.tasks),
     anchor: normalizeAnchor(g.anchor),
     ...(name ? { name } : {}),
-    ...(g.hidden === true ? { hidden: true } : {}),
+    ...(hidden ? { hidden: true } : {}),
+    ...(enabled === false ? { enabled: false } : {}),
   }
 }
 

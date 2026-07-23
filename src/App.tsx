@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { AuthButton } from './components/AuthButton'
 import { CalendarView } from './components/CalendarView'
 import { MobileSplitHandle } from './components/MobileSplitHandle'
@@ -129,16 +129,6 @@ export default function App() {
     clear()
   }
 
-  function handleClearBlocks(groupId: string) {
-    const group = plan.plan.groups.find((g) => g.id === groupId)
-    if (!group || group.tasks.length === 0) return
-    if (!window.confirm('Clear all blocks from this group?')) return
-    plan.clearGroupTasks(groupId)
-    setEditingTaskId(null)
-    clear()
-    show('info', 'Cleared blocks.')
-  }
-
   function handleDeleteGroup(groupId: string) {
     if (plan.plan.groups.length <= 1) {
       show('info', 'Keep at least one block group.')
@@ -228,6 +218,26 @@ export default function App() {
       String(import.meta.env.VITE_GOOGLE_CLIENT_ID).includes('your-client-id'))
   const missingFirebase = import.meta.env.DEV && !isFirebaseConfigured()
 
+  // After OAuth, the main grid mounts with zero-sized flex children until layout
+  // settles — nudge FullCalendar the same way a manual window resize does.
+  useLayoutEffect(() => {
+    if (!session.ready || !session.signedIn || userData.loading) return
+
+    function nudgeLayout() {
+      window.dispatchEvent(new Event('resize'))
+    }
+
+    nudgeLayout()
+    requestAnimationFrame(nudgeLayout)
+    const t1 = window.setTimeout(nudgeLayout, 50)
+    const t2 = window.setTimeout(nudgeLayout, 200)
+
+    return () => {
+      window.clearTimeout(t1)
+      window.clearTimeout(t2)
+    }
+  }, [session.ready, session.signedIn, userData.loading])
+
   return (
     <div className="app">
       {(session.error ||
@@ -282,11 +292,13 @@ export default function App() {
               plan.setAnchor(groupId, next)
             }}
             onReplaceTasks={handleReplaceTasks}
-            onClear={handleClearBlocks}
             onDeleteGroup={handleDeleteGroup}
             onAddGroup={handleAddGroup}
-            onHideGroup={(groupId, name) => {
-              plan.setGroupHidden(groupId, true, name)
+            onCollapseGroup={(groupId) => {
+              plan.collapseGroup(groupId)
+            }}
+            onSetGroupEnabled={(groupId, enabled) => {
+              plan.setGroupEnabled(groupId, enabled)
             }}
             onShowGroup={(groupId) => {
               plan.setGroupHidden(groupId, false)

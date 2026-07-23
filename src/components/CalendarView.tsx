@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import FullCalendar from '@fullcalendar/react'
 import type {
   DateSpanApi,
@@ -7,7 +7,6 @@ import type {
   EventClickArg,
   EventContentArg,
   EventInput,
-  FormatterInput,
 } from '@fullcalendar/core'
 import timeGridPlugin from '@fullcalendar/timegrid'
 import interactionPlugin from '@fullcalendar/interaction'
@@ -15,6 +14,7 @@ import type { CalendarEvent, GoogleCalendar } from '../lib/calendarApi'
 import type { BlockGroup, StackAnchor } from '../lib/tasks'
 import {
   isTodayOrTomorrow,
+  isGroupEnabled,
   pickViewDate,
   resolveStack,
   shiftAnchor,
@@ -32,11 +32,68 @@ import {
 const TASK_COLOR = '#0f6e56'
 const TASK_BORDER = '#0b5341'
 const NARROW_BREAKPOINT = 560
+/** Below this width, abbreviate the weekday in the toolbar title. */
+const LONG_WEEKDAY_MIN = 300
 
-const TITLE_FORMAT: FormatterInput = {
-  month: 'long',
-  day: 'numeric',
-  year: 'numeric',
+function dayFormatOptions(useLongWeekday: boolean) {
+  return {
+    weekday: useLongWeekday ? ('long' as const) : ('short' as const),
+    month: 'long' as const,
+    day: 'numeric' as const,
+    year: 'numeric' as const,
+  }
+}
+
+function formatToolbarTitle(
+  start: Date,
+  end: Date,
+  viewType: CalendarViewType,
+  useLongWeekday: boolean,
+): string {
+  // FullCalendar's range end is exclusive.
+  const last = new Date(end.getTime() - 1)
+  const weekday = useLongWeekday ? ('long' as const) : ('short' as const)
+
+  if (viewType === 'timeGridDay') {
+    return new Intl.DateTimeFormat(undefined, dayFormatOptions(useLongWeekday)).format(
+      start,
+    )
+  }
+
+  const sameMonth =
+    start.getFullYear() === last.getFullYear() &&
+    start.getMonth() === last.getMonth()
+
+  if (sameMonth) {
+    const startPart = new Intl.DateTimeFormat(undefined, {
+      weekday,
+      month: 'long',
+      day: 'numeric',
+    }).format(start)
+    const endPart = new Intl.DateTimeFormat(undefined, {
+      weekday,
+      day: 'numeric',
+      year: 'numeric',
+    }).format(last)
+    return `${startPart} – ${endPart}`
+  }
+
+  if (start.getFullYear() === last.getFullYear()) {
+    const startPart = new Intl.DateTimeFormat(undefined, {
+      weekday,
+      month: 'long',
+      day: 'numeric',
+    }).format(start)
+    const endPart = new Intl.DateTimeFormat(undefined, {
+      weekday,
+      month: 'long',
+      day: 'numeric',
+    }).format(last)
+    return `${startPart} – ${endPart}, ${start.getFullYear()}`
+  }
+
+  const full = new Intl.DateTimeFormat(undefined, dayFormatOptions(useLongWeekday))
+  return `${full.format(start)} – ${full.format(last)}`
 }
 
 type CalendarViewProps = {
@@ -68,7 +125,7 @@ type ResolvedTaskEvent = {
 /** Lay out visible groups once; calendar UI reads times from here. */
 function buildResolvedTaskEvents(groups: BlockGroup[]): ResolvedTaskEvent[] {
   return groups
-    .filter((group) => !group.hidden)
+    .filter((group) => isGroupEnabled(group))
     .flatMap((group) =>
       resolveStack(group.tasks, group.anchor).map((task) => ({
         taskId: task.id,
@@ -141,6 +198,32 @@ export function CalendarView({
   onAnchorCommitRef.current = onAnchorCommit
   onStackShiftPreviewRef.current = onStackShiftPreview
 
+  /** FullCalendar with height="100%" often lays out at 0 after OAuth gate swap. */
+  function refreshCalendarSize(): boolean {
+    const el = calendarBodyRef.current
+    const api = calendarRef.current?.getApi()
+    if (!el || !api) return false
+    if (el.clientHeight < 2 || el.clientWidth < 2) return false
+    api.updateSize()
+    return true
+  }
+
+  function scheduleCalendarSizeRefresh() {
+    if (refreshCalendarSize()) return
+
+    let attempts = 0
+    const retry = () => {
+      if (refreshCalendarSize()) return
+      if (++attempts >= 24) return
+      requestAnimationFrame(retry)
+    }
+    requestAnimationFrame(retry)
+
+    window.setTimeout(refreshCalendarSize, 50)
+    window.setTimeout(refreshCalendarSize, 150)
+    window.setTimeout(refreshCalendarSize, 400)
+  }
+
   const resolvedTaskEvents = useMemo(
     () => buildResolvedTaskEvents(groups),
     [groups],
@@ -149,8 +232,10 @@ export function CalendarView({
   resolvedTaskEventsRef.current = resolvedTaskEvents
 
   const [narrow, setNarrow] = useState(false)
+  const [useLongWeekday, setUseLongWeekday] = useState(true)
   const [title, setTitle] = useState('')
   const [viewType, setViewType] = useState<CalendarViewType>('timeGridDay')
+  const viewRangeRef = useRef<{ start: Date; end: Date } | null>(null)
   const [showAllDay, setShowAllDay] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [calendarsOpen, setCalendarsOpen] = useState(false)
@@ -333,11 +418,18 @@ export function CalendarView({
   }
 
   useEffect(() => {
+    const range = viewRangeRef.current
+    if (!range) return
+    setTitle(formatToolbarTitle(range.start, range.end, viewType, useLongWeekday))
+  }, [useLongWeekday, viewType])
+
+  useEffect(() => {
     const el = shellRef.current
     if (!el) return
 
     const update = (width: number) => {
       setNarrow(width < NARROW_BREAKPOINT)
+      setUseLongWeekday(width >= LONG_WEEKDAY_MIN)
     }
 
     update(el.clientWidth)
@@ -349,46 +441,25 @@ export function CalendarView({
     return () => observer.disconnect()
   }, [])
 
-  // FullCalendar with height="100%" often lays out at 0 after sign-in (OAuth
-  // popup / flex swap). Resize fixes it — call updateSize when the body
-  // actually has dimensions, and again on focus/visibility.
-  useEffect(() => {
-    const body = calendarBodyRef.current
-    if (!body) return
+  useLayoutEffect(() => {
+    scheduleCalendarSizeRefresh()
 
-    let raf1 = 0
-    let raf2 = 0
-
-    function refreshSize() {
-      const el = calendarBodyRef.current
-      const api = calendarRef.current?.getApi()
-      if (!el || !api) return
-      if (el.clientHeight < 2 || el.clientWidth < 2) return
-      api.updateSize()
-    }
-
-    raf1 = requestAnimationFrame(() => {
-      refreshSize()
-      raf2 = requestAnimationFrame(refreshSize)
-    })
-    const delayed = window.setTimeout(refreshSize, 100)
-
+    const targets = [shellRef.current, calendarBodyRef.current].filter(
+      (el): el is HTMLDivElement => el != null,
+    )
     const observer = new ResizeObserver(() => {
-      refreshSize()
+      refreshCalendarSize()
     })
-    observer.observe(body)
+    for (const target of targets) observer.observe(target)
 
     function onShow() {
       if (document.visibilityState === 'hidden') return
-      raf1 = requestAnimationFrame(refreshSize)
+      scheduleCalendarSizeRefresh()
     }
     window.addEventListener('focus', onShow)
     document.addEventListener('visibilitychange', onShow)
 
     return () => {
-      cancelAnimationFrame(raf1)
-      cancelAnimationFrame(raf2)
-      window.clearTimeout(delayed)
       observer.disconnect()
       window.removeEventListener('focus', onShow)
       document.removeEventListener('visibilitychange', onShow)
@@ -500,14 +571,17 @@ export function CalendarView({
   }, [googleEvents, resolvedTaskEvents, showAllDay])
 
   function handleDatesSet(arg: DatesSetArg) {
-    setTitle(arg.view.title)
     const type = arg.view.type
+    viewRangeRef.current = { start: arg.start, end: arg.end }
     if (
       type === 'timeGridDay' ||
       type === 'timeGridThreeDay' ||
       type === 'timeGridWeek'
     ) {
       setViewType(type)
+      setTitle(formatToolbarTitle(arg.start, arg.end, type, useLongWeekday))
+    } else {
+      setTitle(arg.view.title)
     }
     const now = new Date()
     setIsOnToday(now >= arg.start && now < arg.end)
@@ -515,6 +589,7 @@ export function CalendarView({
       !isTodayOrTomorrow(pickViewDate(arg.start, arg.end, now)),
     )
     onDatesSet(arg.start, arg.end)
+    scheduleCalendarSizeRefresh()
   }
 
   function changeView(next: CalendarViewType) {
@@ -599,9 +674,11 @@ export function CalendarView({
               duration: { days: 3 },
             },
           }}
-          titleFormat={TITLE_FORMAT}
           dayHeaders={false}
           height="100%"
+          windowResize={() => {
+            refreshCalendarSize()
+          }}
           nowIndicator
           editable
           selectable={false}
