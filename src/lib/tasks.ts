@@ -29,8 +29,6 @@ export type ResolvedTask = Task & {
   end: Date
 }
 
-const STORAGE_KEY = 'time-blocking.plan'
-
 function newId(): string {
   return crypto.randomUUID()
 }
@@ -213,56 +211,6 @@ export function migratePlan(raw: unknown): Plan | null {
   return null
 }
 
-export function loadPlan(): Plan {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) {
-      // Prefer legacy key if present
-      const legacy = localStorage.getItem('time-blocking.tasks')
-      if (legacy) {
-        const migrated = migratePlan(JSON.parse(legacy))
-        if (migrated) {
-          savePlan(migrated)
-          localStorage.removeItem('time-blocking.tasks')
-          return migrated
-        }
-      }
-      return defaultPlan()
-    }
-    return migratePlan(JSON.parse(raw)) ?? defaultPlan()
-  } catch {
-    return defaultPlan()
-  }
-}
-
-export function savePlan(plan: Plan): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(plan))
-}
-
-export function clearPlan(): void {
-  localStorage.removeItem(STORAGE_KEY)
-  localStorage.removeItem('time-blocking.tasks')
-}
-
-const TARGET_CALENDAR_KEY = 'time-blocking.target-calendar'
-
-export function loadTargetCalendarId(): string {
-  try {
-    return localStorage.getItem(TARGET_CALENDAR_KEY) ?? ''
-  } catch {
-    return ''
-  }
-}
-
-export function saveTargetCalendarId(id: string): void {
-  try {
-    if (id) localStorage.setItem(TARGET_CALENDAR_KEY, id)
-    else localStorage.removeItem(TARGET_CALENDAR_KEY)
-  } catch {
-    /* ignore quota / private mode */
-  }
-}
-
 export function createTask(
   input: Omit<Task, 'id'> & { id?: string },
 ): Task {
@@ -411,9 +359,7 @@ export type SavedTaskList = {
   updatedAt: string
 }
 
-const SAVED_LISTS_KEY = 'time-blocking.saved-lists'
-
-function normalizeSavedLists(raw: unknown): SavedTaskList[] {
+export function normalizeSavedLists(raw: unknown): SavedTaskList[] {
   if (!Array.isArray(raw)) return []
   return raw
     .filter(
@@ -443,34 +389,18 @@ function normalizeSavedLists(raw: unknown): SavedTaskList[] {
     .sort((a, b) => a.name.localeCompare(b.name))
 }
 
-export function loadSavedLists(): SavedTaskList[] {
-  try {
-    const raw = localStorage.getItem(SAVED_LISTS_KEY)
-    if (!raw) return []
-    return normalizeSavedLists(JSON.parse(raw))
-  } catch {
-    return []
-  }
-}
-
-function writeSavedLists(lists: SavedTaskList[]): void {
-  localStorage.setItem(SAVED_LISTS_KEY, JSON.stringify(lists))
-}
-
-/** Overwrite saved lists with a synced copy (validated like any stored shape). */
-export function replaceSavedLists(raw: unknown): SavedTaskList[] {
-  const normalized = normalizeSavedLists(raw)
-  writeSavedLists(normalized)
-  return normalized
-}
-
-export function saveTaskList(
+/**
+ * Save (or overwrite) a list within an existing collection, returning both
+ * the updated collection and the saved entry. Pure — callers own where the
+ * collection itself is persisted (cross-device sync, in this app's case).
+ */
+export function upsertSavedList(
+  lists: SavedTaskList[],
   name: string,
   tasks: Task[],
   replaceId?: string,
-): SavedTaskList {
+): { lists: SavedTaskList[]; saved: SavedTaskList } {
   const trimmed = name.trim() || 'Untitled list'
-  const lists = loadSavedLists()
   const payload: SavedTaskList = {
     id: replaceId || newId(),
     name: trimmed,
@@ -486,16 +416,19 @@ export function saveTaskList(
   )
   if (existingIdx >= 0) {
     payload.id = lists[existingIdx]!.id
-    lists[existingIdx] = payload
-  } else {
-    lists.push(payload)
+    const next = [...lists]
+    next[existingIdx] = payload
+    return { lists: next, saved: payload }
   }
-  writeSavedLists(lists)
-  return payload
+  const next = [...lists, payload].sort((a, b) => a.name.localeCompare(b.name))
+  return { lists: next, saved: payload }
 }
 
-export function deleteSavedList(id: string): void {
-  writeSavedLists(loadSavedLists().filter((l) => l.id !== id))
+export function removeSavedList(
+  lists: SavedTaskList[],
+  id: string,
+): SavedTaskList[] {
+  return lists.filter((l) => l.id !== id)
 }
 
 export function tasksFromSavedList(list: SavedTaskList): Task[] {

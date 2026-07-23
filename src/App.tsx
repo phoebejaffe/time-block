@@ -6,12 +6,12 @@ import { NoticeToast } from './components/NoticeToast'
 import { SidebarResizeHandle } from './components/SidebarResizeHandle'
 import { TaskSidebar } from './components/TaskSidebar'
 import { useCalendarEvents } from './hooks/useCalendarEvents'
-import { useDriveSync } from './hooks/useDriveSync'
 import { useGoogleSession } from './hooks/useGoogleSession'
 import { useMobileSplit } from './hooks/useMobileSplit'
 import { useNotice } from './hooks/useNotice'
 import { usePlan } from './hooks/usePlan'
 import { useSidebarWidth } from './hooks/useSidebarWidth'
+import { useUserData } from './hooks/useUserData'
 import { syncTasksToCalendar } from './lib/calendarApi'
 import { formatError } from './lib/errors'
 import { ensureWriteScope } from './lib/google'
@@ -33,16 +33,10 @@ export default function App() {
     signedIn: session.signedIn,
     onError: (message) => session.setError(message),
   })
-  /** Bumped by TaskSidebar on saved-list / target-calendar edits, and by
-   * useDriveSync after applying a remote pull — either way, tells
-   * TaskSidebar to re-read that (localStorage-backed) state. */
-  const [userDataVersion, setUserDataVersion] = useState(0)
-  useDriveSync({
+  const userData = useUserData({
     signedIn: session.signedIn,
     plan: plan.plan,
     onRemotePlan: plan.replacePlan,
-    userDataVersion,
-    onRemoteUserData: () => setUserDataVersion((n) => n + 1),
   })
 
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
@@ -100,6 +94,8 @@ export default function App() {
   function handleSignOut() {
     if (!session.signOut()) return
     calendars.reset()
+    plan.clear()
+    userData.reset()
     clear()
   }
 
@@ -239,66 +235,79 @@ export default function App() {
         </div>
       )}
 
-      <div className="app-body" ref={appBodyRef} style={bodyStyle}>
-        <TaskSidebar
-          groups={displayGroups}
-          canDeleteGroup={plan.plan.groups.length > 1}
-          writableCalendars={calendars.writableCalendars}
-          onAdd={handleAddTask}
-          onUpdate={plan.updateTask}
-          onRemove={handleRemoveTask}
-          onReorder={plan.reorderTasks}
-          onAnchorChange={(groupId, next) => {
-            setStackDragPreview(null)
-            plan.setAnchor(groupId, next)
-          }}
-          onReplaceTasks={handleReplaceTasks}
-          onClear={handleClearBlocks}
-          onDeleteGroup={handleDeleteGroup}
-          onAddGroup={handleAddGroup}
-          onHideGroup={(groupId, name) => {
-            plan.setGroupHidden(groupId, true, name)
-          }}
-          onShowGroup={(groupId) => {
-            plan.setGroupHidden(groupId, false)
-          }}
-          onCommit={handleCommit}
-          editingId={editingTaskId}
-          onEditingIdChange={setEditingTaskId}
-          busy={busy}
-          signedIn={session.signedIn}
-          onSignIn={() => void handleSignIn()}
-          onSignOut={handleSignOut}
-          syncTick={userDataVersion}
-          onLocalDataChange={() => setUserDataVersion((n) => n + 1)}
-        />
+      {!session.ready || (session.signedIn && userData.loading) ? (
+        <div className="app-gate">
+          <div className="empty-state">
+            <span className="spinner" aria-hidden />
+            <p>Loading your plan…</p>
+          </div>
+        </div>
+      ) : !session.signedIn ? (
+        <div className="app-gate">
+          <div className="empty-state">
+            <h2>Your day, blocked out</h2>
+            <p>
+              Sign in with Google to overlay your calendars, then draft
+              morning blocks that end when you need to leave. Your plan syncs
+              to your Google account, so sign in is required to use it.
+            </p>
+            <AuthButton
+              signedIn={false}
+              busy={busy || missingClientId}
+              onSignIn={() => void handleSignIn()}
+              onSignOut={handleSignOut}
+            />
+          </div>
+        </div>
+      ) : (
+        <div className="app-body" ref={appBodyRef} style={bodyStyle}>
+          <TaskSidebar
+            groups={displayGroups}
+            canDeleteGroup={plan.plan.groups.length > 1}
+            writableCalendars={calendars.writableCalendars}
+            onAdd={handleAddTask}
+            onUpdate={plan.updateTask}
+            onRemove={handleRemoveTask}
+            onReorder={plan.reorderTasks}
+            onAnchorChange={(groupId, next) => {
+              setStackDragPreview(null)
+              plan.setAnchor(groupId, next)
+            }}
+            onReplaceTasks={handleReplaceTasks}
+            onClear={handleClearBlocks}
+            onDeleteGroup={handleDeleteGroup}
+            onAddGroup={handleAddGroup}
+            onHideGroup={(groupId, name) => {
+              plan.setGroupHidden(groupId, true, name)
+            }}
+            onShowGroup={(groupId) => {
+              plan.setGroupHidden(groupId, false)
+            }}
+            onCommit={handleCommit}
+            editingId={editingTaskId}
+            onEditingIdChange={setEditingTaskId}
+            busy={busy}
+            signedIn={session.signedIn}
+            onSignIn={() => void handleSignIn()}
+            onSignOut={handleSignOut}
+            savedLists={userData.savedLists}
+            targetCalendarId={userData.targetCalendarId}
+            onSaveList={userData.saveList}
+            onDeleteList={userData.deleteList}
+            onTargetCalendarChange={userData.setTargetCalendarId}
+          />
 
-        <SidebarResizeHandle
-          bodyRef={appBodyRef}
-          onWidthChange={setSidebarWidth}
-        />
+          <SidebarResizeHandle
+            bodyRef={appBodyRef}
+            onWidthChange={setSidebarWidth}
+          />
 
-        <MobileSplitHandle
-          bodyRef={appBodyRef}
-          onSplitChange={setSplitPercent}
-        />
+          <MobileSplitHandle
+            bodyRef={appBodyRef}
+            onSplitChange={setSplitPercent}
+          />
 
-        <main className="main-panel">
-          {!session.signedIn ? (
-            <div className="empty-state">
-              <h2>Your day, blocked out</h2>
-              <p>
-                Sign in with Google to overlay your calendars, then draft local
-                morning blocks that end when you need to leave.
-              </p>
-              <AuthButton
-                signedIn={false}
-                busy={busy || !session.ready || missingClientId}
-                onSignIn={() => void handleSignIn()}
-                onSignOut={handleSignOut}
-              />
-            </div>
-          ) : (
+          <main className="main-panel">
             <CalendarView
               googleEvents={calendars.googleEvents}
               calendars={calendars.calendars}
@@ -320,9 +329,9 @@ export default function App() {
               onTaskClick={setEditingTaskId}
               busy={busy}
             />
-          )}
-        </main>
-      </div>
+          </main>
+        </div>
+      )}
 
       {notice && <NoticeToast notice={notice} />}
     </div>

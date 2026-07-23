@@ -2,7 +2,7 @@
 
 A Vite + React SPA that signs in with Google, shows your calendars, and lets you draft local time-block tasks that start or end at a chosen time — then clear them or push them onto a real Google Calendar.
 
-No backend. Tasks live in `localStorage` until you clear them or commit them.
+Your plan, saved lists, and target calendar sync across devices via your Google Drive's hidden app-data folder (see `server/README.md` for the small token-exchange backend that keeps you signed in long-term). Sign-in is required — there's no local-only mode.
 
 ## Setup
 
@@ -39,10 +39,11 @@ If the OAuth app is in **Testing** mode, add your Google account as a test user.
 
 ## How it works
 
-1. **Sign in** — Google Identity Services issues an access token in the browser (no server). Still-valid tokens are restored from `localStorage` on refresh. Minting a **new** token requires a user click (GIS Token Client limitation) — after ~1 hour, click **Log in** again (returning users get a soft prompt, not full consent). While the tab stays open, the app best-effort quietly refreshes before expiry; silent refresh is timed out so it cannot hang the UI.
-2. **Calendars** — Toggle which calendars appear. Events load for the visible FullCalendar range.
-3. **Plan** — Build an ordered task list, then set **Ends at** / **Starts at** for the whole stack. Save and reload named lists anytime.
-4. **Add to calendar** — Push the stacked tasks to a Google calendar. The local list stays put. You’ll get a warning if you already pushed a list for that day.
+1. **Sign in** — Google's authorization-code flow exchanges a code for an access + refresh token via the backend in `server/`. The refresh token keeps you signed in long-term (tokens auto-refresh while the tab is open, and on return visits, with no extra click). Signing in also grants Drive's `drive.appdata` scope, needed for sync.
+2. **Load your plan** — On sign-in, the app fetches your plan, saved lists, and target calendar from Drive (a brief loading state). While the tab stays open, it polls Drive every ~20s (and on tab focus) so edits from another device show up here too.
+3. **Calendars** — Toggle which calendars appear. Events load for the visible FullCalendar range.
+4. **Plan** — Build an ordered task list, then set **Ends at** / **Starts at** for the whole stack. Save and reload named lists anytime — edits sync to Drive a couple seconds after you stop typing.
+5. **Add to calendar** — Push the stacked tasks to a Google calendar. The plan stays put. You’ll get a warning if you already pushed a list for that day.
 
 ## Scripts
 

@@ -12,8 +12,11 @@ import type { Plan, SavedTaskList } from './tasks'
 const FILES_URL = 'https://www.googleapis.com/drive/v3/files'
 const UPLOAD_URL = 'https://www.googleapis.com/upload/drive/v3/files'
 const STATE_FILE_NAME = 'time-blocking-state.json'
-const FILE_ID_CACHE_KEY = 'time-blocking.drive-file-id'
 const BOUNDARY = 'time_blocking_sync_boundary'
+
+// In-memory only — this is just a lookup cache for the current tab's
+// session, not user data, so it doesn't belong in persistent storage.
+let cachedFileId: string | null = null
 
 export type SyncPayload = {
   updatedAt: string
@@ -36,18 +39,17 @@ function authHeaders(): Record<string, string> {
   return { Authorization: `Bearer ${token}` }
 }
 
-function cachedFileId(): string | null {
-  return localStorage.getItem(FILE_ID_CACHE_KEY)
+function setCachedFileId(id: string | null): void {
+  cachedFileId = id
 }
 
-function setCachedFileId(id: string | null): void {
-  if (id) localStorage.setItem(FILE_ID_CACHE_KEY, id)
-  else localStorage.removeItem(FILE_ID_CACHE_KEY)
+/** Drop the in-memory file-id cache — call this on sign-out. */
+export function resetDriveSyncCache(): void {
+  cachedFileId = null
 }
 
 async function findFileId(): Promise<string | null> {
-  const cached = cachedFileId()
-  if (cached) return cached
+  if (cachedFileId) return cachedFileId
 
   const params = new URLSearchParams({
     spaces: 'appDataFolder',

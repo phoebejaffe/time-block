@@ -1492,6 +1492,13 @@ body.is-task-reordering .task-sidebar {
   box-shadow: none;
 }
 
+.app-gate {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .empty-state {
   margin: auto;
   max-width: 28rem;
@@ -1510,6 +1517,21 @@ body.is-task-reordering .task-sidebar {
 .empty-state p {
   margin: 0;
   color: var(--ink-muted);
+}
+
+.spinner {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  border: 3px solid var(--line);
+  border-top-color: var(--ink-muted);
+  animation: spinner-rotate 0.8s linear infinite;
+}
+
+@keyframes spinner-rotate {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .mobile-split {

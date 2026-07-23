@@ -7,14 +7,9 @@ import type {
   Task,
 } from '../lib/tasks'
 import {
-  deleteSavedList,
   fromLocalTimeValue,
-  loadSavedLists,
-  loadTargetCalendarId,
   localDateKey,
   resolveStack,
-  saveTargetCalendarId,
-  saveTaskList,
   tasksFromSavedList,
   toLocalTimeValue,
 } from '../lib/tasks'
@@ -79,10 +74,12 @@ type TaskSidebarProps = {
   signedIn?: boolean
   onSignIn?: () => void
   onSignOut?: () => void
-  /** Bumps when saved lists / target calendar change, locally or via sync. */
-  syncTick?: number
-  /** Notifies the caller after a local saved-list / target-calendar edit. */
-  onLocalDataChange?: () => void
+  /** Cross-device data — owned and synced by the caller (see useUserData). */
+  savedLists: SavedTaskList[]
+  targetCalendarId: string
+  onSaveList: (name: string, tasks: Task[], replaceId?: string) => SavedTaskList
+  onDeleteList: (id: string) => void
+  onTargetCalendarChange: (id: string) => void
 }
 
 export function TaskSidebar({
@@ -107,13 +104,12 @@ export function TaskSidebar({
   signedIn,
   onSignIn,
   onSignOut,
-  syncTick,
-  onLocalDataChange,
+  savedLists,
+  targetCalendarId,
+  onSaveList,
+  onDeleteList,
+  onTargetCalendarChange,
 }: TaskSidebarProps) {
-  const [commitCalendarId, setCommitCalendarId] = useState(loadTargetCalendarId)
-  const [savedLists, setSavedLists] = useState<SavedTaskList[]>(() =>
-    loadSavedLists(),
-  )
   const [saveName, setSaveName] = useState('')
   const [hideName, setHideName] = useState('')
   const [selectedSavedId, setSelectedSavedId] = useState('')
@@ -122,30 +118,30 @@ export function TaskSidebar({
   const [pushEpoch, setPushEpoch] = useState(0)
   const [addingGroupId, setAddingGroupId] = useState<string | null>(null)
 
-  // Re-read saved lists / target calendar after a sync pull overwrites them.
-  const lastSyncTickRef = useRef(syncTick)
+  // Keep the restore-modal selection valid as saved lists change (locally
+  // or from a remote sync pull) — pick a fallback if the selected one is gone.
   useEffect(() => {
-    if (syncTick === undefined || syncTick === lastSyncTickRef.current) return
-    lastSyncTickRef.current = syncTick
-    refreshSavedLists()
-    setCommitCalendarId(loadTargetCalendarId())
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- refreshSavedLists is stable enough for this effect
-  }, [syncTick])
+    if (selectedSavedId && !savedLists.some((l) => l.id === selectedSavedId)) {
+      setSelectedSavedId(savedLists[0]?.id ?? '')
+    } else if (!selectedSavedId && savedLists[0]) {
+      setSelectedSavedId(savedLists[0].id)
+    }
+  }, [savedLists, selectedSavedId])
 
   const modalGroup = groups.find((g) => g.id === modalGroupId) ?? null
   const selectedCommitId = useMemo(() => {
     if (
-      commitCalendarId &&
-      writableCalendars.some((c) => c.id === commitCalendarId)
+      targetCalendarId &&
+      writableCalendars.some((c) => c.id === targetCalendarId)
     ) {
-      return commitCalendarId
+      return targetCalendarId
     }
     return (
       writableCalendars.find((c) => c.primary)?.id ||
       writableCalendars[0]?.id ||
       ''
     )
-  }, [commitCalendarId, writableCalendars])
+  }, [targetCalendarId, writableCalendars])
 
   useEffect(() => {
     if (!editingId || editingId === NEW_EDIT_ID) return
@@ -156,7 +152,6 @@ export function TaskSidebar({
 
   function openModal(kind: ModalKind, groupId: string) {
     setModalGroupId(groupId)
-    if (kind === 'restore') refreshSavedLists()
     if (kind === 'hide') {
       const group = groups.find((g) => g.id === groupId)
       setHideName(group?.name ?? '')
@@ -176,21 +171,6 @@ export function TaskSidebar({
     setModalGroupId(null)
   }
 
-  function refreshSavedLists(preferId?: string) {
-    const lists = loadSavedLists()
-    setSavedLists(lists)
-    if (preferId && lists.some((l) => l.id === preferId)) {
-      setSelectedSavedId(preferId)
-    } else if (
-      selectedSavedId &&
-      !lists.some((l) => l.id === selectedSavedId)
-    ) {
-      setSelectedSavedId(lists[0]?.id ?? '')
-    } else if (!selectedSavedId && lists[0]) {
-      setSelectedSavedId(lists[0].id)
-    }
-  }
-
   async function handleCommit() {
     if (!selectedCommitId || !modalGroupId) return
     const ok = await onCommit(modalGroupId, selectedCommitId)
@@ -201,10 +181,9 @@ export function TaskSidebar({
   function handleSaveList(e: React.FormEvent) {
     e.preventDefault()
     if (!modalGroup || modalGroup.tasks.length === 0) return
-    const saved = saveTaskList(saveName || 'Morning', modalGroup.tasks)
+    const saved = onSaveList(saveName || 'Morning', modalGroup.tasks)
     setSaveName(saved.name)
-    refreshSavedLists(saved.id)
-    onLocalDataChange?.()
+    setSelectedSavedId(saved.id)
     closeModal()
   }
 
@@ -222,9 +201,7 @@ export function TaskSidebar({
   function handleDeleteList() {
     const id = selectedSavedId || savedLists[0]?.id
     if (!id) return
-    deleteSavedList(id)
-    refreshSavedLists()
-    onLocalDataChange?.()
+    onDeleteList(id)
   }
 
   const modalResolved = modalGroup
@@ -430,11 +407,7 @@ export function TaskSidebar({
               <span>Target calendar</span>
               <select
                 value={selectedCommitId}
-                onChange={(e) => {
-                  setCommitCalendarId(e.target.value)
-                  saveTargetCalendarId(e.target.value)
-                  onLocalDataChange?.()
-                }}
+                onChange={(e) => onTargetCalendarChange(e.target.value)}
                 disabled={!writableCalendars.length || busy}
               >
                 {writableCalendars.length === 0 ? (

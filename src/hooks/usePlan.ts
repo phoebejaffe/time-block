@@ -1,11 +1,8 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import {
-  clearPlan as clearStoredPlan,
   createBlockGroup,
   createTask,
   defaultPlan,
-  loadPlan,
-  savePlan,
   shiftAnchor,
   type BlockGroup,
   type Plan,
@@ -21,12 +18,14 @@ function mapGroup(
   return groups.map((g) => (g.id === groupId ? update(g) : g))
 }
 
+/**
+ * Plan state lives only in memory here — it's cross-device data, so the
+ * source of truth is Drive (see `useUserData`), not this device's storage.
+ * Starts empty; `replacePlan` fills it in once the initial Drive fetch (or a
+ * later sign-in) resolves.
+ */
 export function usePlan() {
-  const [plan, setPlan] = useState<Plan>(() => loadPlan())
-
-  useEffect(() => {
-    savePlan(plan)
-  }, [plan])
+  const [plan, setPlan] = useState<Plan>(() => defaultPlan())
 
   const updatePlan = useCallback((updater: (prev: Plan) => Plan) => {
     setPlan((prev) => updater(prev))
@@ -209,8 +208,8 @@ export function usePlan() {
     [updatePlan],
   )
 
+  /** Reset to a blank plan (e.g. on sign-out, before the next account's data loads). */
   const clear = useCallback(() => {
-    clearStoredPlan()
     setPlan(defaultPlan())
   }, [])
 
