@@ -16,8 +16,12 @@ import {
 } from '../lib/tasks'
 import {
   hasPushedGroupOnDay,
+  hasPushedTaskOnDay,
   isPushUnchanged,
+  isTaskPushUnchanged,
   stackPushFingerprint,
+  type PushedEvent,
+  type PushSnapshot,
 } from '../lib/pushedEvents'
 import { SettingsMenu } from './SettingsMenu'
 
@@ -69,6 +73,7 @@ type TaskSidebarProps = {
   onSetGroupEnabled: (groupId: string, enabled: boolean) => void
   onShowGroup: (groupId: string) => void
   onCommit: (groupId: string, calendarId: string) => Promise<boolean>
+  onDeleteFromCalendar: (groupId: string) => Promise<void>
   editingId: string | null
   onEditingIdChange: (id: string | null) => void
   busy?: boolean
@@ -81,6 +86,8 @@ type TaskSidebarProps = {
   onSaveList: (name: string, tasks: Task[], replaceId?: string) => SavedTaskList
   onDeleteList: (id: string) => void
   onTargetCalendarChange: (id: string) => void
+  pushedEvents: PushedEvent[]
+  pushSnapshots: PushSnapshot[]
 }
 
 export function TaskSidebar({
@@ -99,6 +106,7 @@ export function TaskSidebar({
   onSetGroupEnabled,
   onShowGroup,
   onCommit,
+  onDeleteFromCalendar,
   editingId,
   onEditingIdChange,
   busy,
@@ -110,12 +118,13 @@ export function TaskSidebar({
   onSaveList,
   onDeleteList,
   onTargetCalendarChange,
+  pushedEvents,
+  pushSnapshots,
 }: TaskSidebarProps) {
   const [saveName, setSaveName] = useState('')
   const [selectedSavedId, setSelectedSavedId] = useState('')
   const [modal, setModal] = useState<ModalKind | null>(null)
   const [modalGroupId, setModalGroupId] = useState<string | null>(null)
-  const [pushEpoch, setPushEpoch] = useState(0)
   const [addingGroupId, setAddingGroupId] = useState<string | null>(null)
 
   // Keep the restore-modal selection valid as saved lists change (locally
@@ -163,7 +172,6 @@ export function TaskSidebar({
   async function handleCommit() {
     if (!selectedCommitId || !modalGroupId) return
     const ok = await onCommit(modalGroupId, selectedCommitId)
-    setPushEpoch((n) => n + 1)
     if (ok) closeModal()
   }
 
@@ -198,13 +206,13 @@ export function TaskSidebar({
     : []
   const modalDayKey = modalGroup ? localDateKey(modalGroup.anchor.at) : ''
   const modalIsUpdate =
-    pushEpoch >= 0 &&
     Boolean(modalGroupId) &&
-    hasPushedGroupOnDay(modalGroupId || '', modalDayKey)
+    hasPushedGroupOnDay(pushedEvents, modalGroupId || '', modalDayKey)
   const modalPushUnchanged =
     modalIsUpdate &&
     modalGroup != null &&
     isPushUnchanged(
+      pushSnapshots,
       selectedCommitId,
       modalGroup.id,
       modalDayKey,
@@ -235,7 +243,8 @@ export function TaskSidebar({
             group={group}
             canDeleteGroup={canDeleteGroup}
             busy={busy}
-            pushEpoch={pushEpoch}
+            pushedEvents={pushedEvents}
+            pushSnapshots={pushSnapshots}
             selectedCommitId={selectedCommitId}
             editingId={editingId}
             adding={addingGroupId === group.id && editingId === NEW_EDIT_ID}
@@ -263,6 +272,7 @@ export function TaskSidebar({
             onOpenSave={() => openModal('save', group.id)}
             onOpenRestore={() => openModal('restore', group.id)}
             onOpenCommit={() => openModal('commit', group.id)}
+            onDeleteFromCalendar={() => onDeleteFromCalendar(group.id)}
             onCollapseGroup={() => onCollapseGroup(group.id)}
           />
         ))}
@@ -428,7 +438,8 @@ type BlockGroupPanelProps = {
   group: BlockGroup
   canDeleteGroup: boolean
   busy?: boolean
-  pushEpoch: number
+  pushedEvents: PushedEvent[]
+  pushSnapshots: PushSnapshot[]
   selectedCommitId: string
   editingId: string | null
   adding: boolean
@@ -446,6 +457,7 @@ type BlockGroupPanelProps = {
   onOpenSave: () => void
   onOpenRestore: () => void
   onOpenCommit: () => void
+  onDeleteFromCalendar: () => void
   onCollapseGroup: () => void
 }
 
@@ -453,7 +465,8 @@ function BlockGroupPanel({
   group,
   canDeleteGroup,
   busy,
-  pushEpoch,
+  pushedEvents,
+  pushSnapshots,
   selectedCommitId,
   editingId,
   adding,
@@ -471,6 +484,7 @@ function BlockGroupPanel({
   onOpenSave,
   onOpenRestore,
   onOpenCommit,
+  onDeleteFromCalendar,
   onCollapseGroup,
 }: BlockGroupPanelProps) {
   const { tasks, anchor } = group
@@ -536,11 +550,12 @@ function BlockGroupPanel({
       ? null
       : `${timeFmt.format(resolved[0]!.start)} – ${timeFmt.format(resolved[resolved.length - 1]!.end)}`
   const dayKey = localDateKey(anchor.at)
-  const isUpdate =
-    pushEpoch >= 0 && hasPushedGroupOnDay(group.id, dayKey)
+  const onCalendar = hasPushedGroupOnDay(pushedEvents, group.id, dayKey)
+  const isUpdate = onCalendar
   const pushUnchanged =
     isUpdate &&
     isPushUnchanged(
+      pushSnapshots,
       selectedCommitId,
       group.id,
       dayKey,
@@ -872,6 +887,18 @@ function BlockGroupPanel({
       <ul className="task-list" ref={listRef}>
         {tasks.map((task, index) => {
           const editing = editingId === task.id
+          const resolvedTask = resolved.find((r) => r.id === task.id)
+          const pushed = hasPushedTaskOnDay(pushedEvents, task.id, dayKey)
+          const synced =
+            pushed &&
+            resolvedTask != null &&
+            isTaskPushUnchanged(
+              pushedEvents,
+              pushSnapshots,
+              group.id,
+              dayKey,
+              resolvedTask,
+            )
           const showLineBefore =
             dropLineIndex === index &&
             dragIndex !== null &&
@@ -915,6 +942,12 @@ function BlockGroupPanel({
                     onPointerDown={(e) => beginTaskDrag(e, index)}
                   >
                     <span className="task-title">
+                      {pushed &&
+                        (synced ? (
+                          <TaskSyncedCheckIcon title="Matches Google Calendar" />
+                        ) : (
+                          <CalendarSyncedIcon title="On Google Calendar — tap Update to sync changes" />
+                        ))}
                       {task.title}
                       <span className="muted task-duration">
                         {' '}
@@ -1039,6 +1072,18 @@ function BlockGroupPanel({
                       >
                         Collapse group
                       </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="calendar-menu-item"
+                        disabled={busy || !onCalendar}
+                        onClick={() => {
+                          setListMenuOpen(false)
+                          void onDeleteFromCalendar()
+                        }}
+                      >
+                        Delete from calendar
+                      </button>
                       <div className="calendar-menu-sep" role="separator" />
                       <button
                         type="button"
@@ -1128,6 +1173,44 @@ function Modal({
         <div className="modal-body">{children}</div>
       </div>
     </div>
+  )
+}
+
+function CalendarSyncedIcon({ title }: { title: string }) {
+  return (
+    <span className="task-synced-icon task-synced-icon-warn" title={title} aria-label={title}>
+      <CalendarIcon />
+    </span>
+  )
+}
+
+function TaskSyncedCheckIcon({ title }: { title: string }) {
+  return (
+    <span
+      className="task-synced-icon task-synced-icon-match"
+      title={title}
+      aria-label={title}
+    >
+      <CheckIcon />
+    </span>
+  )
+}
+
+function CheckIcon() {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M20 6 9 17l-5-5" />
+    </svg>
   )
 }
 
@@ -1275,11 +1358,21 @@ function TaskFieldsForm({
     return Math.max(1, Math.round(value) || 15)
   }
 
+  function stepDurationByFive(
+    current: number | '',
+    direction: 'up' | 'down',
+  ): number {
+    const value = parseDuration(current)
+    if (direction === 'up') {
+      if (value % 5 === 0) return value + 5
+      return Math.ceil(value / 5) * 5
+    }
+    if (value % 5 === 0) return Math.max(1, value - 5)
+    return Math.max(1, Math.floor(value / 5) * 5)
+  }
+
   function beginDurationScrub(e: React.PointerEvent<HTMLInputElement>) {
     if (e.button !== 0) return
-    // Claim the gesture so the number input doesn't start a text-drag.
-    // Focus is restored on a plain click (no scrub) in onUp.
-    e.preventDefault()
     const input = e.currentTarget
     const startY = e.clientY
     const startX = e.clientX
@@ -1298,12 +1391,6 @@ function TaskFieldsForm({
       return Math.max(1, ceil + tick * 5)
     }
 
-    try {
-      input.setPointerCapture(pointerId)
-    } catch {
-      /* ignore */
-    }
-
     function onMove(ev: PointerEvent) {
       if (ev.pointerId !== pointerId) return
       const dx = ev.clientX - startX
@@ -1316,6 +1403,12 @@ function TaskFieldsForm({
         }
         active = true
         document.body.classList.add('is-datetime-scrubbing')
+        input.blur()
+        try {
+          input.setPointerCapture(pointerId)
+        } catch {
+          /* ignore */
+        }
       }
       ev.preventDefault()
       const tick = Math.trunc(-dy / ANCHOR_SCRUB_PX)
@@ -1325,9 +1418,9 @@ function TaskFieldsForm({
     }
 
     function cleanup(focusForTyping: boolean) {
-      input.removeEventListener('pointermove', onMove)
-      input.removeEventListener('pointerup', onUp)
-      input.removeEventListener('pointercancel', onUp)
+      document.removeEventListener('pointermove', onMove)
+      document.removeEventListener('pointerup', onUp)
+      document.removeEventListener('pointercancel', onUp)
       document.body.classList.remove('is-datetime-scrubbing')
       try {
         if (input.hasPointerCapture(pointerId)) {
@@ -1347,10 +1440,13 @@ function TaskFieldsForm({
       cleanup(!active)
     }
 
-    // Listen on the capture target — with setPointerCapture, moves go here.
-    input.addEventListener('pointermove', onMove, { passive: false })
-    input.addEventListener('pointerup', onUp)
-    input.addEventListener('pointercancel', onUp)
+    document.addEventListener('pointermove', onMove, { passive: false })
+    document.addEventListener('pointerup', onUp)
+    document.addEventListener('pointercancel', onUp)
+  }
+
+  function nudgeDuration(direction: 'up' | 'down') {
+    setDurationMinutes((current) => stepDurationByFive(current, direction))
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -1378,7 +1474,7 @@ function TaskFieldsForm({
           <input
             type="number"
             min={1}
-            step="any"
+            step={5}
             value={durationMinutes}
             onChange={(e) => {
               const raw = e.target.value
@@ -1394,14 +1490,14 @@ function TaskFieldsForm({
             }}
             onPointerDown={beginDurationScrub}
             onKeyDown={(e) => {
-              if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+              if (e.key === 'ArrowUp') {
                 e.preventDefault()
-                const current = parseDuration(durationMinutes)
-                const next =
-                  e.key === 'ArrowUp'
-                    ? current + 5
-                    : Math.max(1, current - 5)
-                setDurationMinutes(next)
+                nudgeDuration('up')
+                return
+              }
+              if (e.key === 'ArrowDown') {
+                e.preventDefault()
+                nudgeDuration('down')
                 return
               }
               if (e.key === 'Enter') {

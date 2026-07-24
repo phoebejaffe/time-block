@@ -1,10 +1,9 @@
 import { formatError } from './errors'
 import {
-  loadPushedEvents,
-  savePushedEvents,
-  savePushSnapshot,
+  prunePushedEvents,
   stackPushFingerprint,
   TIMEBLOCK_EVENT_DESCRIPTION,
+  type PushSnapshot,
   type PushedEvent,
 } from './pushedEvents'
 import type { Task } from './tasks'
@@ -243,12 +242,14 @@ export type SyncTasksResult = {
   created: number
   removed: number
   failures: SyncTaskFailure[]
+  pushedEvents: PushedEvent[]
+  pushSnapshot: PushSnapshot | null
 }
 
 
 /**
  * Push the current stack to Google Calendar.
- * Updates events we previously created (tracked in localStorage for ~1 month),
+ * Updates events we previously created (tracked in synced push history for ~1 month),
  * recreates any that were deleted elsewhere, inserts new blocks, and removes
  * leftover events from an earlier push on the same day. If the target calendar
  * changed, also deletes that group/day's events from the previous calendar(s).
@@ -259,10 +260,11 @@ export async function syncTasksToCalendar(
   groupId: string,
   tasks: Task[],
   anchor: StackAnchor,
+  pushedEvents: PushedEvent[],
 ): Promise<SyncTasksResult> {
   const resolved = resolveStack(tasks, anchor)
   const dayKey = localDateKey(anchor.at)
-  let tracked = loadPushedEvents()
+  let tracked = [...pushedEvents]
   let updated = 0
   let created = 0
   let removed = 0
@@ -458,16 +460,110 @@ export async function syncTasksToCalendar(
     }
   }
 
-  savePushedEvents(tracked)
+  const pruned = prunePushedEvents(tracked)
+  let pushSnapshot: PushSnapshot | null = null
   if (failures.length === 0) {
-    savePushSnapshot(
+    pushSnapshot = {
       calendarId,
       groupId,
       dayKey,
-      stackPushFingerprint(anchor, resolved),
+      fingerprint: stackPushFingerprint(anchor, resolved),
+      savedAt: new Date().toISOString(),
+    }
+  }
+  return {
+    updated,
+    created,
+    removed,
+    failures,
+    pushedEvents: pruned,
+    pushSnapshot,
+  }
+}
+
+export type DeleteFromCalendarResult = {
+  removed: number
+  failures: SyncTaskFailure[]
+  pushedEvents: PushedEvent[]
+}
+
+/** Human-readable calendar names for events pushed on this group/day. */
+export function calendarNamesForPushedGroupDay(
+  pushedEvents: PushedEvent[],
+  calendars: GoogleCalendar[],
+  groupId: string,
+  dayKey: string,
+): string[] {
+  const ids = [
+    ...new Set(
+      pushedEvents
+        .filter((e) => e.groupId === groupId && e.dayKey === dayKey)
+        .map((e) => e.calendarId),
+    ),
+  ]
+  return ids.map((id) => calendars.find((c) => c.id === id)?.summary ?? id)
+}
+
+/** Delete all calendar events we previously pushed for this group on this day. */
+export async function deleteGroupFromCalendar(
+  groupId: string,
+  dayKey: string,
+  pushedEvents: PushedEvent[],
+): Promise<DeleteFromCalendarResult> {
+  const toDelete = pushedEvents.filter(
+    (e) => e.groupId === groupId && e.dayKey === dayKey,
+  )
+  let tracked = [...pushedEvents]
+  let removed = 0
+  const failures: SyncTaskFailure[] = []
+
+  function forgetTracked(
+    event: Pick<PushedEvent, 'calendarId' | 'groupId' | 'eventId'>,
+  ) {
+    tracked = tracked.filter(
+      (e) =>
+        !(
+          e.calendarId === event.calendarId &&
+          e.groupId === event.groupId &&
+          e.eventId === event.eventId
+        ),
     )
   }
-  return { updated, created, removed, failures }
+
+  for (const event of toDelete) {
+    try {
+      const stillThere = await isActiveCalendarEvent(
+        event.calendarId,
+        event.eventId,
+      )
+      if (stillThere) {
+        await gapi.client.calendar.events.delete({
+          calendarId: event.calendarId,
+          eventId: event.eventId,
+        })
+      }
+      forgetTracked(event)
+      removed += 1
+    } catch (err) {
+      if (isNotFoundError(err)) {
+        forgetTracked(event)
+        removed += 1
+        continue
+      }
+      failures.push({
+        taskId: event.taskId,
+        title: 'Calendar event',
+        action: 'remove',
+        message: formatError(err),
+      })
+    }
+  }
+
+  return {
+    removed,
+    failures,
+    pushedEvents: prunePushedEvents(tracked),
+  }
 }
 
 export function calendarsWritable(calendars: GoogleCalendar[]): GoogleCalendar[] {

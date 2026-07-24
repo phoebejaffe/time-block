@@ -69,7 +69,7 @@ gcloud functions deploy auth ...
 ## How it works
 
 1. **Sign in** — Google's authorization-code flow exchanges a code for access + refresh tokens via the backend in `server/`. The refresh token keeps Calendar API access working long-term. The returned ID token also signs you into Firebase Auth for Firestore.
-2. **Load your plan** — On sign-in, a Firestore listener on `users/{uid}` loads your plan, saved lists, and target calendar (brief loading state). Edits from another device show up in real time.
+2. **Load your plan** — On sign-in, a Firestore listener on `users/{uid}` loads your plan, saved lists, target calendar, and calendar sync history (brief loading state). Edits from another device show up in real time.
 3. **Calendars** — Toggle which calendars appear. Events load for the visible FullCalendar range.
 4. **Plan** — Build an ordered task list, then set **Ends at** / **Starts at** for the whole stack. Save and reload named lists anytime — edits sync to Firestore a couple seconds after you stop typing.
 5. **Add to calendar** — Push the stacked tasks to a Google calendar. The plan stays put. You'll get a warning if you already pushed a list for that day.

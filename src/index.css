@@ -10,6 +10,7 @@
   --line: rgba(26, 31, 28, 0.12);
   --accent: #0f6e56;
   --accent-ink: #f7fff9;
+  --warn: #b8860b;
   --danger: #8b2e2e;
   --task: #0f6e56;
   --shadow: 0 18px 50px rgba(26, 31, 28, 0.08);
@@ -344,6 +345,49 @@ body.is-sidebar-resizing .main-panel {
   border: 1px solid var(--line);
   background: #fffcf6;
   box-shadow: var(--shadow);
+}
+
+.modal-dialog-wide {
+  width: min(34rem, 100%);
+  max-height: min(88vh, 42rem);
+  display: flex;
+  flex-direction: column;
+}
+
+.help-modal-body {
+  overflow: auto;
+  padding-top: 0.25rem;
+  padding-bottom: 1.1rem;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.help-modal-body h3 {
+  margin: 1.1rem 0 0.45rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.help-modal-body h3:first-of-type {
+  margin-top: 0.35rem;
+}
+
+.help-modal-body p {
+  margin: 0.55rem 0 0;
+}
+
+.help-modal-body ul {
+  margin: 0.35rem 0 0;
+  padding-left: 1.15rem;
+}
+
+.help-modal-body li + li {
+  margin-top: 0.25rem;
+}
+
+.help-modal-body strong {
+  font-weight: 600;
 }
 
 .modal-header {
@@ -987,6 +1031,25 @@ body.is-task-reordering .task-sidebar {
   font-weight: 400;
 }
 
+.task-synced-icon {
+  display: inline-flex;
+  vertical-align: -0.12em;
+  margin-right: 0.2rem;
+}
+
+.task-synced-icon svg {
+  width: 12px;
+  height: 12px;
+}
+
+.task-synced-icon-match {
+  color: var(--accent);
+}
+
+.task-synced-icon-warn {
+  color: var(--ink-muted);
+}
+
 .task-card-icons {
   position: absolute;
   top: 50%;
@@ -1306,7 +1369,7 @@ body.is-task-reordering .task-sidebar {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: #9a5b1a;
+  color: var(--warn);
   cursor: default;
 }
 

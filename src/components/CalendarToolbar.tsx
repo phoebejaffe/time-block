@@ -72,31 +72,33 @@ export function CalendarToolbar({
             <ChevronIcon direction="right" />
           </button>
           {!isOnToday && (
-            <button
-              type="button"
-              className="btn btn-ghost btn-icon calendar-today-btn"
-              aria-label="Today"
-              title="Today"
-              onClick={onToday}
-            >
-              <TodayIcon />
-            </button>
+            <>
+              <button
+                type="button"
+                className="btn btn-ghost btn-icon calendar-nav-btn calendar-today-btn"
+                aria-label="Today"
+                title="Today"
+                onClick={onToday}
+              >
+                <TodayIcon />
+              </button>
+              {farFromTodayOrTomorrow && (
+                <span
+                  className="calendar-date-warning"
+                  title="Not today or tomorrow"
+                  aria-label="Not today or tomorrow"
+                  role="img"
+                >
+                  <WarningIcon />
+                </span>
+              )}
+            </>
           )}
         </div>
       </div>
 
       <div className="calendar-toolbar-center">
         <h2 className="calendar-title">{title}</h2>
-        {farFromTodayOrTomorrow && (
-          <span
-            className="calendar-date-warning"
-            title="Not today or tomorrow"
-            aria-label="Not today or tomorrow"
-            role="img"
-          >
-            <WarningIcon />
-          </span>
-        )}
       </div>
 
       <div className="calendar-toolbar-side calendar-toolbar-right">
@@ -267,8 +269,8 @@ function ChevronIcon({ direction }: { direction: 'left' | 'right' }) {
 function TodayIcon() {
   return (
     <svg
-      width="16"
-      height="16"
+      width="15"
+      height="15"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { HowItWorksModal } from './HowItWorksModal'
 
 type SettingsMenuProps = {
   busy?: boolean
@@ -25,6 +26,7 @@ export function SettingsMenu({
   onSignOut,
 }: SettingsMenuProps) {
   const [open, setOpen] = useState(false)
+  const [helpOpen, setHelpOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const buildTime = useMemo(() => formatBuildTime(__BUILD_TIME__), [])
 
@@ -71,6 +73,17 @@ export function SettingsMenu({
             className="calendar-menu-item"
             onClick={() => {
               setOpen(false)
+              setHelpOpen(true)
+            }}
+          >
+            How this works
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="calendar-menu-item"
+            onClick={() => {
+              setOpen(false)
               window.location.reload()
             }}
           >
@@ -108,6 +121,7 @@ export function SettingsMenu({
           <p className="settings-menu-build">{buildTime}</p>
         </div>
       )}
+      {helpOpen && <HowItWorksModal onClose={() => setHelpOpen(false)} />}
     </div>
   )
 }

@@ -5,6 +5,11 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore'
 import type { Plan, SavedTaskList } from './tasks'
+import type { PushSnapshot, PushedEvent } from './pushedEvents'
+import {
+  normalizePushSnapshots,
+  normalizePushedEvents,
+} from './pushedEvents'
 import { getFirestoreDb } from './firebase'
 
 /**
@@ -17,6 +22,8 @@ export type SyncPayload = {
   plan: Plan
   savedLists: SavedTaskList[]
   targetCalendarId: string
+  pushedEvents: PushedEvent[]
+  pushSnapshots: PushSnapshot[]
 }
 
 class UserDataSyncError extends Error {
@@ -54,6 +61,8 @@ export function subscribeUserState(
         savedLists: (data.savedLists as SavedTaskList[]) ?? [],
         targetCalendarId:
           typeof data.targetCalendarId === 'string' ? data.targetCalendarId : '',
+        pushedEvents: normalizePushedEvents(data.pushedEvents),
+        pushSnapshots: normalizePushSnapshots(data.pushSnapshots),
       })
     },
     (err) => onError(err instanceof Error ? err : new Error(String(err))),

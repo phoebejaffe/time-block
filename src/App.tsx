@@ -12,7 +12,7 @@ import { useNotice } from './hooks/useNotice'
 import { usePlan } from './hooks/usePlan'
 import { useSidebarWidth } from './hooks/useSidebarWidth'
 import { useUserData } from './hooks/useUserData'
-import { syncTasksToCalendar } from './lib/calendarApi'
+import { calendarNamesForPushedGroupDay, deleteGroupFromCalendar, syncTasksToCalendar } from './lib/calendarApi'
 import { isFirebaseConfigured } from './lib/firebase'
 import { formatError } from './lib/errors'
 import { ensureWriteScope } from './lib/google'
@@ -154,7 +154,7 @@ export default function App() {
     if (!group) return false
     const anchor = anchorOnDay(group.anchor, viewDate)
     const dayKey = localDateKey(anchor.at)
-    const isUpdate = hasPushedGroupOnDay(groupId, dayKey)
+    const isUpdate = hasPushedGroupOnDay(userData.pushedEvents, groupId, dayKey)
     if (group.tasks.length === 0 && !isUpdate) {
       show('info', 'Add at least one block before adding to a calendar.')
       return false
@@ -169,12 +169,15 @@ export default function App() {
       if (group.anchor.at !== anchor.at) {
         plan.setAnchor(groupId, anchor)
       }
-      const { updated, created, removed, failures } = await syncTasksToCalendar(
+      const { updated, created, removed, failures, pushedEvents, pushSnapshot } =
+        await syncTasksToCalendar(
         calendarId,
         groupId,
         group.tasks,
         anchor,
+        userData.pushedEvents,
       )
+      userData.applyCalendarSync(pushedEvents, pushSnapshot)
       await calendars.refreshEvents()
 
       if (failures.length > 0) {
@@ -207,6 +210,68 @@ export default function App() {
     } catch (err) {
       show('error', `Couldn't sync calendar: ${formatError(err)}`)
       return false
+    } finally {
+      setCommitBusy(false)
+    }
+  }
+
+  async function handleDeleteFromCalendar(groupId: string) {
+    const group = plan.plan.groups.find((g) => g.id === groupId)
+    if (!group) return
+    const anchor = anchorOnDay(group.anchor, viewDate)
+    const dayKey = localDateKey(anchor.at)
+    if (!hasPushedGroupOnDay(userData.pushedEvents, groupId, dayKey)) return
+    const calendarNames = calendarNamesForPushedGroupDay(
+      userData.pushedEvents,
+      calendars.calendars,
+      groupId,
+      dayKey,
+    )
+    const calendarLabel =
+      calendarNames.length === 1
+        ? `“${calendarNames[0]}”`
+        : calendarNames.map((name) => `“${name}”`).join(' and ')
+    if (
+      !window.confirm(
+        `Remove this group’s blocks from ${calendarLabel} for this day?`,
+      )
+    ) {
+      return
+    }
+
+    setCommitBusy(true)
+    session.setError(null)
+    clear()
+    try {
+      await ensureWriteScope()
+      const { removed, failures, pushedEvents } = await deleteGroupFromCalendar(
+        groupId,
+        dayKey,
+        userData.pushedEvents,
+      )
+      userData.applyCalendarDelete(pushedEvents, groupId, dayKey)
+      await calendars.refreshEvents()
+
+      if (failures.length > 0) {
+        const detail = failures
+          .map((f) => `${f.action}: ${f.message}`)
+          .join(' · ')
+        const prefix =
+          removed > 0
+            ? `Removed ${removed}, but couldn't remove all events: `
+            : "Couldn't remove from calendar: "
+        show('error', `${prefix}${detail}`)
+        return
+      }
+
+      show(
+        'success',
+        removed > 0
+          ? `Removed ${removed} from Google Calendar.`
+          : 'Nothing left on Google Calendar for this day.',
+      )
+    } catch (err) {
+      show('error', `Couldn't remove from calendar: ${formatError(err)}`)
     } finally {
       setCommitBusy(false)
     }
@@ -304,6 +369,7 @@ export default function App() {
               plan.setGroupHidden(groupId, false)
             }}
             onCommit={handleCommit}
+            onDeleteFromCalendar={handleDeleteFromCalendar}
             editingId={editingTaskId}
             onEditingIdChange={setEditingTaskId}
             busy={busy}
@@ -315,6 +381,8 @@ export default function App() {
             onSaveList={userData.saveList}
             onDeleteList={userData.deleteList}
             onTargetCalendarChange={userData.setTargetCalendarId}
+            pushedEvents={userData.pushedEvents}
+            pushSnapshots={userData.pushSnapshots}
           />
 
           <SidebarResizeHandle
