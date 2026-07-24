@@ -53,6 +53,33 @@ export function usePlan() {
     [updatePlan],
   )
 
+  const duplicateGroup = useCallback(
+    (groupId: string) => {
+      updatePlan((prev) => {
+        const source = prev.groups.find((g) => g.id === groupId)
+        if (!source) return prev
+        const duplicate = createBlockGroup({
+          tasks: source.tasks.map((task) =>
+            createTask({
+              title: task.title,
+              durationMinutes: task.durationMinutes,
+              ...(task.empty ? { empty: true } : {}),
+            }),
+          ),
+          anchor: { ...source.anchor },
+          ...(source.name ? { name: source.name } : {}),
+          ...(source.color ? { color: source.color } : {}),
+          ...(source.enabled === false ? { enabled: false } : {}),
+        })
+        const index = prev.groups.findIndex((g) => g.id === groupId)
+        const groups = [...prev.groups]
+        groups.splice(index + 1, 0, duplicate)
+        return { groups }
+      })
+    },
+    [updatePlan],
+  )
+
   const addTask = useCallback(
     (groupId: string, input: Omit<Task, 'id'>) => {
       updatePlan((prev) => ({
@@ -268,6 +295,7 @@ export function usePlan() {
     plan,
     addGroup,
     removeGroup,
+    duplicateGroup,
     addTask,
     addTasks,
     updateTask,

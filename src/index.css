@@ -1688,6 +1688,11 @@ body.is-task-reordering .task-sidebar {
   font-weight: 600;
 }
 
+.calendar-menu-item-struck {
+  text-decoration: line-through;
+  color: var(--ink-muted);
+}
+
 .group-color-menu-item {
   display: flex;
   align-items: center;

@@ -79,6 +79,7 @@ type TaskSidebarProps = {
   onAnchorChange: (groupId: string, anchor: StackAnchor) => void
   onReplaceTasks: (groupId: string, tasks: Task[]) => void
   onDeleteGroup: (groupId: string) => void
+  onDuplicateGroup: (groupId: string) => void
   onAddGroup: () => void
   onSetGroupEnabled: (groupId: string, enabled: boolean) => void
   onSetGroupName: (groupId: string, name: string) => void
@@ -122,6 +123,7 @@ export function TaskSidebar({
   onAnchorChange,
   onReplaceTasks,
   onDeleteGroup,
+  onDuplicateGroup,
   onAddGroup,
   onSetGroupEnabled,
   onSetGroupName,
@@ -320,6 +322,7 @@ export function TaskSidebar({
             onReorder={(from, to) => onReorder(group.id, from, to)}
             onAnchorChange={(anchor) => onAnchorChange(group.id, anchor)}
             onDeleteGroup={() => onDeleteGroup(group.id)}
+            onDuplicateGroup={() => onDuplicateGroup(group.id)}
             onSetGroupEnabled={(enabled) => onSetGroupEnabled(group.id, enabled)}
             onOpenSave={() => openModal('save', group.id)}
             onOpenRestore={() => openModal('restore', group.id)}
@@ -537,6 +540,7 @@ type BlockGroupPanelProps = {
   onReorder: (fromIndex: number, toIndex: number) => void
   onAnchorChange: (anchor: StackAnchor) => void
   onDeleteGroup: () => void
+  onDuplicateGroup: () => void
   onSetGroupEnabled: (enabled: boolean) => void
   onOpenSave: () => void
   onOpenRestore: () => void
@@ -557,41 +561,24 @@ type BlockGroupPanelProps = {
 
 function GroupColorMenuItem({
   value,
-  hasCustomColor,
   disabled,
   onChange,
-  onReset,
 }: {
   value: string
-  hasCustomColor: boolean
   disabled?: boolean
   onChange: (color: string) => void
-  onReset: () => void
 }) {
   return (
-    <>
-      <label className="calendar-menu-item group-color-menu-item">
-        <span>Color</span>
-        <input
-          type="color"
-          value={value}
-          disabled={disabled}
-          aria-label="Group color"
-          onChange={(e) => onChange(e.target.value)}
-        />
-      </label>
-      {hasCustomColor && (
-        <button
-          type="button"
-          role="menuitem"
-          className="calendar-menu-item"
-          disabled={disabled}
-          onClick={onReset}
-        >
-          Reset color
-        </button>
-      )}
-    </>
+    <label className="calendar-menu-item group-color-menu-item">
+      <span>Set color</span>
+      <input
+        type="color"
+        value={value}
+        disabled={disabled}
+        aria-label="Group color"
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </label>
   )
 }
 
@@ -614,6 +601,7 @@ function BlockGroupPanel({
   onReorder,
   onAnchorChange,
   onDeleteGroup,
+  onDuplicateGroup,
   onSetGroupEnabled,
   onOpenSave,
   onOpenRestore,
@@ -802,10 +790,6 @@ function BlockGroupPanel({
 
   function handleColorChange(next: string) {
     onSetGroupColor(next === DEFAULT_GROUP_COLOR ? undefined : next)
-  }
-
-  function handleResetColor() {
-    onSetGroupColor(undefined)
   }
 
   function toggleLibraryBlock(categoryId: string, blockId: string) {
@@ -1105,10 +1089,8 @@ function BlockGroupPanel({
                 </button>
                 <GroupColorMenuItem
                   value={colorPickerValue}
-                  hasCustomColor={Boolean(group.color)}
                   disabled={busy}
                   onChange={handleColorChange}
-                  onReset={handleResetColor}
                 />
               </div>
             )}
@@ -1448,7 +1430,7 @@ function BlockGroupPanel({
                       <button
                         type="button"
                         role="menuitem"
-                        className="calendar-menu-item"
+                        className="calendar-menu-item calendar-menu-item-struck"
                         disabled={busy || tasks.length === 0}
                         onClick={() => {
                           setListMenuOpen(false)
@@ -1460,7 +1442,7 @@ function BlockGroupPanel({
                       <button
                         type="button"
                         role="menuitem"
-                        className="calendar-menu-item"
+                        className="calendar-menu-item calendar-menu-item-struck"
                         disabled={busy}
                         onClick={() => {
                           setListMenuOpen(false)
@@ -1483,11 +1465,22 @@ function BlockGroupPanel({
                       </button>
                       <GroupColorMenuItem
                         value={colorPickerValue}
-                        hasCustomColor={Boolean(group.color)}
                         disabled={busy}
                         onChange={handleColorChange}
-                        onReset={handleResetColor}
                       />
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="calendar-menu-item"
+                        disabled={busy}
+                        onClick={() => {
+                          setListMenuOpen(false)
+                          onDuplicateGroup()
+                        }}
+                      >
+                        Duplicate group
+                      </button>
+                      <div className="calendar-menu-sep" role="separator" />
                       <button
                         type="button"
                         role="menuitem"
@@ -1500,7 +1493,6 @@ function BlockGroupPanel({
                       >
                         Delete from calendar
                       </button>
-                      <div className="calendar-menu-sep" role="separator" />
                       <button
                         type="button"
                         role="menuitem"

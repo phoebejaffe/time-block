@@ -181,6 +181,12 @@ export default function App() {
     clear()
   }
 
+  function handleDuplicateGroup(groupId: string) {
+    plan.duplicateGroup(groupId)
+    handleEditingIdChange(null)
+    clear()
+  }
+
   /** Returns true when the commit modal should close (full success). */
   async function handleCommit(
     groupId: string,
@@ -395,6 +401,7 @@ export default function App() {
             }}
             onReplaceTasks={handleReplaceTasks}
             onDeleteGroup={handleDeleteGroup}
+            onDuplicateGroup={handleDuplicateGroup}
             onAddGroup={handleAddGroup}
             onSetGroupEnabled={plan.setGroupEnabled}
             onSetGroupName={plan.setGroupName}
