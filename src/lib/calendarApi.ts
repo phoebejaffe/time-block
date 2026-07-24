@@ -7,7 +7,7 @@ import {
   type PushedEvent,
 } from './pushedEvents'
 import type { Task } from './tasks'
-import { localDateKey, resolveStack, type StackAnchor } from './tasks'
+import { localDateKey, isTaskEmpty, resolveStack, type StackAnchor } from './tasks'
 
 export type GoogleCalendar = {
   id: string
@@ -343,6 +343,48 @@ export async function syncTasksToCalendar(
   }
 
   for (const task of resolved) {
+    if (isTaskEmpty(task)) {
+      const matches = tracked.filter(
+        (e) =>
+          e.calendarId === calendarId &&
+          e.groupId === groupId &&
+          e.dayKey === dayKey &&
+          e.taskId === task.id,
+      )
+      for (const match of matches) {
+        const unusedIdx = unusedDay.findIndex((e) => e.eventId === match.eventId)
+        if (unusedIdx >= 0) unusedDay.splice(unusedIdx, 1)
+
+        try {
+          const stillThere = await isActiveCalendarEvent(
+            calendarId,
+            match.eventId,
+          )
+          if (stillThere) {
+            await gapi.client.calendar.events.delete({
+              calendarId,
+              eventId: match.eventId,
+            })
+          }
+          forgetTracked(match)
+          removed += 1
+        } catch (err) {
+          if (isNotFoundError(err)) {
+            forgetTracked(match)
+            removed += 1
+            continue
+          }
+          failures.push({
+            taskId: task.id,
+            title: task.title,
+            action: 'remove',
+            message: formatError(err),
+          })
+        }
+      }
+      continue
+    }
+
     const resource = eventResource(task)
     // Only ever reuse an event already pushed for this exact group/day —
     // never one from another day, even if the block id matches.
@@ -464,7 +506,10 @@ export async function syncTasksToCalendar(
       calendarId,
       groupId,
       dayKey,
-      fingerprint: stackPushFingerprint(anchor, resolved),
+      fingerprint: stackPushFingerprint(
+        anchor,
+        resolved.filter((task) => !isTaskEmpty(task)),
+      ),
       savedAt: new Date().toISOString(),
     }
   }

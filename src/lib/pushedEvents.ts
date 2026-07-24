@@ -210,12 +210,20 @@ export function isTaskPushUnchanged(
 /** Stable fingerprint of what a sync would write for this stack. */
 export function stackPushFingerprint(
   anchor: { kind: string; at: string },
-  resolved: { id: string; title: string; start: Date; end: Date }[],
+  resolved: {
+    id: string
+    title: string
+    start: Date
+    end: Date
+    empty?: boolean
+  }[],
 ): string {
   return JSON.stringify({
     kind: anchor.kind,
     at: anchor.at,
-    items: resolved.map((t) => [
+    items: resolved
+      .filter((t) => t.empty !== true)
+      .map((t) => [
       t.id,
       t.title,
       t.start.toISOString(),

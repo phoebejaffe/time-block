@@ -95,6 +95,23 @@ describe('pushedEvents', () => {
     ).toBe(false)
   })
 
+  it('excludes empty blocks from stack fingerprint', () => {
+    const start = new Date('2026-07-18T09:00:00.000Z')
+    const mid = new Date('2026-07-18T09:30:00.000Z')
+    const end = new Date('2026-07-18T10:00:00.000Z')
+    const resolved = [
+      { id: 'a', title: 'A', start, end: mid, empty: true as const },
+      { id: 'b', title: 'B', start: mid, end },
+    ]
+    const fp = stackPushFingerprint(
+      { kind: 'start', at: start.toISOString() },
+      resolved,
+    )
+    const parsed = JSON.parse(fp) as { items: [string][] }
+    expect(parsed.items).toHaveLength(1)
+    expect(parsed.items[0]![0]).toBe('b')
+  })
+
   it('disables update when the stack fingerprint matches the last push', () => {
     const start = new Date('2026-07-18T15:00:00.000Z')
     const end = new Date('2026-07-18T16:00:00.000Z')

@@ -15,6 +15,9 @@ import type { BlockGroup, StackAnchor } from '../lib/tasks'
 import {
   isTodayOrTomorrow,
   isGroupEnabled,
+  isTaskEmpty,
+  groupEventColors,
+  formatCalendarRange,
   pickViewDate,
   resolveStack,
   shiftAnchor,
@@ -29,72 +32,7 @@ import {
   type CalendarViewType,
 } from './CalendarToolbar'
 
-const TASK_COLOR = '#0f6e56'
-const TASK_BORDER = '#0b5341'
 const NARROW_BREAKPOINT = 560
-/** Below this width, abbreviate the weekday in the toolbar title. */
-const LONG_WEEKDAY_MIN = 300
-
-function dayFormatOptions(useLongWeekday: boolean) {
-  return {
-    weekday: useLongWeekday ? ('long' as const) : ('short' as const),
-    month: 'long' as const,
-    day: 'numeric' as const,
-    year: 'numeric' as const,
-  }
-}
-
-function formatToolbarTitle(
-  start: Date,
-  end: Date,
-  viewType: CalendarViewType,
-  useLongWeekday: boolean,
-): string {
-  // FullCalendar's range end is exclusive.
-  const last = new Date(end.getTime() - 1)
-  const weekday = useLongWeekday ? ('long' as const) : ('short' as const)
-
-  if (viewType === 'timeGridDay') {
-    return new Intl.DateTimeFormat(undefined, dayFormatOptions(useLongWeekday)).format(
-      start,
-    )
-  }
-
-  const sameMonth =
-    start.getFullYear() === last.getFullYear() &&
-    start.getMonth() === last.getMonth()
-
-  if (sameMonth) {
-    const startPart = new Intl.DateTimeFormat(undefined, {
-      weekday,
-      month: 'long',
-      day: 'numeric',
-    }).format(start)
-    const endPart = new Intl.DateTimeFormat(undefined, {
-      weekday,
-      day: 'numeric',
-      year: 'numeric',
-    }).format(last)
-    return `${startPart} – ${endPart}`
-  }
-
-  if (start.getFullYear() === last.getFullYear()) {
-    const startPart = new Intl.DateTimeFormat(undefined, {
-      weekday,
-      month: 'long',
-      day: 'numeric',
-    }).format(start)
-    const endPart = new Intl.DateTimeFormat(undefined, {
-      weekday,
-      month: 'long',
-      day: 'numeric',
-    }).format(last)
-    return `${startPart} – ${endPart}, ${start.getFullYear()}`
-  }
-
-  const full = new Intl.DateTimeFormat(undefined, dayFormatOptions(useLongWeekday))
-  return `${full.format(start)} – ${full.format(last)}`
-}
 
 type CalendarViewProps = {
   googleEvents: CalendarEvent[]
@@ -127,7 +65,9 @@ function buildResolvedTaskEvents(groups: BlockGroup[]): ResolvedTaskEvent[] {
   return groups
     .filter((group) => isGroupEnabled(group))
     .flatMap((group) =>
-      resolveStack(group.tasks, group.anchor).map((task) => ({
+      resolveStack(group.tasks, group.anchor)
+        .filter((task) => !isTaskEmpty(task))
+        .map((task) => ({
         taskId: task.id,
         groupId: group.id,
         title: task.title,
@@ -228,11 +168,17 @@ export function CalendarView({
     () => buildResolvedTaskEvents(groups),
     [groups],
   )
+  const groupColors = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof groupEventColors>>()
+    for (const group of groups) {
+      map.set(group.id, groupEventColors(group.color))
+    }
+    return map
+  }, [groups])
   const resolvedTaskEventsRef = useRef(resolvedTaskEvents)
   resolvedTaskEventsRef.current = resolvedTaskEvents
 
   const [narrow, setNarrow] = useState(false)
-  const [useLongWeekday, setUseLongWeekday] = useState(true)
   const [title, setTitle] = useState('')
   const [viewType, setViewType] = useState<CalendarViewType>('timeGridDay')
   const viewRangeRef = useRef<{ start: Date; end: Date } | null>(null)
@@ -420,8 +366,8 @@ export function CalendarView({
   useEffect(() => {
     const range = viewRangeRef.current
     if (!range) return
-    setTitle(formatToolbarTitle(range.start, range.end, viewType, useLongWeekday))
-  }, [useLongWeekday, viewType])
+    setTitle(formatCalendarRange(range.start, range.end, viewType))
+  }, [viewType])
 
   useEffect(() => {
     const el = shellRef.current
@@ -429,7 +375,6 @@ export function CalendarView({
 
     const update = (width: number) => {
       setNarrow(width < NARROW_BREAKPOINT)
-      setUseLongWeekday(width >= LONG_WEEKDAY_MIN)
     }
 
     update(el.clientWidth)
@@ -548,27 +493,30 @@ export function CalendarView({
         extendedProps: e.extendedProps,
       }))
 
-    const local: EventInput[] = resolvedTaskEvents.map((task) => ({
-      id: `task:${task.taskId}`,
-      title: task.title,
-      start: task.start.toISOString(),
-      end: task.end.toISOString(),
-      backgroundColor: TASK_COLOR,
-      borderColor: TASK_BORDER,
-      // Move only — `editable: true` would re-enable duration resize.
-      startEditable: true,
-      durationEditable: false,
-      order: 0,
-      classNames: [TASK_STACK_CLASS, ...durationClass(task.start, task.end)],
-      extendedProps: {
-        source: 'task',
-        taskId: task.taskId,
-        groupId: task.groupId,
-      },
-    }))
+    const local: EventInput[] = resolvedTaskEvents.map((task) => {
+      const colors = groupColors.get(task.groupId) ?? groupEventColors()
+      return {
+        id: `task:${task.taskId}`,
+        title: task.title,
+        start: task.start.toISOString(),
+        end: task.end.toISOString(),
+        backgroundColor: colors.backgroundColor,
+        borderColor: colors.borderColor,
+        // Move only — `editable: true` would re-enable duration resize.
+        startEditable: true,
+        durationEditable: false,
+        order: 0,
+        classNames: [TASK_STACK_CLASS, ...durationClass(task.start, task.end)],
+        extendedProps: {
+          source: 'task',
+          taskId: task.taskId,
+          groupId: task.groupId,
+        },
+      }
+    })
 
     return [...google, ...local]
-  }, [googleEvents, resolvedTaskEvents, showAllDay])
+  }, [googleEvents, groupColors, resolvedTaskEvents, showAllDay])
 
   function handleDatesSet(arg: DatesSetArg) {
     const type = arg.view.type
@@ -579,7 +527,7 @@ export function CalendarView({
       type === 'timeGridWeek'
     ) {
       setViewType(type)
-      setTitle(formatToolbarTitle(arg.start, arg.end, type, useLongWeekday))
+      setTitle(formatCalendarRange(arg.start, arg.end, type))
     } else {
       setTitle(arg.view.title)
     }

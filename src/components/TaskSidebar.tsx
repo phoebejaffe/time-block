@@ -1,15 +1,28 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react'
+import { createPortal } from 'react-dom'
 import type { GoogleCalendar } from '../lib/calendarApi'
 import type {
   BlockGroup,
+  BlockLibrary,
   SavedTaskList,
   StackAnchor,
   Task,
 } from '../lib/tasks'
 import {
+  blockLibraryKey,
+  DEFAULT_GROUP_COLOR,
   fromLocalTimeValue,
   isGroupEnabled,
+  isTaskEmpty,
   localDateKey,
+  resolveSavedBlocksFromKeys,
   resolveStack,
   tasksFromSavedList,
   toLocalTimeValue,
@@ -24,6 +37,7 @@ import {
   type PushSnapshot,
 } from '../lib/pushedEvents'
 import { SettingsMenu } from './SettingsMenu'
+import { TaskFieldsForm } from './TaskFieldsForm'
 
 const timeFmt = new Intl.DateTimeFormat(undefined, {
   hour: 'numeric',
@@ -36,11 +50,7 @@ const ANCHOR_SCRUB_PX = 25
 const ANCHOR_SCRUB_ACTIVATE_PX = 8
 
 type AnchorField = 'hour' | 'minute'
-type ModalKind = 'save' | 'restore' | 'commit'
-
-function blockCountLabel(count: number): string {
-  return count === 1 ? '1 Block' : `${count} Blocks`
-}
+type ModalKind = 'save' | 'restore' | 'commit' | 'name'
 
 function readSelectionStart(input: HTMLInputElement): number | null {
   try {
@@ -62,6 +72,7 @@ type TaskSidebarProps = {
   canDeleteGroup: boolean
   writableCalendars: GoogleCalendar[]
   onAdd: (groupId: string, task: Omit<Task, 'id'>) => void
+  onAddBlocks: (groupId: string, tasks: Omit<Task, 'id'>[]) => void
   onUpdate: (groupId: string, task: Task) => void
   onRemove: (groupId: string, id: string) => void
   onReorder: (groupId: string, fromIndex: number, toIndex: number) => void
@@ -69,11 +80,18 @@ type TaskSidebarProps = {
   onReplaceTasks: (groupId: string, tasks: Task[]) => void
   onDeleteGroup: (groupId: string) => void
   onAddGroup: () => void
-  onCollapseGroup: (groupId: string) => void
   onSetGroupEnabled: (groupId: string, enabled: boolean) => void
-  onShowGroup: (groupId: string) => void
+  onSetGroupName: (groupId: string, name: string) => void
+  onSetGroupColor: (groupId: string, color: string | undefined) => void
   onCommit: (groupId: string, calendarId: string) => Promise<boolean>
   onDeleteFromCalendar: (groupId: string) => Promise<void>
+  onTaskEditPreview: (preview: {
+    groupId: string
+    taskId: string
+    title: string
+    durationMinutes: number
+    empty?: boolean
+  } | null) => void
   editingId: string | null
   onEditingIdChange: (id: string | null) => void
   busy?: boolean
@@ -88,6 +106,8 @@ type TaskSidebarProps = {
   onTargetCalendarChange: (id: string) => void
   pushedEvents: PushedEvent[]
   pushSnapshots: PushSnapshot[]
+  blockLibrary: BlockLibrary
+  onReplaceBlockLibrary: (library: BlockLibrary) => void
 }
 
 export function TaskSidebar({
@@ -95,6 +115,7 @@ export function TaskSidebar({
   canDeleteGroup,
   writableCalendars,
   onAdd,
+  onAddBlocks,
   onUpdate,
   onRemove,
   onReorder,
@@ -102,11 +123,12 @@ export function TaskSidebar({
   onReplaceTasks,
   onDeleteGroup,
   onAddGroup,
-  onCollapseGroup,
   onSetGroupEnabled,
-  onShowGroup,
+  onSetGroupName,
+  onSetGroupColor,
   onCommit,
   onDeleteFromCalendar,
+  onTaskEditPreview,
   editingId,
   onEditingIdChange,
   busy,
@@ -120,8 +142,11 @@ export function TaskSidebar({
   onTargetCalendarChange,
   pushedEvents,
   pushSnapshots,
+  blockLibrary,
+  onReplaceBlockLibrary,
 }: TaskSidebarProps) {
   const [saveName, setSaveName] = useState('')
+  const [groupNameInput, setGroupNameInput] = useState('')
   const [selectedSavedId, setSelectedSavedId] = useState('')
   const [modal, setModal] = useState<ModalKind | null>(null)
   const [modalGroupId, setModalGroupId] = useState<string | null>(null)
@@ -138,6 +163,17 @@ export function TaskSidebar({
   }, [savedLists, selectedSavedId])
 
   const modalGroup = groups.find((g) => g.id === modalGroupId) ?? null
+  const unnamedGroupLabels = useMemo(() => {
+    const labels = new Map<string, string>()
+    let n = 0
+    for (const g of groups) {
+      if (!g.name?.trim()) {
+        n += 1
+        labels.set(g.id, `Unnamed ${n}`)
+      }
+    }
+    return labels
+  }, [groups])
   const selectedCommitId = useMemo(() => {
     if (
       targetCalendarId &&
@@ -161,6 +197,10 @@ export function TaskSidebar({
 
   function openModal(kind: ModalKind, groupId: string) {
     setModalGroupId(groupId)
+    if (kind === 'name') {
+      const group = groups.find((g) => g.id === groupId)
+      setGroupNameInput(group?.name ?? '')
+    }
     setModal(kind)
   }
 
@@ -201,6 +241,13 @@ export function TaskSidebar({
     onDeleteList(id)
   }
 
+  function handleNameGroup(e: React.FormEvent) {
+    e.preventDefault()
+    if (!modalGroupId) return
+    onSetGroupName(modalGroupId, groupNameInput)
+    closeModal()
+  }
+
   const modalResolved = modalGroup
     ? resolveStack(modalGroup.tasks, modalGroup.anchor)
     : []
@@ -216,7 +263,10 @@ export function TaskSidebar({
       selectedCommitId,
       modalGroup.id,
       modalDayKey,
-      stackPushFingerprint(modalGroup.anchor, modalResolved),
+      stackPushFingerprint(
+        modalGroup.anchor,
+        modalResolved.filter((task) => !isTaskEmpty(task)),
+      ),
     )
 
   return (
@@ -232,6 +282,8 @@ export function TaskSidebar({
             signedIn={signedIn}
             onSignIn={onSignIn}
             onSignOut={onSignOut}
+            blockLibrary={blockLibrary}
+            onReplaceBlockLibrary={onReplaceBlockLibrary}
           />
         </div>
       </div>
@@ -241,6 +293,7 @@ export function TaskSidebar({
           <BlockGroupPanel
             key={group.id}
             group={group}
+            collapsedLabel={group.name?.trim() || unnamedGroupLabels.get(group.id) || 'Unnamed'}
             canDeleteGroup={canDeleteGroup}
             busy={busy}
             pushedEvents={pushedEvents}
@@ -267,13 +320,16 @@ export function TaskSidebar({
             onReorder={(from, to) => onReorder(group.id, from, to)}
             onAnchorChange={(anchor) => onAnchorChange(group.id, anchor)}
             onDeleteGroup={() => onDeleteGroup(group.id)}
-            onShowGroup={() => onShowGroup(group.id)}
             onSetGroupEnabled={(enabled) => onSetGroupEnabled(group.id, enabled)}
             onOpenSave={() => openModal('save', group.id)}
             onOpenRestore={() => openModal('restore', group.id)}
             onOpenCommit={() => openModal('commit', group.id)}
             onDeleteFromCalendar={() => onDeleteFromCalendar(group.id)}
-            onCollapseGroup={() => onCollapseGroup(group.id)}
+            onTaskEditPreview={onTaskEditPreview}
+            onOpenName={() => openModal('name', group.id)}
+            onSetGroupColor={(color) => onSetGroupColor(group.id, color)}
+            blockLibrary={blockLibrary}
+            onAddFromLibrary={(inputs) => onAddBlocks(group.id, inputs)}
           />
         ))}
         <button
@@ -430,12 +486,41 @@ export function TaskSidebar({
         </Modal>
       )}
 
+      {modal === 'name' && modalGroup && (
+        <Modal title="Name group" onClose={closeModal}>
+          <form className="modal-form" onSubmit={handleNameGroup}>
+            <label>
+              <span>Name</span>
+              <input
+                value={groupNameInput}
+                onChange={(e) => setGroupNameInput(e.target.value)}
+                placeholder="Morning"
+                autoFocus
+              />
+            </label>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={closeModal}
+              >
+                Cancel
+              </button>
+              <button type="submit" className="btn btn-primary btn-sm" disabled={busy}>
+                Save
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
     </aside>
   )
 }
 
 type BlockGroupPanelProps = {
   group: BlockGroup
+  collapsedLabel: string
   canDeleteGroup: boolean
   busy?: boolean
   pushedEvents: PushedEvent[]
@@ -452,17 +537,67 @@ type BlockGroupPanelProps = {
   onReorder: (fromIndex: number, toIndex: number) => void
   onAnchorChange: (anchor: StackAnchor) => void
   onDeleteGroup: () => void
-  onShowGroup: () => void
   onSetGroupEnabled: (enabled: boolean) => void
   onOpenSave: () => void
   onOpenRestore: () => void
   onOpenCommit: () => void
   onDeleteFromCalendar: () => void
-  onCollapseGroup: () => void
+  onTaskEditPreview: (preview: {
+    groupId: string
+    taskId: string
+    title: string
+    durationMinutes: number
+    empty?: boolean
+  } | null) => void
+  onOpenName: () => void
+  onSetGroupColor: (color: string | undefined) => void
+  blockLibrary: BlockLibrary
+  onAddFromLibrary: (inputs: Omit<Task, 'id'>[]) => void
+}
+
+function GroupColorMenuItem({
+  value,
+  hasCustomColor,
+  disabled,
+  onChange,
+  onReset,
+}: {
+  value: string
+  hasCustomColor: boolean
+  disabled?: boolean
+  onChange: (color: string) => void
+  onReset: () => void
+}) {
+  return (
+    <>
+      <label className="calendar-menu-item group-color-menu-item">
+        <span>Color</span>
+        <input
+          type="color"
+          value={value}
+          disabled={disabled}
+          aria-label="Group color"
+          onChange={(e) => onChange(e.target.value)}
+        />
+      </label>
+      {hasCustomColor && (
+        <button
+          type="button"
+          role="menuitem"
+          className="calendar-menu-item"
+          disabled={disabled}
+          onClick={onReset}
+        >
+          Reset color
+        </button>
+      )}
+    </>
+  )
 }
 
 function BlockGroupPanel({
   group,
+  collapsedLabel,
   canDeleteGroup,
   busy,
   pushedEvents,
@@ -479,22 +614,34 @@ function BlockGroupPanel({
   onReorder,
   onAnchorChange,
   onDeleteGroup,
-  onShowGroup,
   onSetGroupEnabled,
   onOpenSave,
   onOpenRestore,
   onOpenCommit,
   onDeleteFromCalendar,
-  onCollapseGroup,
+  onTaskEditPreview,
+  onOpenName,
+  onSetGroupColor,
+  blockLibrary,
+  onAddFromLibrary,
 }: BlockGroupPanelProps) {
   const { tasks, anchor } = group
   const enabled = isGroupEnabled(group)
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   const [dropLineIndex, setDropLineIndex] = useState<number | null>(null)
   const [listMenuOpen, setListMenuOpen] = useState(false)
+  const [libraryOpen, setLibraryOpen] = useState(false)
+  const [librarySelection, setLibrarySelection] = useState<string[]>([])
+  const [libraryDropdownStyle, setLibraryDropdownStyle] =
+    useState<CSSProperties>({})
+  const [collapsedMenuOpen, setCollapsedMenuOpen] = useState(false)
 
   const listRef = useRef<HTMLUListElement>(null)
   const listMenuRef = useRef<HTMLDivElement>(null)
+  const libraryMenuRef = useRef<HTMLDivElement>(null)
+  const libraryTriggerRef = useRef<HTMLButtonElement>(null)
+  const libraryDropdownRef = useRef<HTMLDivElement>(null)
+  const collapsedMenuRef = useRef<HTMLDivElement>(null)
   const dropLineIndexRef = useRef<number | null>(null)
   const suppressClickRef = useRef(false)
   const tasksLengthRef = useRef(tasks.length)
@@ -541,6 +688,152 @@ function BlockGroupPanel({
     }
   }, [listMenuOpen])
 
+  useEffect(() => {
+    if (!libraryOpen) return
+
+    function handlePointerDown(event: MouseEvent) {
+      const target = event.target
+      if (!(target instanceof Node)) return
+      if (
+        libraryMenuRef.current?.contains(target) ||
+        libraryDropdownRef.current?.contains(target)
+      ) {
+        return
+      }
+      setLibraryOpen(false)
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') setLibraryOpen(false)
+    }
+
+    document.addEventListener('mousedown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [libraryOpen])
+
+  useLayoutEffect(() => {
+    if (!libraryOpen) {
+      setLibraryDropdownStyle({})
+      return
+    }
+
+    function repositionLibraryDropdown() {
+      const trigger = libraryTriggerRef.current
+      const dropdown = libraryDropdownRef.current
+      if (!trigger || !dropdown) return
+
+      const gap = 6
+      const pad = 8
+      const triggerRect = trigger.getBoundingClientRect()
+      const width = Math.min(
+        288,
+        Math.max(triggerRect.width, 224),
+        window.innerWidth - pad * 2,
+      )
+      const dropdownHeight = dropdown.scrollHeight
+      const spaceBelow = window.innerHeight - triggerRect.bottom - pad
+      const spaceAbove = triggerRect.top - pad
+      const openDown = spaceBelow >= spaceAbove
+      const available = (openDown ? spaceBelow : spaceAbove) - gap
+      const viewportCap = window.innerHeight * 0.75 - pad * 2
+      const maxHeight = Math.max(160, Math.min(available, viewportCap))
+      let top = openDown
+        ? triggerRect.bottom + gap
+        : triggerRect.top - Math.min(dropdownHeight, maxHeight) - gap
+      top = Math.max(pad, Math.min(top, window.innerHeight - pad - maxHeight))
+      let left = triggerRect.left
+      left = Math.max(pad, Math.min(left, window.innerWidth - width - pad))
+
+      setLibraryDropdownStyle({
+        position: 'fixed',
+        top,
+        left,
+        width,
+        maxHeight,
+        zIndex: 75,
+        bottom: 'auto',
+        right: 'auto',
+      })
+    }
+
+    repositionLibraryDropdown()
+    const sidebar = libraryMenuRef.current?.closest('.task-sidebar')
+    window.addEventListener('resize', repositionLibraryDropdown)
+    sidebar?.addEventListener('scroll', repositionLibraryDropdown, {
+      passive: true,
+    })
+    return () => {
+      window.removeEventListener('resize', repositionLibraryDropdown)
+      sidebar?.removeEventListener('scroll', repositionLibraryDropdown)
+    }
+  }, [libraryOpen, librarySelection, blockLibrary])
+
+  useEffect(() => {
+    if (!collapsedMenuOpen) return
+
+    function handlePointerDown(event: MouseEvent) {
+      const target = event.target
+      if (!(target instanceof Node)) return
+      if (collapsedMenuRef.current && !collapsedMenuRef.current.contains(target)) {
+        setCollapsedMenuOpen(false)
+      }
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') setCollapsedMenuOpen(false)
+    }
+
+    document.addEventListener('mousedown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [collapsedMenuOpen])
+
+  const colorPickerValue =
+    group.color && /^#[0-9a-fA-F]{6}$/.test(group.color)
+      ? group.color
+      : DEFAULT_GROUP_COLOR
+
+  function handleColorChange(next: string) {
+    onSetGroupColor(next === DEFAULT_GROUP_COLOR ? undefined : next)
+  }
+
+  function handleResetColor() {
+    onSetGroupColor(undefined)
+  }
+
+  function toggleLibraryBlock(categoryId: string, blockId: string) {
+    const key = blockLibraryKey(categoryId, blockId)
+    setLibrarySelection((prev) => {
+      if (prev.includes(key)) return prev.filter((k) => k !== key)
+      return [...prev, key]
+    })
+  }
+
+  function handleAddFromLibrary() {
+    const blocks = resolveSavedBlocksFromKeys(blockLibrary, librarySelection)
+    if (blocks.length === 0) return
+    onAddFromLibrary(
+      blocks.map((b) => ({
+        title: b.title,
+        durationMinutes: b.durationMinutes,
+        ...(b.empty ? { empty: true } : {}),
+      })),
+    )
+    setLibrarySelection([])
+    setLibraryOpen(false)
+  }
+
+  function handlePowerChange(nextEnabled: boolean) {
+    onSetGroupEnabled(nextEnabled)
+  }
+
   const resolved = useMemo(
     () => resolveStack(tasks, anchor),
     [tasks, anchor],
@@ -559,7 +852,10 @@ function BlockGroupPanel({
       selectedCommitId,
       group.id,
       dayKey,
-      stackPushFingerprint(anchor, resolved),
+      stackPushFingerprint(
+        anchor,
+        resolved.filter((task) => !isTaskEmpty(task)),
+      ),
     )
   function beginAnchorScrub(e: React.PointerEvent<HTMLInputElement>) {
     if (e.button !== 0) return
@@ -567,21 +863,9 @@ function BlockGroupPanel({
     const startY = e.clientY
     const startX = e.clientX
     const pointerId = e.pointerId
-    const isTouch = e.pointerType === 'touch'
     let active = false
     let lastTick = 0
     let field: AnchorField = 'minute'
-
-    // On touch, block the native time picker for the whole gesture; a plain
-    // tap re-opens it in onUp. Mouse keeps default so caret placement works.
-    if (isTouch) e.preventDefault()
-
-    // Claim the gesture immediately so the sidebar doesn't scroll instead.
-    try {
-      input.setPointerCapture(pointerId)
-    } catch {
-      /* ignore */
-    }
 
     function currentIso(): string {
       if (input.value) {
@@ -617,7 +901,7 @@ function BlockGroupPanel({
       if (!active) {
         if (Math.abs(dy) < ANCHOR_SCRUB_ACTIVATE_PX) return
         if (Math.abs(dy) < Math.abs(dx)) {
-          cleanup(false)
+          cleanup()
           return
         }
         active = true
@@ -625,6 +909,11 @@ function BlockGroupPanel({
         originIso = currentIso()
         document.body.classList.add('is-datetime-scrubbing')
         input.blur()
+        try {
+          input.setPointerCapture(pointerId)
+        } catch {
+          /* ignore */
+        }
       }
       ev.preventDefault()
       const tick = Math.trunc(-dy / ANCHOR_SCRUB_PX)
@@ -633,7 +922,7 @@ function BlockGroupPanel({
       onAnchorChange({ ...anchorRef.current, at: isoForTick(tick) })
     }
 
-    function cleanup(openPicker: boolean) {
+    function cleanup() {
       document.removeEventListener('pointermove', onMove)
       document.removeEventListener('pointerup', onUp)
       document.removeEventListener('pointercancel', onUp)
@@ -645,18 +934,11 @@ function BlockGroupPanel({
       } catch {
         /* ignore */
       }
-      if (!openPicker || !isTouch) return
-      input.focus()
-      try {
-        input.showPicker?.()
-      } catch {
-        /* ignore — not supported or not allowed */
-      }
     }
 
     function onUp(ev: PointerEvent) {
       if (ev.pointerId !== pointerId) return
-      cleanup(!active)
+      cleanup()
     }
 
     document.addEventListener('pointermove', onMove, { passive: false })
@@ -777,64 +1059,73 @@ function BlockGroupPanel({
     document.addEventListener('pointercancel', onUp)
   }
 
-  if (group.hidden) {
-    const countText = ` (${blockCountLabel(tasks.length)})`
+  if (!enabled) {
     return (
-      <section
-        className={[
-          'block-group',
-          'block-group-collapsed',
-          !enabled ? 'block-group-disabled' : '',
-        ]
-          .filter(Boolean)
-          .join(' ')}
-      >
+      <section className="block-group block-group-collapsed block-group-disabled">
         <div className="block-group-collapsed-row">
           <PowerToggle
             enabled={enabled}
             disabled={busy}
-            onChange={onSetGroupEnabled}
+            onChange={handlePowerChange}
           />
           <button
             type="button"
             className="block-group-collapsed-toggle"
-            onClick={onShowGroup}
+            onClick={() => onSetGroupEnabled(true)}
             disabled={busy}
             aria-expanded={false}
           >
-            {group.name ? (
-              <>
-                <span className="block-group-collapsed-title">{group.name}</span>
-                <span className="muted block-group-collapsed-count">
-                  {countText}
-                </span>
-              </>
-            ) : (
-              <span className="muted block-group-collapsed-count">
-                {countText}
-              </span>
-            )}
+            <span className="block-group-collapsed-title">{collapsedLabel}</span>
           </button>
+          <div className="task-new-menu block-group-collapsed-menu" ref={collapsedMenuRef}>
+            <button
+              type="button"
+              className="btn btn-text btn-icon task-new-menu-btn"
+              aria-label="Collapsed group options"
+              aria-expanded={collapsedMenuOpen}
+              aria-haspopup="true"
+              disabled={busy}
+              onClick={() => setCollapsedMenuOpen((open) => !open)}
+            >
+              ···
+            </button>
+            {collapsedMenuOpen && (
+              <div className="task-new-menu-dropdown" role="menu">
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="calendar-menu-item"
+                  disabled={busy}
+                  onClick={() => {
+                    setCollapsedMenuOpen(false)
+                    onOpenName()
+                  }}
+                >
+                  Name group
+                </button>
+                <GroupColorMenuItem
+                  value={colorPickerValue}
+                  hasCustomColor={Boolean(group.color)}
+                  disabled={busy}
+                  onChange={handleColorChange}
+                  onReset={handleResetColor}
+                />
+              </div>
+            )}
+          </div>
         </div>
       </section>
     )
   }
 
   return (
-    <section
-      className={[
-        'block-group',
-        !enabled ? 'block-group-disabled' : '',
-      ]
-        .filter(Boolean)
-        .join(' ')}
-    >
+    <section className="block-group">
       <div className="stack-anchor">
         <div className="stack-anchor-row">
           <PowerToggle
             enabled={enabled}
             disabled={busy}
-            onChange={onSetGroupEnabled}
+            onChange={handlePowerChange}
           />
           <div className="segmented segmented-sm segmented-single">
             <button
@@ -888,7 +1179,9 @@ function BlockGroupPanel({
         {tasks.map((task, index) => {
           const editing = editingId === task.id
           const resolvedTask = resolved.find((r) => r.id === task.id)
-          const pushed = hasPushedTaskOnDay(pushedEvents, task.id, dayKey)
+          const pushed =
+            !isTaskEmpty(task) &&
+            hasPushedTaskOnDay(pushedEvents, task.id, dayKey)
           const synced =
             pushed &&
             resolvedTask != null &&
@@ -915,6 +1208,7 @@ function BlockGroupPanel({
                 dragIndex === index ? 'is-dragging' : '',
                 showLineBefore ? 'drop-line-before' : '',
                 editing ? 'is-editing' : '',
+                isTaskEmpty(task) && !editing ? 'task-card-empty' : '',
               ]
                 .filter(Boolean)
                 .join(' ')}
@@ -923,15 +1217,22 @@ function BlockGroupPanel({
                 <TaskFieldsForm
                   initialTitle={task.title}
                   initialDuration={task.durationMinutes}
+                  initialEmpty={task.empty === true}
                   submitLabel="Save"
                   busy={busy}
+                  previewGroupId={group.id}
+                  previewTaskId={task.id}
+                  onTaskEditPreview={onTaskEditPreview}
                   onCancel={() => onEditingIdChange(null)}
                   onSubmit={(next) => {
-                    onUpdate({
+                    const updated: Task = {
                       ...task,
                       title: next.title,
                       durationMinutes: next.durationMinutes,
-                    })
+                    }
+                    if (next.empty) updated.empty = true
+                    else delete updated.empty
+                    onUpdate(updated)
                     onEditingIdChange(null)
                   }}
                 />
@@ -940,6 +1241,10 @@ function BlockGroupPanel({
                   <div
                     className="task-card-main task-card-drag"
                     onPointerDown={(e) => beginTaskDrag(e, index)}
+                    onClick={() => {
+                      if (suppressClickRef.current) return
+                      onEditingIdChange(task.id)
+                    }}
                   >
                     <span className="task-title">
                       {pushed &&
@@ -1013,14 +1318,118 @@ function BlockGroupPanel({
             />
           ) : (
             <div className="task-new-row">
-              <button
-                type="button"
-                className="task-new-trigger"
-                onClick={onStartAdd}
-                disabled={busy}
-              >
-                New block +
-              </button>
+              <div className="task-new-triggers">
+                <div className="task-new-menu task-new-library" ref={libraryMenuRef}>
+                  <button
+                    ref={libraryTriggerRef}
+                    type="button"
+                    className="task-new-trigger"
+                    disabled={busy}
+                    aria-expanded={libraryOpen}
+                    aria-haspopup="listbox"
+                    onClick={() => {
+                      setLibraryOpen((open) => !open)
+                      setListMenuOpen(false)
+                    }}
+                  >
+                    New block +
+                  </button>
+                  {libraryOpen &&
+                    createPortal(
+                      <div
+                        ref={libraryDropdownRef}
+                        className="task-new-menu-dropdown block-library-picker block-library-picker-fixed"
+                        style={libraryDropdownStyle}
+                        role="listbox"
+                        aria-multiselectable="true"
+                      >
+                        <div className="block-library-picker-list">
+                          {blockLibrary.categories.length === 0 ? (
+                            <p className="muted block-library-picker-empty">
+                              No saved blocks yet. Add some in Settings → Block
+                              library.
+                            </p>
+                          ) : (
+                            blockLibrary.categories.map((category) => (
+                              <div
+                                key={category.id}
+                                className="block-library-picker-category"
+                              >
+                                <div className="block-library-picker-category-name">
+                                  {category.name}
+                                </div>
+                                {category.blocks.map((block) => {
+                                  const key = blockLibraryKey(
+                                    category.id,
+                                    block.id,
+                                  )
+                                  const order = librarySelection.indexOf(key)
+                                  const selected = order >= 0
+                                  return (
+                                    <button
+                                      key={block.id}
+                                      type="button"
+                                      role="option"
+                                      aria-selected={selected}
+                                      className={[
+                                        'block-library-picker-item',
+                                        selected ? 'is-selected' : '',
+                                        isTaskEmpty(block) ? 'is-empty' : '',
+                                      ]
+                                        .filter(Boolean)
+                                        .join(' ')}
+                                      onClick={() =>
+                                        toggleLibraryBlock(
+                                          category.id,
+                                          block.id,
+                                        )
+                                      }
+                                    >
+                                      {selected && (
+                                        <span className="block-library-picker-order">
+                                          {order + 1}
+                                        </span>
+                                      )}
+                                      <span className="block-library-picker-title">
+                                        {block.title}
+                                      </span>
+                                      <span className="muted block-library-picker-duration">
+                                        {block.durationMinutes} min
+                                      </span>
+                                    </button>
+                                  )
+                                })}
+                              </div>
+                            ))
+                          )}
+                        </div>
+                        <div className="block-library-picker-actions">
+                          <button
+                            type="button"
+                            className="btn btn-primary btn-sm"
+                            disabled={busy || librarySelection.length === 0}
+                            onClick={handleAddFromLibrary}
+                          >
+                            {librarySelection.length === 1
+                              ? 'Add 1 block'
+                              : librarySelection.length > 1
+                                ? `Add ${librarySelection.length} blocks`
+                                : 'Add blocks'}
+                          </button>
+                        </div>
+                      </div>,
+                      document.body,
+                    )}
+                </div>
+                <button
+                  type="button"
+                  className="task-new-trigger task-new-trigger-secondary"
+                  onClick={onStartAdd}
+                  disabled={busy}
+                >
+                  New custom block +
+                </button>
+              </div>
               <div className="task-new-list-actions">
                 <div className="task-new-menu" ref={listMenuRef}>
                   <button
@@ -1067,11 +1476,18 @@ function BlockGroupPanel({
                         disabled={busy}
                         onClick={() => {
                           setListMenuOpen(false)
-                          onCollapseGroup()
+                          onOpenName()
                         }}
                       >
-                        Collapse group
+                        Name group
                       </button>
+                      <GroupColorMenuItem
+                        value={colorPickerValue}
+                        hasCustomColor={Boolean(group.color)}
+                        disabled={busy}
+                        onChange={handleColorChange}
+                        onReset={handleResetColor}
+                      />
                       <button
                         type="button"
                         role="menuitem"
@@ -1248,11 +1664,9 @@ function PowerToggle({
     <button
       type="button"
       className={['power-toggle', enabled ? 'is-on' : ''].filter(Boolean).join(' ')}
-      aria-label={
-        enabled ? 'Hide blocks from calendar' : 'Show blocks on calendar'
-      }
+      aria-label={enabled ? 'Turn off group' : 'Turn on group'}
       aria-pressed={enabled}
-      title={enabled ? 'Hide from calendar' : 'Show on calendar'}
+      title={enabled ? 'Turn off and collapse group' : 'Turn on and expand group'}
       disabled={disabled}
       onClick={() => onChange(!enabled)}
     >
@@ -1318,212 +1732,5 @@ function TrashIcon() {
       <path d="M10 11v6" />
       <path d="M14 11v6" />
     </svg>
-  )
-}
-
-function TaskFieldsForm({
-  initialTitle,
-  initialDuration,
-  submitLabel,
-  busy,
-  onSubmit,
-  onCancel,
-}: {
-  initialTitle: string
-  initialDuration: number
-  submitLabel: string
-  busy?: boolean
-  onSubmit: (task: Omit<Task, 'id'>) => void
-  onCancel: () => void
-}) {
-  const [title, setTitle] = useState(initialTitle)
-  const [durationMinutes, setDurationMinutes] = useState<number | ''>(
-    initialDuration,
-  )
-  const durationRef = useRef(durationMinutes)
-  durationRef.current = durationMinutes
-
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key !== 'Escape') return
-      e.preventDefault()
-      onCancel()
-    }
-    document.addEventListener('keydown', onKeyDown)
-    return () => document.removeEventListener('keydown', onKeyDown)
-  }, [onCancel])
-
-  function parseDuration(value: number | ''): number {
-    if (value === '') return 15
-    return Math.max(1, Math.round(value) || 15)
-  }
-
-  function stepDurationByFive(
-    current: number | '',
-    direction: 'up' | 'down',
-  ): number {
-    const value = parseDuration(current)
-    if (direction === 'up') {
-      if (value % 5 === 0) return value + 5
-      return Math.ceil(value / 5) * 5
-    }
-    if (value % 5 === 0) return Math.max(1, value - 5)
-    return Math.max(1, Math.floor(value / 5) * 5)
-  }
-
-  function beginDurationScrub(e: React.PointerEvent<HTMLInputElement>) {
-    if (e.button !== 0) return
-    const input = e.currentTarget
-    const startY = e.clientY
-    const startX = e.clientX
-    const pointerId = e.pointerId
-    let active = false
-    let lastTick = 0
-    const origin = parseDuration(durationRef.current)
-
-    function durationForTick(tick: number): number {
-      if (tick === 0) return origin
-      if (tick > 0) {
-        const floor = Math.floor(origin / 5) * 5
-        return Math.max(1, floor + tick * 5)
-      }
-      const ceil = Math.ceil(origin / 5) * 5
-      return Math.max(1, ceil + tick * 5)
-    }
-
-    function onMove(ev: PointerEvent) {
-      if (ev.pointerId !== pointerId) return
-      const dx = ev.clientX - startX
-      const dy = ev.clientY - startY
-      if (!active) {
-        if (Math.abs(dy) < ANCHOR_SCRUB_ACTIVATE_PX) return
-        if (Math.abs(dy) < Math.abs(dx)) {
-          cleanup(false)
-          return
-        }
-        active = true
-        document.body.classList.add('is-datetime-scrubbing')
-        input.blur()
-        try {
-          input.setPointerCapture(pointerId)
-        } catch {
-          /* ignore */
-        }
-      }
-      ev.preventDefault()
-      const tick = Math.trunc(-dy / ANCHOR_SCRUB_PX)
-      if (tick === lastTick) return
-      lastTick = tick
-      setDurationMinutes(durationForTick(tick))
-    }
-
-    function cleanup(focusForTyping: boolean) {
-      document.removeEventListener('pointermove', onMove)
-      document.removeEventListener('pointerup', onUp)
-      document.removeEventListener('pointercancel', onUp)
-      document.body.classList.remove('is-datetime-scrubbing')
-      try {
-        if (input.hasPointerCapture(pointerId)) {
-          input.releasePointerCapture(pointerId)
-        }
-      } catch {
-        /* ignore */
-      }
-      if (focusForTyping) {
-        input.focus()
-        input.select()
-      }
-    }
-
-    function onUp(ev: PointerEvent) {
-      if (ev.pointerId !== pointerId) return
-      cleanup(!active)
-    }
-
-    document.addEventListener('pointermove', onMove, { passive: false })
-    document.addEventListener('pointerup', onUp)
-    document.addEventListener('pointercancel', onUp)
-  }
-
-  function nudgeDuration(direction: 'up' | 'down') {
-    setDurationMinutes((current) => stepDurationByFive(current, direction))
-  }
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    if (!title.trim()) return
-    onSubmit({
-      title: title.trim(),
-      durationMinutes: parseDuration(durationMinutes),
-    })
-  }
-
-  return (
-    <form className="task-form" onSubmit={handleSubmit} noValidate>
-      <input
-        className="task-form-name"
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        placeholder="Event Name"
-        aria-label="Event name"
-        required
-        autoFocus
-      />
-      <div className="task-form-row">
-        <div className="task-form-duration">
-          <input
-            type="number"
-            min={1}
-            step={5}
-            value={durationMinutes}
-            onChange={(e) => {
-              const raw = e.target.value
-              if (raw === '') {
-                setDurationMinutes('')
-                return
-              }
-              const next = Number(raw)
-              setDurationMinutes(Number.isFinite(next) ? next : '')
-            }}
-            onBlur={() => {
-              setDurationMinutes(parseDuration(durationMinutes))
-            }}
-            onPointerDown={beginDurationScrub}
-            onKeyDown={(e) => {
-              if (e.key === 'ArrowUp') {
-                e.preventDefault()
-                nudgeDuration('up')
-                return
-              }
-              if (e.key === 'ArrowDown') {
-                e.preventDefault()
-                nudgeDuration('down')
-                return
-              }
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                e.currentTarget.form?.requestSubmit()
-              }
-            }}
-            aria-label="Duration in minutes"
-          />
-          <span className="muted">mins</span>
-        </div>
-        <button
-          type="button"
-          className="btn btn-ghost btn-sm"
-          onClick={onCancel}
-        >
-          Cancel
-        </button>
-        <button
-          type="submit"
-          className="btn btn-primary btn-sm"
-          disabled={busy}
-        >
-          {submitLabel}
-        </button>
-      </div>
-    </form>
   )
 }

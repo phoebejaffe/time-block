@@ -4,7 +4,8 @@ import {
   setDoc,
   type Unsubscribe,
 } from 'firebase/firestore'
-import type { Plan, SavedTaskList } from './tasks'
+import type { Plan, SavedTaskList, BlockLibrary } from './tasks'
+import { defaultBlockLibrary, normalizeBlockLibrary } from './tasks'
 import type { PushSnapshot, PushedEvent } from './pushedEvents'
 import {
   normalizePushSnapshots,
@@ -21,6 +22,7 @@ export type SyncPayload = {
   updatedAt: string
   plan: Plan
   savedLists: SavedTaskList[]
+  blockLibrary: BlockLibrary
   targetCalendarId: string
   pushedEvents: PushedEvent[]
   pushSnapshots: PushSnapshot[]
@@ -59,6 +61,10 @@ export function subscribeUserState(
         updatedAt: data.updatedAt,
         plan: data.plan as Plan,
         savedLists: (data.savedLists as SavedTaskList[]) ?? [],
+        blockLibrary:
+          data.blockLibrary != null
+            ? normalizeBlockLibrary(data.blockLibrary)
+            : defaultBlockLibrary(),
         targetCalendarId:
           typeof data.targetCalendarId === 'string' ? data.targetCalendarId : '',
         pushedEvents: normalizePushedEvents(data.pushedEvents),

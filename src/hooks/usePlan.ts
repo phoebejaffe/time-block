@@ -65,6 +65,19 @@ export function usePlan() {
     [updatePlan],
   )
 
+  const addTasks = useCallback(
+    (groupId: string, inputs: Omit<Task, 'id'>[]) => {
+      if (inputs.length === 0) return
+      updatePlan((prev) => ({
+        groups: mapGroup(prev.groups, groupId, (g) => ({
+          ...g,
+          tasks: [...g.tasks, ...inputs.map((input) => createTask(input))],
+        })),
+      }))
+    },
+    [updatePlan],
+  )
+
   const updateTask = useCallback(
     (groupId: string, task: Task) => {
       updatePlan((prev) => ({
@@ -186,25 +199,6 @@ export function usePlan() {
     [updatePlan],
   )
 
-  const setGroupHidden = useCallback(
-    (groupId: string, hidden: boolean) => {
-      updatePlan((prev) => ({
-        groups: mapGroup(prev.groups, groupId, (g) => {
-          const next: BlockGroup = {
-            id: g.id,
-            tasks: g.tasks,
-            anchor: g.anchor,
-            ...(g.name ? { name: g.name } : {}),
-            ...(g.enabled === false ? { enabled: false } : {}),
-            ...(hidden ? { hidden: true } : {}),
-          }
-          return next
-        }),
-      }))
-    },
-    [updatePlan],
-  )
-
   const setGroupEnabled = useCallback(
     (groupId: string, enabled: boolean) => {
       updatePlan((prev) => ({
@@ -214,7 +208,7 @@ export function usePlan() {
             tasks: g.tasks,
             anchor: g.anchor,
             ...(g.name ? { name: g.name } : {}),
-            ...(g.hidden ? { hidden: true } : {}),
+            ...(g.color ? { color: g.color } : {}),
             ...(enabled ? {} : { enabled: false }),
           }
           return next
@@ -224,14 +218,31 @@ export function usePlan() {
     [updatePlan],
   )
 
-  const collapseGroup = useCallback(
-    (groupId: string) => {
+  const setGroupName = useCallback(
+    (groupId: string, name: string) => {
+      const trimmed = name.trim()
       updatePlan((prev) => ({
-        groups: mapGroup(prev.groups, groupId, (g) => ({
-          ...g,
-          hidden: true,
-          enabled: false,
-        })),
+        groups: mapGroup(prev.groups, groupId, (g) => {
+          if (trimmed) return { ...g, name: trimmed }
+          const next = { ...g }
+          delete next.name
+          return next
+        }),
+      }))
+    },
+    [updatePlan],
+  )
+
+  const setGroupColor = useCallback(
+    (groupId: string, color: string | undefined) => {
+      const trimmed = color?.trim()
+      updatePlan((prev) => ({
+        groups: mapGroup(prev.groups, groupId, (g) => {
+          if (trimmed) return { ...g, color: trimmed }
+          const next = { ...g }
+          delete next.color
+          return next
+        }),
       }))
     },
     [updatePlan],
@@ -258,6 +269,7 @@ export function usePlan() {
     addGroup,
     removeGroup,
     addTask,
+    addTasks,
     updateTask,
     removeTask,
     insertTaskAt,
@@ -267,9 +279,9 @@ export function usePlan() {
     shiftStack,
     setTaskDuration,
     clearGroupTasks,
-    setGroupHidden,
     setGroupEnabled,
-    collapseGroup,
+    setGroupName,
+    setGroupColor,
     clear,
     replacePlan,
     findGroupForTask,

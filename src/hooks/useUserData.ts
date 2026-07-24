@@ -15,10 +15,13 @@ import {
 } from '../lib/pushedEvents'
 import {
   defaultPlan,
+  defaultBlockLibrary,
   migratePlan,
+  normalizeBlockLibrary,
   normalizeSavedLists,
   removeSavedList,
   upsertSavedList,
+  type BlockLibrary,
   type Plan,
   type SavedTaskList,
   type Task,
@@ -47,6 +50,9 @@ type UseUserDataOptions = {
  */
 export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions) {
   const [savedLists, setSavedLists] = useState<SavedTaskList[]>([])
+  const [blockLibrary, setBlockLibrary] = useState<BlockLibrary>(() =>
+    defaultBlockLibrary(),
+  )
   const [targetCalendarId, setTargetCalendarIdState] = useState('')
   const [pushedEvents, setPushedEvents] = useState<PushedEvent[]>([])
   const [pushSnapshots, setPushSnapshots] = useState<PushSnapshot[]>([])
@@ -64,6 +70,7 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
   const stateRef = useRef({
     plan,
     savedLists,
+    blockLibrary,
     targetCalendarId,
     pushedEvents,
     pushSnapshots,
@@ -71,6 +78,7 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
   stateRef.current = {
     plan,
     savedLists,
+    blockLibrary,
     targetCalendarId,
     pushedEvents,
     pushSnapshots,
@@ -92,6 +100,7 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
       updatedAt: string
       plan: unknown
       savedLists: unknown
+      blockLibrary: unknown
       targetCalendarId: unknown
       pushedEvents: unknown
       pushSnapshots: unknown
@@ -100,6 +109,11 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
       const migrated = migratePlan(remote.plan)
       onRemotePlanRef.current(migrated ?? defaultPlan())
       setSavedLists(normalizeSavedLists(remote.savedLists))
+      setBlockLibrary(
+        remote.blockLibrary != null
+          ? normalizeBlockLibrary(remote.blockLibrary)
+          : defaultBlockLibrary(),
+      )
       setTargetCalendarIdState(
         typeof remote.targetCalendarId === 'string' ? remote.targetCalendarId : '',
       )
@@ -125,6 +139,7 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
     const {
       plan: p,
       savedLists: sl,
+      blockLibrary: bl,
       targetCalendarId: tc,
       pushedEvents: pe,
       pushSnapshots: ps,
@@ -134,6 +149,7 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
       updatedAt,
       plan: p,
       savedLists: sl,
+      blockLibrary: bl,
       targetCalendarId: tc,
       pushedEvents: pe,
       pushSnapshots: ps,
@@ -231,7 +247,7 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
     return () => {
       if (pushTimerRef.current) clearTimeout(pushTimerRef.current)
     }
-  }, [plan, savedLists, targetCalendarId, pushedEvents, pushSnapshots, signedIn, firebaseUser, loading, pushNow])
+  }, [plan, savedLists, blockLibrary, targetCalendarId, pushedEvents, pushSnapshots, signedIn, firebaseUser, loading, pushNow])
 
   const saveList = useCallback(
     (name: string, tasks: Task[], replaceId?: string): SavedTaskList => {
@@ -244,6 +260,10 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
 
   const deleteList = useCallback((id: string) => {
     setSavedLists((prev) => removeSavedList(prev, id))
+  }, [])
+
+  const replaceBlockLibrary = useCallback((next: BlockLibrary) => {
+    setBlockLibrary(next)
   }, [])
 
   const setTargetCalendarId = useCallback((id: string) => {
@@ -288,6 +308,7 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
     lastSyncedAtRef.current = null
     seededRef.current = false
     setSavedLists([])
+    setBlockLibrary(defaultBlockLibrary())
     setTargetCalendarIdState('')
     setPushedEvents([])
     setPushSnapshots([])
@@ -299,6 +320,7 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
 
   return {
     savedLists,
+    blockLibrary,
     targetCalendarId,
     pushedEvents,
     pushSnapshots,
@@ -307,6 +329,7 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
     syncError,
     saveList,
     deleteList,
+    replaceBlockLibrary,
     setTargetCalendarId,
     applyCalendarSync,
     applyCalendarDelete,

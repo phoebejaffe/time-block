@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { AuthButton } from './components/AuthButton'
 import { CalendarView } from './components/CalendarView'
 import { MobileSplitHandle } from './components/MobileSplitHandle'
@@ -19,11 +19,13 @@ import { ensureWriteScope } from './lib/google'
 import { hasPushedGroupOnDay } from './lib/pushedEvents'
 import {
   anchorOnDay,
+  applyTaskEditPreview,
   localDateKey,
   pickViewDate,
   shiftAnchor,
   startOfLocalDay,
   type Task,
+  type TaskEditPreview,
 } from './lib/tasks'
 
 export default function App() {
@@ -47,6 +49,9 @@ export default function App() {
     groupId: string
     deltaMs: number
   } | null>(null)
+  const [taskEditPreview, setTaskEditPreview] = useState<TaskEditPreview | null>(
+    null,
+  )
   const appBodyRef = useRef<HTMLDivElement>(null)
   const { setSplitPercent, splitStyle } = useMobileSplit()
   const { setSidebarWidth, sidebarStyle } = useSidebarWidth()
@@ -64,19 +69,44 @@ export default function App() {
     [plan.plan.groups, viewDate],
   )
 
-  /** Sidebar preview: view-day anchors plus live stack drag shift. */
-  const displayGroups = useMemo(
-    () =>
-      viewDayGroups.map((group) =>
-        stackDragPreview?.groupId === group.id
+  /** Sidebar + calendar preview: view-day anchors, stack drag, and live task edits. */
+  const previewGroups = useMemo(() => {
+    let groups = viewDayGroups
+    if (stackDragPreview) {
+      groups = groups.map((group) =>
+        stackDragPreview.groupId === group.id
           ? {
               ...group,
               anchor: shiftAnchor(group.anchor, stackDragPreview.deltaMs),
             }
           : group,
-      ),
-    [viewDayGroups, stackDragPreview],
-  )
+      )
+    }
+    return applyTaskEditPreview(groups, taskEditPreview)
+  }, [viewDayGroups, stackDragPreview, taskEditPreview])
+
+  const handleTaskEditPreview = useCallback((preview: TaskEditPreview | null) => {
+    setTaskEditPreview((prev) => {
+      if (
+        prev === preview ||
+        (prev &&
+          preview &&
+          prev.groupId === preview.groupId &&
+          prev.taskId === preview.taskId &&
+          prev.title === preview.title &&
+          prev.durationMinutes === preview.durationMinutes &&
+          prev.empty === preview.empty)
+      ) {
+        return prev
+      }
+      return preview
+    })
+  }, [])
+
+  function handleEditingIdChange(id: string | null) {
+    setEditingTaskId(id)
+    if (id == null) setTaskEditPreview(null)
+  }
 
   function handleDatesSet(start: Date, end: Date) {
     calendars.setDates(start, end)
@@ -85,6 +115,7 @@ export default function App() {
       prev.getTime() === next.getTime() ? prev : next,
     )
     setStackDragPreview(null)
+    setTaskEditPreview(null)
   }
 
   async function handleSignIn() {
@@ -105,6 +136,11 @@ export default function App() {
     clear()
   }
 
+  function handleAddBlocks(groupId: string, inputs: Omit<Task, 'id'>[]) {
+    plan.addTasks(groupId, inputs)
+    clear()
+  }
+
   function handleRemoveTask(groupId: string, taskId: string) {
     const group = plan.plan.groups.find((g) => g.id === groupId)
     const index = group?.tasks.findIndex((t) => t.id === taskId) ?? -1
@@ -112,9 +148,9 @@ export default function App() {
     if (!task) return
 
     plan.removeTask(groupId, taskId)
-    if (editingTaskId === taskId) setEditingTaskId(null)
+    if (editingTaskId === taskId) handleEditingIdChange(null)
 
-    show('info', 'Block deleted', {
+    show('info', `"${task.title}" deleted`, {
       actionLabel: 'Undo',
       progressMs: 5_000,
       onAction: () => {
@@ -136,7 +172,7 @@ export default function App() {
     }
     if (!window.confirm('Delete this block group?')) return
     plan.removeGroup(groupId)
-    setEditingTaskId(null)
+    handleEditingIdChange(null)
     clear()
   }
 
@@ -345,10 +381,11 @@ export default function App() {
       ) : (
         <div className="app-body" ref={appBodyRef} style={bodyStyle}>
           <TaskSidebar
-            groups={displayGroups}
+            groups={previewGroups}
             canDeleteGroup={plan.plan.groups.length > 1}
             writableCalendars={calendars.writableCalendars}
             onAdd={handleAddTask}
+            onAddBlocks={handleAddBlocks}
             onUpdate={plan.updateTask}
             onRemove={handleRemoveTask}
             onReorder={plan.reorderTasks}
@@ -359,19 +396,14 @@ export default function App() {
             onReplaceTasks={handleReplaceTasks}
             onDeleteGroup={handleDeleteGroup}
             onAddGroup={handleAddGroup}
-            onCollapseGroup={(groupId) => {
-              plan.collapseGroup(groupId)
-            }}
-            onSetGroupEnabled={(groupId, enabled) => {
-              plan.setGroupEnabled(groupId, enabled)
-            }}
-            onShowGroup={(groupId) => {
-              plan.setGroupHidden(groupId, false)
-            }}
+            onSetGroupEnabled={plan.setGroupEnabled}
+            onSetGroupName={plan.setGroupName}
+            onSetGroupColor={plan.setGroupColor}
             onCommit={handleCommit}
             onDeleteFromCalendar={handleDeleteFromCalendar}
+            onTaskEditPreview={handleTaskEditPreview}
             editingId={editingTaskId}
-            onEditingIdChange={setEditingTaskId}
+            onEditingIdChange={handleEditingIdChange}
             busy={busy}
             signedIn={session.signedIn}
             onSignIn={() => void handleSignIn()}
@@ -383,6 +415,8 @@ export default function App() {
             onTargetCalendarChange={userData.setTargetCalendarId}
             pushedEvents={userData.pushedEvents}
             pushSnapshots={userData.pushSnapshots}
+            blockLibrary={userData.blockLibrary}
+            onReplaceBlockLibrary={userData.replaceBlockLibrary}
           />
 
           <SidebarResizeHandle
@@ -401,7 +435,7 @@ export default function App() {
               calendars={calendars.calendars}
               visibleCalendarIds={calendars.visibleIds}
               onToggleCalendar={calendars.toggleCalendar}
-              groups={viewDayGroups}
+              groups={previewGroups}
               onDatesSet={handleDatesSet}
               onAnchorCommit={(groupId, next) => {
                 setStackDragPreview(null)

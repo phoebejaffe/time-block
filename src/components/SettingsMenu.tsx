@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { HowItWorksModal } from './HowItWorksModal'
+import { BlockLibraryModal } from './BlockLibraryModal'
+import type { BlockLibrary } from '../lib/tasks'
 
 type SettingsMenuProps = {
   busy?: boolean
   signedIn?: boolean
   onSignIn?: () => void
   onSignOut?: () => void
+  blockLibrary: BlockLibrary
+  onReplaceBlockLibrary: (library: BlockLibrary) => void
 }
 
 function formatBuildTime(iso: string): string {
@@ -24,9 +28,12 @@ export function SettingsMenu({
   signedIn,
   onSignIn,
   onSignOut,
+  blockLibrary,
+  onReplaceBlockLibrary,
 }: SettingsMenuProps) {
   const [open, setOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
+  const [libraryOpen, setLibraryOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const buildTime = useMemo(() => formatBuildTime(__BUILD_TIME__), [])
 
@@ -67,6 +74,17 @@ export function SettingsMenu({
       </button>
       {open && (
         <div className="settings-menu-dropdown" role="menu">
+          <button
+            type="button"
+            role="menuitem"
+            className="calendar-menu-item"
+            onClick={() => {
+              setOpen(false)
+              setLibraryOpen(true)
+            }}
+          >
+            Block library
+          </button>
           <button
             type="button"
             role="menuitem"
@@ -122,6 +140,13 @@ export function SettingsMenu({
         </div>
       )}
       {helpOpen && <HowItWorksModal onClose={() => setHelpOpen(false)} />}
+      {libraryOpen && (
+        <BlockLibraryModal
+          library={blockLibrary}
+          onChange={onReplaceBlockLibrary}
+          onClose={() => setLibraryOpen(false)}
+        />
+      )}
     </div>
   )
 }

@@ -97,15 +97,14 @@ export function HowItWorksModal({ onClose }: HowItWorksModalProps) {
           </ul>
           <p>
             <strong>Delete a block</strong> — use the trash icon; you&apos;ll get a
-            short Undo option.
+            short Undo option showing the block name.
           </p>
           <p>
-            <strong>Power button</strong> — turns a group on or off for the calendar.
-            When it&apos;s off, the group looks grey in the sidebar and doesn&apos;t
-            show on the calendar.
+            <strong>Power button</strong> — hides a group from the calendar and
+            collapses it in the sidebar. Turn it back on to expand the group again.
           </p>
           <p>
-            <strong>Group menu (···)</strong> — Save blocks, Restore blocks, Collapse
+            <strong>Group menu (···)</strong> — Save blocks, Restore blocks, Name
             group, Delete from calendar, or Delete block group.
           </p>
           <p>
