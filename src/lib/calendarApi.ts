@@ -284,12 +284,15 @@ export async function syncTasksToCalendar(
       e.calendarId !== calendarId,
   )
 
+  // Dedup within this group/calendar/day only — a block pushed to one day
+  // must never be conflated with the same block pushed to a different day.
   function upsertTracked(next: PushedEvent) {
     tracked = tracked.filter(
       (e) =>
         !(
           e.calendarId === next.calendarId &&
           e.groupId === next.groupId &&
+          e.dayKey === next.dayKey &&
           (e.eventId === next.eventId || e.taskId === next.taskId)
         ),
     )
@@ -341,15 +344,9 @@ export async function syncTasksToCalendar(
 
   for (const task of resolved) {
     const resource = eventResource(task)
-    const match =
-      unusedDay.find((e) => e.taskId === task.id) ||
-      tracked.find(
-        (e) =>
-          e.calendarId === calendarId &&
-          e.groupId === groupId &&
-          e.taskId === task.id,
-      ) ||
-      unusedDay[0]
+    // Only ever reuse an event already pushed for this exact group/day —
+    // never one from another day, even if the block id matches.
+    const match = unusedDay.find((e) => e.taskId === task.id) || unusedDay[0]
 
     if (match) {
       const idx = unusedDay.indexOf(match)
