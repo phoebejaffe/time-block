@@ -178,22 +178,39 @@ calendar view always shows "if this group's tasks happened today [or
 whatever day is in view], here's when," and only committing an edit persists
 that day. Default: a new group anchors "ends at 9:00am today."
 
-### 4.6 SavedTaskList (a reusable, named block list)
+### 4.6 Block-group checkpoint (save/revert a group's "default" blocks)
 
 ```ts
-type SavedTaskList = {
-  id: string
-  name: string
+type BlockGroupCheckpoint = {
   tasks: Array<{ title: string; durationMinutes: number; empty?: boolean }>
-  updatedAt: string  // ISO
+  savedAt: string  // ISO
 }
 ```
 
-Saved per user (not per group) in the cross-device store; sorted
-alphabetically by name. Saving a list from a group's current tasks either
-creates a new entry or overwrites an existing one — matched by id, or by
-case-insensitive name if no id match. "Restore" replaces a group's current
-tasks wholesale with a snapshot's tasks (fresh ids are generated).
+Each group may hold at most one checkpoint (stored inline on the
+`BlockGroup`, not as a separate collection) — a snapshot of "the canonical
+version of this group's blocks" that the user can always get back to after
+making one-off adjustments (e.g. a daily routine that gets tweaked day to
+day but should be easy to reset).
+
+- **Save as default / Update default blocks** snapshots the group's current
+  tasks (title, duration, `empty` flag, and order only — no ids or resolved
+  times) as the checkpoint, overwriting any previous one. The overflow menu
+  labels this action "Save as default" if the group has no checkpoint yet,
+  or "Update default blocks" if it does; updating an existing checkpoint
+  asks for confirmation via a native dialog first. Only offered while the
+  group is enabled, and only when there either is no checkpoint yet or the
+  current tasks have "drifted" from it.
+- **Drift** is computed by comparing the group's current tasks against the
+  checkpoint's tasks, in order, by title/duration/empty-state only (ids and
+  resolved times are ignored, and differing lengths always count as
+  drifted). While drifted, an inline **Revert** button (with its own icon)
+  appears next to the group's overflow-menu trigger — a one-click shortcut
+  that replaces the group's tasks wholesale with fresh copies (new ids)
+  rebuilt from the checkpoint, without opening the menu.
+- Both saving and reverting show an "Undo" toast (§7.6) that restores the
+  exact previous state (the prior checkpoint, or the prior task list,
+  respectively) if clicked.
 
 ### 4.7 Block library (reusable individual blocks, organized by category)
 
@@ -204,11 +221,12 @@ type BlockLibrary = { categories: BlockLibraryCategory[]; updatedAt: string }
 ```
 
 A separate, user-managed catalog of individual reusable blocks (distinct
-from saved *lists* — a library block gets appended to whatever group you're
-editing, one or many at a time, rather than replacing the whole list). Users
-create categories, add/edit/delete/reorder blocks within a category via
-drag, and reorder/delete whole categories, from a dedicated "Block library"
-modal (opened from the app's settings menu). When adding blocks from the
+from a group's checkpoint, §4.6 — a library block gets appended to whatever
+group you're editing, one or many at a time, rather than replacing/
+restoring the whole list). Users create categories, add/edit/delete/
+reorder blocks within a category via drag, and rename/reorder/delete whole
+categories, from a dedicated "Block library" modal (opened from the app's
+settings menu). When adding blocks from the
 library into a group, the user multi-selects blocks (in the picker they're
 numbered in selection order) and they get appended to the group in that
 order as brand-new `Task`s (fresh ids).
@@ -434,24 +452,31 @@ Top to bottom:
    each independently either **expanded** or **collapsed**:
    - **Collapsed** group (its `enabled` flag is off): a single compact row
      showing a power toggle, the group's name (or a synthesized "Unnamed
-     N" label), and a small "···" overflow menu (Name group / Set color)
-     — expand it again via the power toggle or by tapping the row.
+     N" label) followed by its total duration in parens if it has any
+     tasks (e.g. "Morning (1h 30m)"), and a small "···" overflow menu
+     (Set name / Move up / Move down / Duplicate group / — separator — /
+     Delete block group) — expand it again via the power toggle or by
+     tapping the row.
    - **Expanded** group:
-     - **Anchor row**: a power toggle (turns the group off/collapses it); a
-       two-state toggle button labeled "Starts" or "Ends" (tapping flips
-       the anchor's `kind`, keeping the same clock time); the word "at";
-       a native time input showing the anchor's local time (`HH:mm`,
-       5-minute step); and, if the group has any tasks, a read-only summary
-       of the whole stack's start–end time range.
+     - **Name row**: a power toggle (turns the group off/collapses it) and
+       the group's name (or its synthesized "Unnamed N" label), always
+       visible above the anchor controls.
+     - **Anchor row**: a two-state toggle button labeled "Starts" or "Ends"
+       (tapping flips the anchor's `kind`, keeping the same clock time);
+       the word "at"; a native time input showing the anchor's local time
+       (`HH:mm`, 5-minute step); and, if the group has any tasks, a
+       read-only summary of the whole stack's start–end time range.
      - **Task list**: one row per task, each showing (in order): if the
        task is currently reflected on Google Calendar for the day in view,
        a small icon — a checkmark if it exactly matches what was last
        pushed, or a "calendar" glyph if it's out of sync since the last
-       push; then the task's title; then its duration ("· N min"); then,
-       on hover/focus, edit and delete icon-buttons. Tasks with `empty:
-       true` render in a visually muted/reduced style when not being
-       edited. Clicking anywhere on a row's main area (other than the
-       trailing icon buttons) opens that task for inline editing.
+       push; then the task's title, truncated with an ellipsis if it
+       doesn't fit rather than pushing anything else out of the row; then
+       its duration ("· N min"); then edit and delete icon-buttons (always
+       reserved space so long titles can't crowd them out). Tasks with
+       `empty: true` render in a visually muted/reduced style when not
+       being edited. Clicking anywhere on a row's main area (other than
+       the trailing icon buttons) opens that task for inline editing.
      - **Inline task editor** (replaces a row, or appears as a fresh row at
        the bottom when adding): a text input for the title, a numeric
        input for duration in minutes (step 5), a toggle button for the
@@ -463,15 +488,23 @@ Top to bottom:
        its title + duration, multi-selectable with a running numeric
        selection order, plus an "Add N block(s)" confirm button; shows an
        empty-state message pointing at Settings → Block library if the
-       library has no categories yet) and a secondary "New custom block +"
-       trigger that opens the inline task editor directly for a one-off
-       task. On the same row: a "···" overflow menu (Save blocks / Restore
-       blocks / Name group / Set color / Duplicate group / — separator —
-       Delete from calendar (disabled unless something's currently pushed
-       for this group+day) / Delete block group (disabled if it's the only
-       remaining group)) and a primary "Add"/"Update" button (label swaps
-       to "Update" once anything has been pushed for this group on the
-       viewed day; disabled while nothing has ever been pushed and the
+       library has no categories yet) and a secondary "Custom +" trigger
+       that opens the inline task editor directly for a one-off task. On
+       the same row: a "···" overflow menu — positioned via a portal that
+       flips above/below and clamps horizontally to stay on-screen, the
+       same technique used by the block library picker — containing, when
+       the group is enabled: "Save as default"/"Update default blocks"
+       (only shown while there's no checkpoint yet or the blocks have
+       drifted from it — see §4.6) / — separator — / Set name / a "Set
+       color" swatch input / — separator — / Move up / Move down (either
+       omitted if not applicable) / Duplicate group / — separator — /
+       Delete blocks from calendar (disabled unless something's currently
+       pushed for this group+day) / Delete block group (disabled if it's
+       the only remaining group). An inline **Revert** button appears next
+       to the menu trigger whenever the group has drifted from its saved
+       checkpoint (§4.6). Finally, a primary "Add"/"Update" button (label
+       swaps to "Update" once anything has been pushed for this group on
+       the viewed day; disabled while nothing has ever been pushed and the
        group has zero tasks; visually "soft-disabled" — clickable but
        styled inert — when the stack already exactly matches the last
        successful push) that opens the commit modal (§7.4).
@@ -485,13 +518,8 @@ All modals share a common shell: a full-screen semi-transparent backdrop
 (title + "×" close button) and a body, rendered via a portal so they sit
 above everything else. Modals used:
 
-- **Save block list** — one field (list name, pre-filled/blank), Cancel /
-  Save (disabled if the group currently has zero tasks).
-- **Restore block list** — a `<select>` of saved lists (each option shows
-  "Name (task count)"); Delete (removes the selected saved list) / Cancel /
-  Restore (replaces the current group's tasks with the selected list's).
-  Shows "No saved lists yet." if the collection is empty.
-- **Name group** — one field (group name); Cancel / Save.
+- **Name group** (opened via the group menu's "Set name" item) — one field
+  (group name); Cancel / Save.
 - **Commit to calendar** ("Add to calendar" / "Update calendar", titled
   based on whether this group+day has already been pushed) — a `<select>`
   of the user's writable calendars (choosing one updates the persisted
@@ -502,11 +530,22 @@ above everything else. Modals used:
   soft affordance — while the plan already exactly matches what's on the
   calendar (with a tooltip explaining why).
 - **Block library** (opened from the settings menu, not from a group) — a
-  wider dialog listing every category (each with an editable name field,
-  move-up/move-down/delete controls, its own reorderable list of blocks
-  using the same task-row/task-editor UI as the sidebar, and an "add block"
-  button) plus an "New category +" button; a single "Done" button closes
-  it. Shows an empty-state message if there are no categories.
+  wider dialog listing every category, each with a name heading, a small
+  "···" overflow menu (Rename — opens a nested "Rename category" modal
+  stacked on top of this one, one field + Cancel/Save — / — separator —
+  / Move up / Move down (either omitted if not applicable) / — separator
+  — / Delete category, which asks for confirmation via a native dialog
+  first), its own reorderable list of blocks using the same task-row/
+  task-editor UI as the sidebar (with shared edit/delete icon buttons), and
+  an "New block +" button; plus a "New category +" button below the list.
+  Closed via its header's "×" button, clicking outside, or Escape. Shows an
+  empty-state message if there are no categories. A freshly-added block
+  opens its inline editor with a *blank* title field (unlike the sidebar's
+  task editor, this is the one place a draft can be cancelled: if its title
+  is still blank when the user cancels, the whole draft block is discarded
+  rather than being kept as "Untitled"). Deleting an already-saved block
+  shows an "Undo" toast (§7.6), the same mechanism used for deleting a task
+  from the plan.
 - **How this works** (help) — a static, scrollable explainer covering the
   same interaction model documented in this spec's UI sections; opened from
   the settings menu.
@@ -579,22 +618,28 @@ duration, not the trailing icon buttons) reorders it within its list:
 ### 8.1 Editing the plan (all local, until synced)
 
 Every plan mutation — add/update/remove/reorder a task, add multiple tasks
-at once (from the block library), replace all of a group's tasks (restore a
-saved list), add/duplicate/remove a group, rename a group, recolor a group,
-enable/disable a group, or change a group's anchor — goes through a small
-set of pure reducer-style functions operating on the whole `Plan` object,
+at once (from the block library), replace all of a group's tasks (revert to
+its saved checkpoint), add/duplicate/remove/reorder a group, rename a
+group, recolor a group, enable/disable a group, save/update/revert a
+group's checkpoint, or change a group's anchor — goes through a small set
+of pure reducer-style functions operating on the whole `Plan` object,
 applied via `setState` (no external state library). All of these are
 optimistic/instant in the UI; there is no separate "save" step for editing
 — persistence happens automatically in the background (§8.4).
 
 Deleting a task shows an "Undo" toast (progress bar over ~5s) that, if
 clicked, re-inserts the exact same task object back at its original index.
+Saving/updating a group's checkpoint and reverting to it show the same kind
+of "Undo" toast, restoring the exact previous checkpoint or task list,
+respectively (§4.6).
 
 Deleting a group requires a native `confirm()` dialog and is blocked (with
 an info toast) if it's the only group left. Duplicating a group inserts an
-exact copy (fresh ids for the group and every task, tasks/anchor/name
-[unnamed]/color/enabled state all copied) immediately after the source
-group.
+exact copy (fresh ids for the group and every task; tasks/anchor/name
+[unnamed]/color/enabled state/checkpoint are all copied) immediately after
+the source group. Reordering a group ("Move up"/"Move down" in its overflow
+menu, disabled at the top/bottom of the list respectively) swaps its
+position with the adjacent group — there is no drag-to-reorder for groups.
 
 ### 8.2 Live "preview" while editing (sidebar ⇄ calendar reactivity)
 
@@ -610,8 +655,13 @@ actually rendered:
    one task (by id) wherever it's rendered, without touching the underlying
    Plan until the form is actually submitted.
 2. **Dragging a block-stack event on the calendar** (see §8.3) streams a
-   live millisecond delta for the whole group, applied to every task's
-   displayed anchor for that group only, again without touching the Plan
+   live millisecond delta for the whole group up to the top level. The
+   *sidebar's* derived group list applies that delta to the dragged group's
+   displayed anchor (so its anchor-row time and task rows preview the new
+   position live); the *calendar's* own derived group list deliberately
+   does **not** apply it, since the calendar already expresses the live
+   drag purely through direct DOM transforms (§8.3) and re-shifting its
+   anchor too would double-apply the movement. Neither touches the Plan
    until the drag is dropped.
 
 Both preview mechanisms are pure/derived (`useMemo`) and are cleared
@@ -622,19 +672,36 @@ whenever the calendar's visible date range changes.
 - **Google events**: rendered non-editable, ordered visually behind
   in-app blocks, colored per calendar, with size-dependent CSS classes for
   very short events (≤5 min, ≤10 min, <30 min) so labels still fit.
-- **In-app block events** (one FullCalendar event per non-empty, non-hidden
-  task, across all *enabled* groups, positioned via §4.4's stack
-  resolution against the day currently in view): each carries the group's
-  color, is move-only (`startEditable: true`, `durationEditable: false` —
-  duration is owned by the plan, resizing is explicitly reverted), and
-  tracks its source task/group id as custom metadata for click/drag
-  handling.
+- **In-app block events** (one FullCalendar event per task, across all
+  *enabled* groups, positioned via §4.4's stack resolution against the day
+  currently in view — including `empty`/spacer tasks, which render with
+  desaturated/muted colors instead of being omitted): each carries the
+  group's color (or its muted variant for spacers), is move-only
+  (`startEditable: true`, `durationEditable: false` — duration is owned by
+  the plan, resizing is explicitly reverted), and tracks its source
+  task/group id as custom metadata for click/drag handling. Each event's
+  label renders the start time floating beside the title on the first line
+  so wrapped lines run flush left, wraps onto further lines as space
+  allows, then ellipsizes once it exceeds the event box's available height
+  (skipped for the very shortest, ≤5-minute events, which intentionally let
+  their label overflow above the box); label text color is chosen
+  per-event for WCAG-contrast against that event's background color (black
+  or white, whichever has the higher contrast), with a soft outline in the
+  opposite color so it stays legible over any group color.
 - **Dragging any one block** in a stack visually moves the **entire
   group's** blocks together by the same delta, in real time, while
   dragging — not just the one grabbed event — by directly transforming the
-  DOM elements of sibling blocks in the same group in lockstep with
-  FullCalendar's own drag "mirror" element (kept in sync via
-  `requestAnimationFrame`), while a custom `eventAllow` guard: (a) blocks
+  DOM elements of the *other* sibling blocks in the same group (never the
+  dragged element itself, which FullCalendar's own mirror already tracks)
+  in lockstep with FullCalendar's drag "mirror" element, all re-synced on
+  every `requestAnimationFrame` tick together with each visible block's
+  floating time-label text (so labels never drift out of sync with the
+  visual position mid-drag — a bug in an earlier version). The calendar
+  itself never re-renders the dragged group's anchor mid-drag (it always
+  reads the *unshifted* plan and expresses the live delta purely via these
+  DOM transforms); only the sidebar's live preview layer (§8.2) shifts the
+  anchor for its own display, so the two views can't fight over layout
+  during a drag. A custom `eventAllow` guard: (a) blocks
   drags entirely during a pinch-zoom gesture, (b) refuses to let the block
   cross onto a different calendar day (vertical-only reordering within the
   same day), (c) refuses any change that would alter duration (guards
@@ -671,8 +738,8 @@ whenever the calendar's visible date range changes.
 ### 8.4 Cross-device sync (Firestore)
 
 - One document per user at `users/{uid}` containing: `updatedAt` (ISO),
-  `plan`, `savedLists`, `blockLibrary`, `targetCalendarId`, `pushedEvents`,
-  `pushSnapshots`.
+  `plan` (each group's checkpoint travels inline with it), `blockLibrary`,
+  `targetCalendarId`, `pushedEvents`, `pushSnapshots`.
 - **On sign-in**, subscribe to that document in real time:
   - If it exists and its `updatedAt` is newer than the last value this tab
     itself wrote, replace all local state with the remote values
@@ -684,8 +751,8 @@ whenever the calendar's visible date range changes.
     subscription's own initial write as one to *ignore* when it echoes
     back (to avoid re-processing your own write as if it were a remote
     change).
-- **On local edits** (to plan, saved lists, block library, target calendar,
-  or push history), debounce ~2 seconds of inactivity, then overwrite the
+- **On local edits** (to plan, block library, target calendar, or push
+  history), debounce ~2 seconds of inactivity, then overwrite the
   whole document with a fresh `updatedAt` — last-write-wins at the
   document level; no field-level merge/CRDT logic.
 - **Loading state**: while signed in but the Firestore user isn't
@@ -802,8 +869,7 @@ in-app plan/tasks at all — it only removes calendar-side events.
 
 | Data | Storage | Synced across devices? |
 | --- | --- | --- |
-| Plan (groups/tasks/anchors) | Firestore `users/{uid}.plan` | Yes |
-| Saved task lists | Firestore `users/{uid}.savedLists` | Yes |
+| Plan (groups/tasks/anchors/checkpoints) | Firestore `users/{uid}.plan` | Yes |
 | Block library | Firestore `users/{uid}.blockLibrary` | Yes |
 | Target calendar id | Firestore `users/{uid}.targetCalendarId` | Yes |
 | Calendar push history (events + snapshots) | Firestore `users/{uid}.pushedEvents` / `.pushSnapshots` | Yes |
@@ -833,8 +899,10 @@ fresh load starts on today.
    calendar list + read-only event overlay.
 6. Firebase Auth + Firestore wiring: real-time subscribe, debounced push,
    sign-out reset, loading gate.
-7. Saved lists, block library, and their modals.
+7. Block-group checkpoints (save/revert a "default" block list per group)
+   and the block library, and their modals.
 8. Calendar push/update/delete sync algorithm and its push-tracking data
    model, plus the sidebar's synced/out-of-sync indicators.
 9. Notices/toasts, error-formatting, help modal, settings menu, polish
-   (empty blocks, group colors, group enable/disable, group duplicate).
+   (empty/spacer blocks, group colors, group enable/disable, group
+   duplicate/reorder, contrast-aware calendar event labels).
