@@ -50,6 +50,47 @@ function darkenHex(hex: string, amount = 0.28): string {
   return `#${channel(0)}${channel(2)}${channel(4)}`
 }
 
+function hexToRgb(hex: string): [number, number, number] | null {
+  const raw = hex.replace('#', '')
+  if (!/^[0-9a-fA-F]{6}$/.test(raw)) return null
+  return [
+    parseInt(raw.slice(0, 2), 16),
+    parseInt(raw.slice(2, 4), 16),
+    parseInt(raw.slice(4, 6), 16),
+  ]
+}
+
+function rgbToHex(r: number, g: number, b: number): string {
+  const channel = (n: number) =>
+    Math.max(0, Math.min(255, Math.round(n)))
+      .toString(16)
+      .padStart(2, '0')
+  return `#${channel(r)}${channel(g)}${channel(b)}`
+}
+
+function desaturateHex(hex: string, saturation = 0.5): string {
+  const rgb = hexToRgb(hex)
+  if (!rgb) return hex
+  const [r, g, b] = rgb
+  const gray = 0.299 * r + 0.587 * g + 0.114 * b
+  return rgbToHex(
+    gray + (r - gray) * saturation,
+    gray + (g - gray) * saturation,
+    gray + (b - gray) * saturation,
+  )
+}
+
+/** Mute overlay colors for empty blocks on the in-app calendar. */
+export function desaturateEventColors(
+  colors: { backgroundColor: string; borderColor: string },
+  saturation = 0.5,
+): { backgroundColor: string; borderColor: string } {
+  return {
+    backgroundColor: desaturateHex(colors.backgroundColor, saturation),
+    borderColor: desaturateHex(colors.borderColor, saturation),
+  }
+}
+
 /** Colors for in-app task stack events (not passed to Google Calendar). */
 export function groupEventColors(color?: string): {
   backgroundColor: string

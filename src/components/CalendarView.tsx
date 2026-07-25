@@ -17,6 +17,7 @@ import {
   isGroupEnabled,
   isTaskEmpty,
   groupEventColors,
+  desaturateEventColors,
   formatCalendarRange,
   pickViewDate,
   resolveStack,
@@ -58,6 +59,7 @@ type ResolvedTaskEvent = {
   title: string
   start: Date
   end: Date
+  empty?: boolean
 }
 
 /** Lay out visible groups once; calendar UI reads times from here. */
@@ -65,14 +67,13 @@ function buildResolvedTaskEvents(groups: BlockGroup[]): ResolvedTaskEvent[] {
   return groups
     .filter((group) => isGroupEnabled(group))
     .flatMap((group) =>
-      resolveStack(group.tasks, group.anchor)
-        .filter((task) => !isTaskEmpty(task))
-        .map((task) => ({
+      resolveStack(group.tasks, group.anchor).map((task) => ({
         taskId: task.id,
         groupId: group.id,
         title: task.title,
         start: task.start,
         end: task.end,
+        ...(isTaskEmpty(task) ? { empty: true } : {}),
       })),
     )
 }
@@ -106,6 +107,141 @@ function formatTaskEventTime(date: Date): string {
     .format(date)
     .replace(/\s/g, '')
     .toLowerCase()
+}
+
+function hexToRgb(hex: string): [number, number, number] | null {
+  const normalized = hex.trim().replace(/^#/, '')
+  if (!/^[0-9a-f]{3}$|^[0-9a-f]{6}$/i.test(normalized)) return null
+  const expanded =
+    normalized.length === 3
+      ? normalized
+          .split('')
+          .map((c) => c + c)
+          .join('')
+      : normalized
+  return [
+    parseInt(expanded.slice(0, 2), 16),
+    parseInt(expanded.slice(2, 4), 16),
+    parseInt(expanded.slice(4, 6), 16),
+  ]
+}
+
+function srgbChannel(value: number): number {
+  const s = value / 255
+  return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4
+}
+
+function contrastingTextColor(
+  backgroundColor: string,
+): '#000000' | '#ffffff' {
+  const rgb = hexToRgb(backgroundColor)
+  if (!rgb) return '#ffffff'
+  const [r, g, b] = rgb.map(srgbChannel)
+  const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
+  return luminance > 0.45 ? '#000000' : '#ffffff'
+}
+
+function oppositeTextColor(
+  color: '#000000' | '#ffffff',
+): '#000000' | '#ffffff' {
+  return color === '#000000' ? '#ffffff' : '#000000'
+}
+
+function textOutlineShadow(
+  color: '#000000' | '#ffffff',
+  px = 1,
+  blur = 2,
+  opacity = 0.1,
+): string {
+  const shadowColor =
+    color === '#000000'
+      ? `rgba(0, 0, 0, ${opacity})`
+      : `rgba(255, 255, 255, ${opacity})`
+  const coords: Array<[number, number]> = [
+    [-px, -px],
+    [0, -px],
+    [px, -px],
+    [-px, 0],
+    [px, 0],
+    [-px, px],
+    [0, px],
+    [px, px],
+  ]
+  const outline = coords
+    .map(([x, y]) => `${x}px ${y}px ${blur}px ${shadowColor}`)
+    .join(', ')
+  return `${outline}, 0 0 ${blur * 2}px ${shadowColor}`
+}
+
+function taskEventTextStyle(groupBackgroundColor: string): {
+  color: '#000000' | '#ffffff'
+  textShadow: string
+} {
+  const color = contrastingTextColor(groupBackgroundColor)
+  return {
+    color,
+    textShadow: textOutlineShadow(oppositeTextColor(color)),
+  }
+}
+
+/**
+ * Task event label: time floats left so the title starts beside it on the
+ * first line, wraps to subsequent full-width lines, then ellipsizes once it
+ * runs out of the event box's height. Skipped for `event-xxs` (≤5min)
+ * blocks, which intentionally let their label overflow above the tiny box.
+ */
+function TaskEventLabel({
+  timeText,
+  title,
+  clamp,
+  textStyle,
+}: {
+  timeText: string
+  title: string
+  clamp: boolean
+  textStyle: { color: '#000000' | '#ffffff'; textShadow: string }
+}) {
+  const frameRef = useRef<HTMLDivElement>(null)
+  const titleRef = useRef<HTMLDivElement>(null)
+
+  useLayoutEffect(() => {
+    if (!clamp) return
+    const frame = frameRef.current
+    const titleEl = titleRef.current
+    if (!frame || !titleEl) return
+
+    function applyClamp() {
+      if (!frame || !titleEl) return
+      const availableHeight = frame.clientHeight
+      if (availableHeight <= 0) return
+      const style = window.getComputedStyle(titleEl)
+      const fontSize = parseFloat(style.fontSize) || 11
+      const lineHeight =
+        style.lineHeight === 'normal'
+          ? fontSize * 1.2
+          : parseFloat(style.lineHeight) || fontSize * 1.2
+      const lines = Math.max(1, Math.floor(availableHeight / lineHeight))
+      titleEl.style.setProperty('--title-lines', String(lines))
+    }
+
+    applyClamp()
+    const observer = new ResizeObserver(applyClamp)
+    observer.observe(frame)
+    return () => observer.disconnect()
+  }, [clamp])
+
+  return (
+    <div className="fc-event-main-frame" ref={frameRef}>
+      {timeText ? (
+        <div className="fc-event-time" style={textStyle}>
+          {timeText}
+        </div>
+      ) : null}
+      <div className="fc-event-title" ref={titleRef} style={textStyle}>
+        {title}
+      </div>
+    </div>
+  )
 }
 
 export function CalendarView({
@@ -503,7 +639,8 @@ export function CalendarView({
       }))
 
     const local: EventInput[] = resolvedTaskEvents.map((task) => {
-      const colors = groupColors.get(task.groupId) ?? groupEventColors()
+      const base = groupColors.get(task.groupId) ?? groupEventColors()
+      const colors = task.empty ? desaturateEventColors(base, 0.5) : base
       return {
         id: `task:${task.taskId}`,
         title: task.title,
@@ -515,7 +652,11 @@ export function CalendarView({
         startEditable: true,
         durationEditable: false,
         order: 0,
-        classNames: [TASK_STACK_CLASS, ...durationClass(task.start, task.end)],
+        classNames: [
+          TASK_STACK_CLASS,
+          ...durationClass(task.start, task.end),
+          ...(task.empty ? ['task-event-empty'] : []),
+        ],
         extendedProps: {
           source: 'task',
           taskId: task.taskId,
@@ -568,15 +709,25 @@ export function CalendarView({
       ? resolvedTaskEventsRef.current.find((task) => task.taskId === taskId)
       : undefined
     const start = resolved?.start ?? arg.event.start
+    const end = resolved?.end ?? arg.event.end
     const timeText = start ? formatTaskEventTime(start) : ''
+    const groupId = arg.event.extendedProps.groupId as string | undefined
+    const groupColor = groupId ? groupColors.get(groupId) : undefined
+    const groupBg =
+      groupColor?.backgroundColor ?? groupEventColors().backgroundColor
+    const textStyle = taskEventTextStyle(groupBg)
+    const clamp =
+      start && end
+        ? !durationClass(start, end).includes('event-xxs')
+        : true
 
     return (
-      <div className="fc-event-main-frame">
-        {timeText ? (
-          <div className="fc-event-time">{timeText}</div>
-        ) : null}
-        <div className="fc-event-title">{arg.event.title}</div>
-      </div>
+      <TaskEventLabel
+        timeText={timeText}
+        title={arg.event.title}
+        clamp={clamp}
+        textStyle={textStyle}
+      />
     )
   }
 
