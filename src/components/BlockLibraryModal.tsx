@@ -605,9 +605,8 @@ function CategorySection({
                     }}
                   >
                     <span className="task-title">
-                      {block.title}
+                      <span className="task-title-text">{block.title}</span>
                       <span className="muted task-duration">
-                        {' '}
                         · {block.durationMinutes} min
                       </span>
                     </span>

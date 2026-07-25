@@ -1301,9 +1301,8 @@ function BlockGroupPanel({
                         ) : (
                           <CalendarSyncedIcon title="On Google Calendar — tap Update to sync changes" />
                         ))}
-                      {task.title}
+                      <span className="task-title-text">{task.title}</span>
                       <span className="muted task-duration">
-                        {' '}
                         · {task.durationMinutes} min
                       </span>
                     </span>
