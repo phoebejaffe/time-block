@@ -269,6 +269,23 @@ body.is-sidebar-resizing .main-panel {
   border-top: 0;
 }
 
+.stack-anchor-name-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.stack-anchor-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 0.9rem;
+  font-weight: 550;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 .stack-anchor-row {
   display: flex;
   align-items: center;
@@ -290,7 +307,7 @@ body.is-sidebar-resizing .main-panel {
 
 .stack-anchor-time input {
   width: auto;
-  min-width: 6.5rem;
+  min-width: 5rem;
   height: 100%;
   box-sizing: border-box;
 }
@@ -769,7 +786,7 @@ body.is-datetime-scrubbing .task-form-duration input {
   right: 0;
   top: auto;
   z-index: 40;
-  min-width: 10.5rem;
+  min-width: 11.875rem;
   padding: 0.3rem;
   border-radius: var(--radius);
   border: 1px solid var(--line);
@@ -777,9 +794,14 @@ body.is-datetime-scrubbing .task-form-duration input {
   box-shadow: var(--shadow);
 }
 
+.task-new-menu-dropdown-fixed {
+  z-index: 75;
+}
+
 .task-new-menu-dropdown .calendar-menu-item {
   font-size: 0.78rem;
   padding: 0.38rem 0.55rem;
+  white-space: nowrap;
 }
 
 .task-new-commit {
@@ -1085,13 +1107,14 @@ body.is-datetime-scrubbing .task-form-duration input {
   min-width: 0;
 }
 
-.block-group-disabled {
+.block-group-disabled .power-toggle,
+.block-group-disabled .block-group-collapsed-toggle {
   opacity: 0.52;
+  filter: grayscale(0.35);
 }
 
 .block-group-disabled .task-card,
-.block-group-disabled .stack-anchor-row,
-.block-group-disabled .block-group-collapsed-toggle {
+.block-group-disabled .stack-anchor-row {
   filter: grayscale(0.35);
 }
 
@@ -1158,10 +1181,6 @@ body.is-datetime-scrubbing .task-form-duration input {
 .block-group-collapsed-count {
   font-weight: 500;
   font-size: 0.85rem;
-}
-
-.block-group-collapsed-menu {
-  flex-shrink: 0;
 }
 
 .task-new-group {
@@ -1704,11 +1723,6 @@ body.is-task-reordering .task-sidebar {
   font-weight: 600;
 }
 
-.calendar-menu-item-struck {
-  text-decoration: line-through;
-  color: var(--ink-muted);
-}
-
 .group-color-menu-item {
   display: flex;
   align-items: center;
@@ -1729,10 +1743,6 @@ body.is-task-reordering .task-sidebar {
   border-radius: 6px;
   background: transparent;
   cursor: pointer;
-}
-
-.block-group-collapsed-menu {
-  flex-shrink: 0;
 }
 
 .calendar-menu-sep {
@@ -1821,24 +1831,36 @@ body.is-task-reordering .task-sidebar {
 }
 
 .calendar-shell .fc .fc-timegrid-event.task-event .fc-event-main-frame {
-  display: block;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: flex-start;
+  column-gap: 0.35em;
+  height: auto;
   overflow: hidden;
 }
 
 .calendar-shell .fc .fc-timegrid-event.task-event .fc-event-time {
-  display: inline;
+  flex: 0 0 calc(var(--task-event-time-ch, 6.5) * 1ch);
+  width: calc(var(--task-event-time-ch, 6.5) * 1ch);
   max-height: none;
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
 }
 
 .calendar-shell .fc .fc-timegrid-event.task-event .fc-event-title {
-  display: inline;
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
   white-space: normal;
   overflow: visible;
   text-overflow: unset;
   top: auto;
   bottom: auto;
   word-break: break-word;
+  text-align: left;
 }
 
 .calendar-shell .fc .fc-timegrid-event-short .fc-event-main {

@@ -6,6 +6,7 @@ import {
   defaultBlockLibrary,
   formatCalendarDay,
   formatCalendarRange,
+  formatDurationMinutes,
   groupEventColors,
   hasCommittedOnDay,
   loadCommittedDays,
@@ -256,6 +257,27 @@ describe('groupEventColors', () => {
   it('derives a darker border from hex group colors', () => {
     expect(groupEventColors('#336699').backgroundColor).toBe('#336699')
     expect(groupEventColors('#336699').borderColor).toBe('#25496e')
+  })
+})
+
+describe('formatDurationMinutes', () => {
+  it('formats sub-hour durations as minutes only', () => {
+    expect(formatDurationMinutes(0)).toBe('0m')
+    expect(formatDurationMinutes(45)).toBe('45m')
+  })
+
+  it('formats exact-hour durations without a minutes part', () => {
+    expect(formatDurationMinutes(60)).toBe('1h')
+    expect(formatDurationMinutes(180)).toBe('3h')
+  })
+
+  it('formats mixed hour and minute durations', () => {
+    expect(formatDurationMinutes(135)).toBe('2h 15m')
+  })
+
+  it('rounds and clamps to non-negative values', () => {
+    expect(formatDurationMinutes(59.6)).toBe('1h')
+    expect(formatDurationMinutes(-10)).toBe('0m')
   })
 })
 

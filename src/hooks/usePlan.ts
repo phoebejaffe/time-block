@@ -7,6 +7,7 @@ import {
   shiftAnchor,
   tasksFromCheckpoint,
   type BlockGroup,
+  type BlockGroupCheckpoint,
   type Plan,
   type StackAnchor,
   type Task,
@@ -76,6 +77,23 @@ export function usePlan() {
         const index = prev.groups.findIndex((g) => g.id === groupId)
         const groups = [...prev.groups]
         groups.splice(index + 1, 0, duplicate)
+        return { groups }
+      })
+    },
+    [updatePlan],
+  )
+
+  const moveGroup = useCallback(
+    (groupId: string, direction: 'up' | 'down') => {
+      updatePlan((prev) => {
+        const index = prev.groups.findIndex((g) => g.id === groupId)
+        if (index < 0) return prev
+        const target = direction === 'up' ? index - 1 : index + 1
+        if (target < 0 || target >= prev.groups.length) return prev
+        const groups = [...prev.groups]
+        const [moved] = groups.splice(index, 1)
+        if (!moved) return prev
+        groups.splice(target, 0, moved)
         return { groups }
       })
     },
@@ -287,6 +305,21 @@ export function usePlan() {
     [updatePlan],
   )
 
+  /** Directly set (or clear) a group's checkpoint, e.g. to undo a save/revert. */
+  const setCheckpoint = useCallback(
+    (groupId: string, checkpoint: BlockGroupCheckpoint | undefined) => {
+      updatePlan((prev) => ({
+        groups: mapGroup(prev.groups, groupId, (g) => {
+          if (checkpoint) return { ...g, checkpoint }
+          const next = { ...g }
+          delete next.checkpoint
+          return next
+        }),
+      }))
+    },
+    [updatePlan],
+  )
+
   const setGroupColor = useCallback(
     (groupId: string, color: string | undefined) => {
       const trimmed = color?.trim()
@@ -323,6 +356,7 @@ export function usePlan() {
     addGroup,
     removeGroup,
     duplicateGroup,
+    moveGroup,
     addTask,
     addTasks,
     updateTask,
@@ -339,6 +373,7 @@ export function usePlan() {
     setGroupColor,
     saveCheckpoint,
     revertToCheckpoint,
+    setCheckpoint,
     clear,
     replacePlan,
     findGroupForTask,

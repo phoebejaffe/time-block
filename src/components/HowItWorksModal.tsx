@@ -104,8 +104,8 @@ export function HowItWorksModal({ onClose }: HowItWorksModalProps) {
             collapses it in the sidebar. Turn it back on to expand the group again.
           </p>
           <p>
-            <strong>Group menu (···)</strong> — Save blocks, Restore blocks, Name
-            group, Delete from calendar, or Delete block group.
+            <strong>Group menu (···)</strong> — Set name, Save as default,
+            Delete blocks from calendar, or Delete block group.
           </p>
           <p>
             <strong>Add to calendar</strong> — the Add / Update button sends the

@@ -94,6 +94,9 @@ function durationClass(start: Date | string, end: Date | string): string[] {
   return []
 }
 
+/** Width for task-event time labels (≈ longest en-US 12h string, slightly tight). */
+const TASK_EVENT_TIME_CHARS = 6.5
+
 function formatTaskEventTime(date: Date): string {
   return new Intl.DateTimeFormat(undefined, {
     hour: 'numeric',
@@ -129,6 +132,7 @@ export function CalendarView({
   const mirrorNudgeMsRef = useRef(0)
   const dragOriginAnchorRef = useRef<StackAnchor | null>(null)
   const dragGroupIdRef = useRef<string | null>(null)
+  const dragTaskIdRef = useRef<string | null>(null)
   const pendingDeltaRef = useRef<number | null>(null)
   const dragFinalizedRef = useRef(false)
   /** Pinch started mid-drag — discard any pending stack move on drop. */
@@ -188,13 +192,14 @@ export function CalendarView({
   const [isOnToday, setIsOnToday] = useState(true)
   const [farFromTodayOrTomorrow, setFarFromTodayOrTomorrow] = useState(false)
 
-  const { handleEventDragStart, handleEventDragStop, cancelStackDrag } =
+  const { handleEventDragStart, handleEventDragStop, cancelStackDrag, syncStackDragTransforms } =
     useTaskStackDrag({
       shellRef,
       getVisual: () => ({
         deltaMs: pendingDeltaRef.current,
         mirrorNudgeMs: mirrorNudgeMsRef.current,
       }),
+      onDragFrame: () => syncTaskEventTimes(),
     })
 
   const { zoom, pinchingRef } = useCalendarZoom({
@@ -206,30 +211,30 @@ export function CalendarView({
       pendingDeltaRef.current = 0
       mirrorNudgeMsRef.current = 0
       cancelStackDrag()
-      syncTaskEventTimes(null)
+      syncTaskEventTimes()
       onStackShiftPreviewRef.current?.(null, null)
     },
   })
 
-  /** Keep task block labels and FC dates aligned with the resolved stack. */
-  function syncTaskEventTimes(
-    deltaMs: number | null,
-    previewGroupId: string | null = null,
-  ) {
+  /**
+   * Keep task block time labels aligned with the resolved stack. During a
+   * drag, calendar siblings move via DOM transform (not shifted `groups`), so
+   * apply the pending delta to labels for the dragged group.
+   */
+  function syncTaskEventTimes() {
     const shell = shellRef.current
     const resolvedByTaskId = resolvedTaskEventsRef.current
     if (!shell || resolvedByTaskId.length === 0) return
 
     const timesByTaskId = resolvedTaskEventMap(resolvedByTaskId)
+    const deltaMs = pendingDeltaRef.current
+    const previewGroupId = dragGroupIdRef.current
 
     shell.querySelectorAll<HTMLElement>(`.${TASK_STACK_CLASS}`).forEach((el) => {
-      const isMirror = el.classList.contains('fc-event-mirror')
       const elGroupId = el.dataset.groupId
-      if (previewGroupId != null && !isMirror && elGroupId !== previewGroupId) {
-        return
-      }
-
-      const taskId = el.dataset.taskId
+      const taskId =
+        el.dataset.taskId ??
+        (el.classList.contains('fc-event-mirror') ? dragTaskIdRef.current : null)
       if (!taskId) return
       const resolved = timesByTaskId.get(taskId)
       if (!resolved) return
@@ -244,16 +249,17 @@ export function CalendarView({
         previewGroupId != null &&
         deltaMs != null &&
         deltaMs !== 0 &&
-        (isMirror || elGroupId === previewGroupId)
+        elGroupId === previewGroupId
       const next = applyDelta ? startMs + deltaMs : startMs
-      timeEl.textContent = `${formatTaskEventTime(new Date(next))}\u00a0\u00a0`
+      timeEl.textContent = formatTaskEventTime(new Date(next))
     })
   }
 
   function publishPreview(deltaMs: number | null) {
     if (pendingDeltaRef.current === deltaMs) return
     pendingDeltaRef.current = deltaMs
-    syncTaskEventTimes(deltaMs, dragGroupIdRef.current)
+    syncStackDragTransforms()
+    syncTaskEventTimes()
     onStackShiftPreviewRef.current?.(dragGroupIdRef.current, deltaMs)
   }
 
@@ -272,13 +278,14 @@ export function CalendarView({
     dragSpanOriginRef.current = null
     mirrorNudgeMsRef.current = 0
     dragGroupIdRef.current = null
+    dragTaskIdRef.current = null
     discardDragRef.current = false
 
     if (!discard && origin && groupId && deltaMs != null && deltaMs !== 0) {
       // Leave preview times in place until FC remounts with the commit.
       onAnchorCommitRef.current(groupId, shiftAnchor(origin, deltaMs))
     } else {
-      syncTaskEventTimes(null, groupId)
+      syncTaskEventTimes()
       onStackShiftPreviewRef.current?.(null, null)
     }
   }
@@ -286,6 +293,7 @@ export function CalendarView({
   function handleDragStart(arg: Parameters<typeof handleEventDragStart>[0]) {
     if (pinchingRef.current) return
     const groupId = arg.event.extendedProps.groupId as string | undefined
+    const taskId = arg.event.extendedProps.taskId as string | undefined
     const group = groups.find((g) => g.id === groupId)
     dragFinalizedRef.current = false
     discardDragRef.current = false
@@ -294,6 +302,7 @@ export function CalendarView({
     mirrorNudgeMsRef.current = 0
     dragOriginAnchorRef.current = group?.anchor ?? null
     dragGroupIdRef.current = groupId ?? null
+    dragTaskIdRef.current = taskId ?? null
     pendingDeltaRef.current = null
     handleEventDragStart(arg)
   }
@@ -471,7 +480,7 @@ export function CalendarView({
     }
 
     const frame = requestAnimationFrame(() => {
-      syncTaskEventTimes(null)
+      syncTaskEventTimes()
     })
     return () => cancelAnimationFrame(frame)
   }, [resolvedTaskEvents])
@@ -564,7 +573,7 @@ export function CalendarView({
     return (
       <div className="fc-event-main-frame">
         {timeText ? (
-          <div className="fc-event-time">{timeText}&nbsp;&nbsp;</div>
+          <div className="fc-event-time">{timeText}</div>
         ) : null}
         <div className="fc-event-title">{arg.event.title}</div>
       </div>
@@ -572,7 +581,13 @@ export function CalendarView({
   }
 
   return (
-    <div className="calendar-shell" ref={shellRef}>
+    <div
+      className="calendar-shell"
+      ref={shellRef}
+      style={{
+        ['--task-event-time-ch' as string]: String(TASK_EVENT_TIME_CHARS),
+      }}
+    >
       <CalendarToolbar
         title={title}
         isOnToday={isOnToday}

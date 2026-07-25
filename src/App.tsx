@@ -69,7 +69,7 @@ export default function App() {
     [plan.plan.groups, viewDate],
   )
 
-  /** Sidebar + calendar preview: view-day anchors, stack drag, and live task edits. */
+  /** Sidebar + task-edit preview (includes live stack drag). */
   const previewGroups = useMemo(() => {
     let groups = viewDayGroups
     if (stackDragPreview) {
@@ -84,6 +84,12 @@ export default function App() {
     }
     return applyTaskEditPreview(groups, taskEditPreview)
   }, [viewDayGroups, stackDragPreview, taskEditPreview])
+
+  /** Calendar omits stack-drag anchor shift — siblings move via DOM transform. */
+  const calendarGroups = useMemo(
+    () => applyTaskEditPreview(viewDayGroups, taskEditPreview),
+    [viewDayGroups, taskEditPreview],
+  )
 
   const handleTaskEditPreview = useCallback((preview: TaskEditPreview | null) => {
     setTaskEditPreview((prev) => {
@@ -160,11 +166,6 @@ export default function App() {
     })
   }
 
-  function handleReplaceTasks(groupId: string, tasks: Task[]) {
-    plan.replaceTasks(groupId, tasks)
-    clear()
-  }
-
   function handleDeleteGroup(groupId: string) {
     if (plan.plan.groups.length <= 1) {
       show('info', 'Keep at least one block group.')
@@ -187,6 +188,11 @@ export default function App() {
     clear()
   }
 
+  function handleMoveGroup(groupId: string, direction: 'up' | 'down') {
+    plan.moveGroup(groupId, direction)
+    clear()
+  }
+
   function handleSaveCheckpoint(groupId: string) {
     const group = plan.plan.groups.find((g) => g.id === groupId)
     if (!group) return
@@ -198,14 +204,35 @@ export default function App() {
     ) {
       return
     }
+    const previousCheckpoint = group.checkpoint
     plan.saveCheckpoint(groupId)
-    show('info', 'Saved as default blocks.')
+
+    show('info', 'Saved as default blocks.', {
+      actionLabel: 'Undo',
+      progressMs: 5_000,
+      onAction: () => {
+        plan.setCheckpoint(groupId, previousCheckpoint)
+        clear()
+      },
+    })
   }
 
   function handleRevertToCheckpoint(groupId: string) {
+    const group = plan.plan.groups.find((g) => g.id === groupId)
+    const previousTasks = group?.tasks
+    if (!previousTasks) return
+
     plan.revertToCheckpoint(groupId)
     handleEditingIdChange(null)
-    clear()
+
+    show('info', 'Reverted to default blocks.', {
+      actionLabel: 'Undo',
+      progressMs: 5_000,
+      onAction: () => {
+        plan.replaceTasks(groupId, previousTasks)
+        clear()
+      },
+    })
   }
 
   /** Returns true when the commit modal should close (full success). */
@@ -420,9 +447,9 @@ export default function App() {
               setStackDragPreview(null)
               plan.setAnchor(groupId, next)
             }}
-            onReplaceTasks={handleReplaceTasks}
             onDeleteGroup={handleDeleteGroup}
             onDuplicateGroup={handleDuplicateGroup}
+            onMoveGroup={handleMoveGroup}
             onSaveCheckpoint={handleSaveCheckpoint}
             onRevertToCheckpoint={handleRevertToCheckpoint}
             onAddGroup={handleAddGroup}
@@ -438,10 +465,7 @@ export default function App() {
             signedIn={session.signedIn}
             onSignIn={() => void handleSignIn()}
             onSignOut={handleSignOut}
-            savedLists={userData.savedLists}
             targetCalendarId={userData.targetCalendarId}
-            onSaveList={userData.saveList}
-            onDeleteList={userData.deleteList}
             onTargetCalendarChange={userData.setTargetCalendarId}
             pushedEvents={userData.pushedEvents}
             pushSnapshots={userData.pushSnapshots}
@@ -465,7 +489,7 @@ export default function App() {
               calendars={calendars.calendars}
               visibleCalendarIds={calendars.visibleIds}
               onToggleCalendar={calendars.toggleCalendar}
-              groups={previewGroups}
+              groups={calendarGroups}
               onDatesSet={handleDatesSet}
               onAnchorCommit={(groupId, next) => {
                 setStackDragPreview(null)

@@ -11,20 +11,19 @@ import type { GoogleCalendar } from '../lib/calendarApi'
 import type {
   BlockGroup,
   BlockLibrary,
-  SavedTaskList,
   StackAnchor,
   Task,
 } from '../lib/tasks'
 import {
   blockLibraryKey,
   DEFAULT_GROUP_COLOR,
+  formatDurationMinutes,
   fromLocalTimeValue,
   isGroupEnabled,
   isTaskEmpty,
   localDateKey,
   resolveSavedBlocksFromKeys,
   resolveStack,
-  tasksFromSavedList,
   tasksMatchCheckpoint,
   toLocalTimeValue,
 } from '../lib/tasks'
@@ -51,7 +50,7 @@ const ANCHOR_SCRUB_PX = 25
 const ANCHOR_SCRUB_ACTIVATE_PX = 8
 
 type AnchorField = 'hour' | 'minute'
-type ModalKind = 'save' | 'restore' | 'commit' | 'name'
+type ModalKind = 'commit' | 'name'
 
 function readSelectionStart(input: HTMLInputElement): number | null {
   try {
@@ -78,9 +77,9 @@ type TaskSidebarProps = {
   onRemove: (groupId: string, id: string) => void
   onReorder: (groupId: string, fromIndex: number, toIndex: number) => void
   onAnchorChange: (groupId: string, anchor: StackAnchor) => void
-  onReplaceTasks: (groupId: string, tasks: Task[]) => void
   onDeleteGroup: (groupId: string) => void
   onDuplicateGroup: (groupId: string) => void
+  onMoveGroup: (groupId: string, direction: 'up' | 'down') => void
   onSaveCheckpoint: (groupId: string) => void
   onRevertToCheckpoint: (groupId: string) => void
   onAddGroup: () => void
@@ -103,10 +102,7 @@ type TaskSidebarProps = {
   onSignIn?: () => void
   onSignOut?: () => void
   /** Cross-device data — owned and synced by the caller (see useUserData). */
-  savedLists: SavedTaskList[]
   targetCalendarId: string
-  onSaveList: (name: string, tasks: Task[], replaceId?: string) => SavedTaskList
-  onDeleteList: (id: string) => void
   onTargetCalendarChange: (id: string) => void
   pushedEvents: PushedEvent[]
   pushSnapshots: PushSnapshot[]
@@ -124,9 +120,9 @@ export function TaskSidebar({
   onRemove,
   onReorder,
   onAnchorChange,
-  onReplaceTasks,
   onDeleteGroup,
   onDuplicateGroup,
+  onMoveGroup,
   onSaveCheckpoint,
   onRevertToCheckpoint,
   onAddGroup,
@@ -142,32 +138,17 @@ export function TaskSidebar({
   signedIn,
   onSignIn,
   onSignOut,
-  savedLists,
   targetCalendarId,
-  onSaveList,
-  onDeleteList,
   onTargetCalendarChange,
   pushedEvents,
   pushSnapshots,
   blockLibrary,
   onReplaceBlockLibrary,
 }: TaskSidebarProps) {
-  const [saveName, setSaveName] = useState('')
   const [groupNameInput, setGroupNameInput] = useState('')
-  const [selectedSavedId, setSelectedSavedId] = useState('')
   const [modal, setModal] = useState<ModalKind | null>(null)
   const [modalGroupId, setModalGroupId] = useState<string | null>(null)
   const [addingGroupId, setAddingGroupId] = useState<string | null>(null)
-
-  // Keep the restore-modal selection valid as saved lists change (locally
-  // or from a remote sync pull) — pick a fallback if the selected one is gone.
-  useEffect(() => {
-    if (selectedSavedId && !savedLists.some((l) => l.id === selectedSavedId)) {
-      setSelectedSavedId(savedLists[0]?.id ?? '')
-    } else if (!selectedSavedId && savedLists[0]) {
-      setSelectedSavedId(savedLists[0].id)
-    }
-  }, [savedLists, selectedSavedId])
 
   const modalGroup = groups.find((g) => g.id === modalGroupId) ?? null
   const unnamedGroupLabels = useMemo(() => {
@@ -222,32 +203,6 @@ export function TaskSidebar({
     if (ok) closeModal()
   }
 
-  function handleSaveList(e: React.FormEvent) {
-    e.preventDefault()
-    if (!modalGroup || modalGroup.tasks.length === 0) return
-    const saved = onSaveList(saveName || 'Morning', modalGroup.tasks)
-    setSaveName(saved.name)
-    setSelectedSavedId(saved.id)
-    closeModal()
-  }
-
-  function handleLoadList() {
-    if (!modalGroupId) return
-    const list =
-      savedLists.find((l) => l.id === selectedSavedId) || savedLists[0]
-    if (!list) return
-    onReplaceTasks(modalGroupId, tasksFromSavedList(list))
-    setSaveName(list.name)
-    setSelectedSavedId(list.id)
-    closeModal()
-  }
-
-  function handleDeleteList() {
-    const id = selectedSavedId || savedLists[0]?.id
-    if (!id) return
-    onDeleteList(id)
-  }
-
   function handleNameGroup(e: React.FormEvent) {
     e.preventDefault()
     if (!modalGroupId) return
@@ -296,12 +251,14 @@ export function TaskSidebar({
       </div>
 
       <div className="block-groups">
-        {groups.map((group) => (
+        {groups.map((group, index) => (
           <BlockGroupPanel
             key={group.id}
             group={group}
             collapsedLabel={group.name?.trim() || unnamedGroupLabels.get(group.id) || 'Unnamed'}
             canDeleteGroup={canDeleteGroup}
+            canMoveGroupUp={index > 0}
+            canMoveGroupDown={index < groups.length - 1}
             busy={busy}
             pushedEvents={pushedEvents}
             pushSnapshots={pushSnapshots}
@@ -328,11 +285,11 @@ export function TaskSidebar({
             onAnchorChange={(anchor) => onAnchorChange(group.id, anchor)}
             onDeleteGroup={() => onDeleteGroup(group.id)}
             onDuplicateGroup={() => onDuplicateGroup(group.id)}
+            onMoveGroupUp={() => onMoveGroup(group.id, 'up')}
+            onMoveGroupDown={() => onMoveGroup(group.id, 'down')}
             onSaveCheckpoint={() => onSaveCheckpoint(group.id)}
             onRevertToCheckpoint={() => onRevertToCheckpoint(group.id)}
             onSetGroupEnabled={(enabled) => onSetGroupEnabled(group.id, enabled)}
-            onOpenSave={() => openModal('save', group.id)}
-            onOpenRestore={() => openModal('restore', group.id)}
             onOpenCommit={() => openModal('commit', group.id)}
             onDeleteFromCalendar={() => onDeleteFromCalendar(group.id)}
             onTaskEditPreview={onTaskEditPreview}
@@ -351,88 +308,6 @@ export function TaskSidebar({
           New group +
         </button>
       </div>
-
-      {modal === 'save' && modalGroup && (
-        <Modal title="Save block list" onClose={closeModal}>
-          <form className="modal-form" onSubmit={handleSaveList}>
-            <label>
-              <span>Name</span>
-              <input
-                value={saveName}
-                onChange={(e) => setSaveName(e.target.value)}
-                placeholder="Morning"
-                autoFocus
-              />
-            </label>
-            <div className="modal-actions">
-              <button
-                type="button"
-                className="btn btn-ghost btn-sm"
-                onClick={closeModal}
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="btn btn-primary btn-sm"
-                disabled={busy || modalGroup.tasks.length === 0}
-              >
-                Save
-              </button>
-            </div>
-          </form>
-        </Modal>
-      )}
-
-      {modal === 'restore' && (
-        <Modal title="Restore block list" onClose={closeModal}>
-          <div className="modal-form">
-            {savedLists.length === 0 ? (
-              <p className="muted">No saved lists yet.</p>
-            ) : (
-              <label>
-                <span>Saved list</span>
-                <select
-                  value={selectedSavedId || savedLists[0]?.id || ''}
-                  onChange={(e) => setSelectedSavedId(e.target.value)}
-                  autoFocus
-                >
-                  {savedLists.map((list) => (
-                    <option key={list.id} value={list.id}>
-                      {list.name} ({list.tasks.length})
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-            <div className="modal-actions">
-              <button
-                type="button"
-                className="btn btn-ghost btn-sm"
-                onClick={handleDeleteList}
-                disabled={busy || savedLists.length === 0}
-              >
-                Delete
-              </button>
-              <button
-                type="button"
-                className="btn btn-ghost btn-sm"
-                onClick={closeModal}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary btn-sm"
-                onClick={handleLoadList}
-                disabled={busy || savedLists.length === 0}
-              >
-                Restore
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
 
       {modal === 'commit' && modalGroup && (
         <Modal
@@ -532,6 +407,8 @@ type BlockGroupPanelProps = {
   group: BlockGroup
   collapsedLabel: string
   canDeleteGroup: boolean
+  canMoveGroupUp: boolean
+  canMoveGroupDown: boolean
   busy?: boolean
   pushedEvents: PushedEvent[]
   pushSnapshots: PushSnapshot[]
@@ -548,11 +425,11 @@ type BlockGroupPanelProps = {
   onAnchorChange: (anchor: StackAnchor) => void
   onDeleteGroup: () => void
   onDuplicateGroup: () => void
+  onMoveGroupUp: () => void
+  onMoveGroupDown: () => void
   onSaveCheckpoint: () => void
   onRevertToCheckpoint: () => void
   onSetGroupEnabled: (enabled: boolean) => void
-  onOpenSave: () => void
-  onOpenRestore: () => void
   onOpenCommit: () => void
   onDeleteFromCalendar: () => void
   onTaskEditPreview: (preview: {
@@ -595,6 +472,8 @@ function BlockGroupPanel({
   group,
   collapsedLabel,
   canDeleteGroup,
+  canMoveGroupUp,
+  canMoveGroupDown,
   busy,
   pushedEvents,
   pushSnapshots,
@@ -611,11 +490,11 @@ function BlockGroupPanel({
   onAnchorChange,
   onDeleteGroup,
   onDuplicateGroup,
+  onMoveGroupUp,
+  onMoveGroupDown,
   onSaveCheckpoint,
   onRevertToCheckpoint,
   onSetGroupEnabled,
-  onOpenSave,
-  onOpenRestore,
   onOpenCommit,
   onDeleteFromCalendar,
   onTaskEditPreview,
@@ -633,19 +512,21 @@ function BlockGroupPanel({
   const [librarySelection, setLibrarySelection] = useState<string[]>([])
   const [libraryDropdownStyle, setLibraryDropdownStyle] =
     useState<CSSProperties>({})
-  const [collapsedMenuOpen, setCollapsedMenuOpen] = useState(false)
 
   const listRef = useRef<HTMLUListElement>(null)
   const listMenuRef = useRef<HTMLDivElement>(null)
+  const listMenuTriggerRef = useRef<HTMLButtonElement>(null)
+  const listMenuDropdownRef = useRef<HTMLDivElement>(null)
   const libraryMenuRef = useRef<HTMLDivElement>(null)
   const libraryTriggerRef = useRef<HTMLButtonElement>(null)
   const libraryDropdownRef = useRef<HTMLDivElement>(null)
-  const collapsedMenuRef = useRef<HTMLDivElement>(null)
   const dropLineIndexRef = useRef<number | null>(null)
   const suppressClickRef = useRef(false)
   const tasksLengthRef = useRef(tasks.length)
   const anchorRef = useRef(anchor)
   anchorRef.current = anchor
+  const [listMenuDropdownStyle, setListMenuDropdownStyle] =
+    useState<CSSProperties>({})
 
   useEffect(() => {
     dropLineIndexRef.current = dropLineIndex
@@ -670,9 +551,13 @@ function BlockGroupPanel({
     function handlePointerDown(event: MouseEvent) {
       const target = event.target
       if (!(target instanceof Node)) return
-      if (listMenuRef.current && !listMenuRef.current.contains(target)) {
-        setListMenuOpen(false)
+      if (
+        listMenuRef.current?.contains(target) ||
+        listMenuDropdownRef.current?.contains(target)
+      ) {
+        return
       }
+      setListMenuOpen(false)
     }
 
     function handleKeyDown(event: KeyboardEvent) {
@@ -771,29 +656,6 @@ function BlockGroupPanel({
     }
   }, [libraryOpen, librarySelection, blockLibrary])
 
-  useEffect(() => {
-    if (!collapsedMenuOpen) return
-
-    function handlePointerDown(event: MouseEvent) {
-      const target = event.target
-      if (!(target instanceof Node)) return
-      if (collapsedMenuRef.current && !collapsedMenuRef.current.contains(target)) {
-        setCollapsedMenuOpen(false)
-      }
-    }
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') setCollapsedMenuOpen(false)
-    }
-
-    document.addEventListener('mousedown', handlePointerDown)
-    document.addEventListener('keydown', handleKeyDown)
-    return () => {
-      document.removeEventListener('mousedown', handlePointerDown)
-      document.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [collapsedMenuOpen])
-
   const colorPickerValue =
     group.color && /^#[0-9a-fA-F]{6}$/.test(group.color)
       ? group.color
@@ -855,6 +717,196 @@ function BlockGroupPanel({
   const hasCheckpointDrift = Boolean(
     group.checkpoint && !tasksMatchCheckpoint(tasks, group.checkpoint),
   )
+  const showSaveCheckpoint = !group.checkpoint || hasCheckpointDrift
+  const totalDurationMinutes = tasks.reduce(
+    (sum, task) => sum + task.durationMinutes,
+    0,
+  )
+
+  useLayoutEffect(() => {
+    if (!listMenuOpen) {
+      setListMenuDropdownStyle({})
+      return
+    }
+
+    function repositionListMenuDropdown() {
+      const trigger = listMenuTriggerRef.current
+      const dropdown = listMenuDropdownRef.current
+      if (!trigger || !dropdown) return
+
+      const gap = 6
+      const pad = 8
+      const triggerRect = trigger.getBoundingClientRect()
+      const dropdownHeight = dropdown.offsetHeight
+      const dropdownWidth = dropdown.offsetWidth
+      const spaceBelow = window.innerHeight - triggerRect.bottom - pad
+      const spaceAbove = triggerRect.top - pad
+      const openUp =
+        spaceAbove >= dropdownHeight + gap &&
+        (spaceAbove >= spaceBelow || spaceBelow < dropdownHeight + gap)
+      let top = openUp
+        ? triggerRect.top - dropdownHeight - gap
+        : triggerRect.bottom + gap
+      top = Math.max(pad, Math.min(top, window.innerHeight - pad - dropdownHeight))
+      let left = triggerRect.right - dropdownWidth
+      left = Math.max(pad, Math.min(left, window.innerWidth - dropdownWidth - pad))
+
+      setListMenuDropdownStyle({
+        position: 'fixed',
+        top,
+        left,
+        minWidth: dropdownWidth,
+        zIndex: 75,
+        bottom: 'auto',
+        right: 'auto',
+      })
+    }
+
+    repositionListMenuDropdown()
+    const sidebar = listMenuRef.current?.closest('.task-sidebar')
+    window.addEventListener('resize', repositionListMenuDropdown)
+    sidebar?.addEventListener('scroll', repositionListMenuDropdown, {
+      passive: true,
+    })
+    return () => {
+      window.removeEventListener('resize', repositionListMenuDropdown)
+      sidebar?.removeEventListener('scroll', repositionListMenuDropdown)
+    }
+  }, [
+    listMenuOpen,
+    enabled,
+    canMoveGroupUp,
+    canMoveGroupDown,
+    showSaveCheckpoint,
+    group.checkpoint,
+    tasks.length,
+    onCalendar,
+    canDeleteGroup,
+  ])
+
+  function renderListMenuDropdown() {
+    if (!listMenuOpen) return null
+
+    return createPortal(
+      <div
+        ref={listMenuDropdownRef}
+        className="task-new-menu-dropdown task-new-menu-dropdown-fixed"
+        style={listMenuDropdownStyle}
+        role="menu"
+      >
+        {enabled && showSaveCheckpoint && (
+          <>
+            <button
+              type="button"
+              role="menuitem"
+              className="calendar-menu-item"
+              disabled={busy || tasks.length === 0}
+              onClick={() => {
+                setListMenuOpen(false)
+                onSaveCheckpoint()
+              }}
+            >
+              {group.checkpoint ? 'Update default blocks' : 'Save as default'}
+            </button>
+            <div className="calendar-menu-sep" role="separator" />
+          </>
+        )}
+        <button
+          type="button"
+          role="menuitem"
+          className="calendar-menu-item"
+          disabled={busy}
+          onClick={() => {
+            setListMenuOpen(false)
+            onOpenName()
+          }}
+        >
+          Set name
+        </button>
+        {enabled && (
+          <GroupColorMenuItem
+            value={colorPickerValue}
+            disabled={busy}
+            onChange={handleColorChange}
+          />
+        )}
+        {(canMoveGroupUp || canMoveGroupDown) && (
+          <>
+            <div className="calendar-menu-sep" role="separator" />
+            {canMoveGroupUp && (
+              <button
+                type="button"
+                role="menuitem"
+                className="calendar-menu-item"
+                disabled={busy}
+                onClick={() => {
+                  setListMenuOpen(false)
+                  onMoveGroupUp()
+                }}
+              >
+                Move up
+              </button>
+            )}
+            {canMoveGroupDown && (
+              <button
+                type="button"
+                role="menuitem"
+                className="calendar-menu-item"
+                disabled={busy}
+                onClick={() => {
+                  setListMenuOpen(false)
+                  onMoveGroupDown()
+                }}
+              >
+                Move down
+              </button>
+            )}
+          </>
+        )}
+        <button
+          type="button"
+          role="menuitem"
+          className="calendar-menu-item"
+          disabled={busy}
+          onClick={() => {
+            setListMenuOpen(false)
+            onDuplicateGroup()
+          }}
+        >
+          Duplicate group
+        </button>
+        <div className="calendar-menu-sep" role="separator" />
+        {enabled && (
+          <button
+            type="button"
+            role="menuitem"
+            className="calendar-menu-item"
+            disabled={busy || !onCalendar}
+            onClick={() => {
+              setListMenuOpen(false)
+              void onDeleteFromCalendar()
+            }}
+          >
+            Delete blocks from calendar
+          </button>
+        )}
+        <button
+          type="button"
+          role="menuitem"
+          className="calendar-menu-item"
+          disabled={busy || !canDeleteGroup}
+          onClick={() => {
+            setListMenuOpen(false)
+            onDeleteGroup()
+          }}
+        >
+          Delete block group
+        </button>
+      </div>,
+      document.body,
+    )
+  }
+
   function beginAnchorScrub(e: React.PointerEvent<HTMLInputElement>) {
     if (e.button !== 0) return
     const input = e.currentTarget
@@ -1073,41 +1125,30 @@ function BlockGroupPanel({
             disabled={busy}
             aria-expanded={false}
           >
-            <span className="block-group-collapsed-title">{collapsedLabel}</span>
+            <span className="block-group-collapsed-title">
+              {collapsedLabel}
+              {totalDurationMinutes > 0 && (
+                <span className="block-group-collapsed-count">
+                  {' '}
+                  ({formatDurationMinutes(totalDurationMinutes)})
+                </span>
+              )}
+            </span>
           </button>
-          <div className="task-new-menu block-group-collapsed-menu" ref={collapsedMenuRef}>
+          <div className="task-new-menu" ref={listMenuRef}>
             <button
               type="button"
+              ref={listMenuTriggerRef}
               className="btn btn-text btn-icon task-new-menu-btn"
-              aria-label="Collapsed group options"
-              aria-expanded={collapsedMenuOpen}
+              aria-label="Block group options"
+              aria-expanded={listMenuOpen}
               aria-haspopup="true"
               disabled={busy}
-              onClick={() => setCollapsedMenuOpen((open) => !open)}
+              onClick={() => setListMenuOpen((open) => !open)}
             >
               ···
             </button>
-            {collapsedMenuOpen && (
-              <div className="task-new-menu-dropdown" role="menu">
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="calendar-menu-item"
-                  disabled={busy}
-                  onClick={() => {
-                    setCollapsedMenuOpen(false)
-                    onOpenName()
-                  }}
-                >
-                  Name group
-                </button>
-                <GroupColorMenuItem
-                  value={colorPickerValue}
-                  disabled={busy}
-                  onChange={handleColorChange}
-                />
-              </div>
-            )}
+            {renderListMenuDropdown()}
           </div>
         </div>
       </section>
@@ -1117,12 +1158,15 @@ function BlockGroupPanel({
   return (
     <section className="block-group">
       <div className="stack-anchor">
-        <div className="stack-anchor-row">
+        <div className="stack-anchor-name-row">
           <PowerToggle
             enabled={enabled}
             disabled={busy}
             onChange={handlePowerChange}
           />
+          <span className="stack-anchor-name">{collapsedLabel}</span>
+        </div>
+        <div className="stack-anchor-row">
           <div className="segmented segmented-sm segmented-single">
             <button
               type="button"
@@ -1430,6 +1474,7 @@ function BlockGroupPanel({
                 <div className="task-new-menu" ref={listMenuRef}>
                   <button
                     type="button"
+                    ref={listMenuTriggerRef}
                     className="btn btn-text btn-icon task-new-menu-btn"
                     aria-label="Block group options"
                     aria-expanded={listMenuOpen}
@@ -1439,101 +1484,7 @@ function BlockGroupPanel({
                   >
                     ···
                   </button>
-                  {listMenuOpen && (
-                    <div className="task-new-menu-dropdown" role="menu">
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className="calendar-menu-item calendar-menu-item-struck"
-                        disabled={busy || tasks.length === 0}
-                        onClick={() => {
-                          setListMenuOpen(false)
-                          onOpenSave()
-                        }}
-                      >
-                        Save blocks
-                      </button>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className="calendar-menu-item calendar-menu-item-struck"
-                        disabled={busy}
-                        onClick={() => {
-                          setListMenuOpen(false)
-                          onOpenRestore()
-                        }}
-                      >
-                        Restore blocks
-                      </button>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className="calendar-menu-item"
-                        disabled={busy}
-                        onClick={() => {
-                          setListMenuOpen(false)
-                          onOpenName()
-                        }}
-                      >
-                        Name group
-                      </button>
-                      <GroupColorMenuItem
-                        value={colorPickerValue}
-                        disabled={busy}
-                        onChange={handleColorChange}
-                      />
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className="calendar-menu-item"
-                        disabled={busy}
-                        onClick={() => {
-                          setListMenuOpen(false)
-                          onDuplicateGroup()
-                        }}
-                      >
-                        Duplicate group
-                      </button>
-                      <div className="calendar-menu-sep" role="separator" />
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className="calendar-menu-item"
-                        disabled={busy || tasks.length === 0}
-                        onClick={() => {
-                          setListMenuOpen(false)
-                          onSaveCheckpoint()
-                        }}
-                      >
-                        {group.checkpoint ? 'Update default blocks' : 'Save as default'}
-                      </button>
-                      <div className="calendar-menu-sep" role="separator" />
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className="calendar-menu-item"
-                        disabled={busy || !onCalendar}
-                        onClick={() => {
-                          setListMenuOpen(false)
-                          void onDeleteFromCalendar()
-                        }}
-                      >
-                        Delete from calendar
-                      </button>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className="calendar-menu-item"
-                        disabled={busy || !canDeleteGroup}
-                        onClick={() => {
-                          setListMenuOpen(false)
-                          onDeleteGroup()
-                        }}
-                      >
-                        Delete block group
-                      </button>
-                    </div>
-                  )}
+                  {renderListMenuDropdown()}
                 </div>
                 {hasCheckpointDrift && (
                   <button

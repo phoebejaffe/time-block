@@ -89,6 +89,16 @@ export function isTaskEmpty(task: Pick<Task, 'empty'>): boolean {
   return task.empty === true
 }
 
+/** Format a duration in minutes as "Xh Ym" / "Xh" / "Xm" for compact display. */
+export function formatDurationMinutes(minutes: number): string {
+  const total = Math.max(0, Math.round(minutes))
+  const hours = Math.floor(total / 60)
+  const mins = total % 60
+  if (hours === 0) return `${mins}m`
+  if (mins === 0) return `${hours}h`
+  return `${hours}h ${mins}m`
+}
+
 /** Overlay in-progress sidebar edits onto groups for live calendar preview. */
 export function applyTaskEditPreview(
   groups: BlockGroup[],
@@ -551,97 +561,6 @@ export function markCommittedDay(dateKey: string): void {
   const days = new Set(loadCommittedDays())
   days.add(dateKey)
   localStorage.setItem(COMMITTED_DAYS_KEY, JSON.stringify([...days]))
-}
-
-export type SavedTaskList = {
-  id: string
-  name: string
-  tasks: Array<{ title: string; durationMinutes: number; empty?: boolean }>
-  updatedAt: string
-}
-
-export function normalizeSavedLists(raw: unknown): SavedTaskList[] {
-  if (!Array.isArray(raw)) return []
-  return raw
-    .filter(
-      (item): item is SavedTaskList =>
-        Boolean(item) &&
-        typeof item === 'object' &&
-        typeof (item as SavedTaskList).id === 'string' &&
-        typeof (item as SavedTaskList).name === 'string' &&
-        Array.isArray((item as SavedTaskList).tasks),
-    )
-    .map((item) => ({
-      id: item.id,
-      name: item.name,
-      updatedAt: item.updatedAt || new Date().toISOString(),
-      tasks: item.tasks
-        .filter(
-          (t) =>
-            t &&
-            typeof t.title === 'string' &&
-            typeof t.durationMinutes === 'number',
-        )
-        .map((t) => ({
-          title: t.title,
-          durationMinutes: Math.max(1, Math.round(t.durationMinutes) || 1),
-          ...((t as { empty?: boolean }).empty === true ? { empty: true } : {}),
-        })),
-    }))
-    .sort((a, b) => a.name.localeCompare(b.name))
-}
-
-/**
- * Save (or overwrite) a list within an existing collection, returning both
- * the updated collection and the saved entry. Pure — callers own where the
- * collection itself is persisted (cross-device sync, in this app's case).
- */
-export function upsertSavedList(
-  lists: SavedTaskList[],
-  name: string,
-  tasks: Task[],
-  replaceId?: string,
-): { lists: SavedTaskList[]; saved: SavedTaskList } {
-  const trimmed = name.trim() || 'Untitled list'
-  const payload: SavedTaskList = {
-    id: replaceId || newId(),
-    name: trimmed,
-    updatedAt: new Date().toISOString(),
-    tasks: tasks.map((t) => ({
-      title: t.title,
-      durationMinutes: t.durationMinutes,
-      ...(t.empty ? { empty: true } : {}),
-    })),
-  }
-
-  const existingIdx = lists.findIndex(
-    (l) => l.id === payload.id || l.name.toLowerCase() === trimmed.toLowerCase(),
-  )
-  if (existingIdx >= 0) {
-    payload.id = lists[existingIdx]!.id
-    const next = [...lists]
-    next[existingIdx] = payload
-    return { lists: next, saved: payload }
-  }
-  const next = [...lists, payload].sort((a, b) => a.name.localeCompare(b.name))
-  return { lists: next, saved: payload }
-}
-
-export function removeSavedList(
-  lists: SavedTaskList[],
-  id: string,
-): SavedTaskList[] {
-  return lists.filter((l) => l.id !== id)
-}
-
-export function tasksFromSavedList(list: SavedTaskList): Task[] {
-  return list.tasks.map((t) =>
-    createTask({
-      title: t.title,
-      durationMinutes: t.durationMinutes,
-      ...(t.empty ? { empty: true } : {}),
-    }),
-  )
 }
 
 export type SavedBlock = {

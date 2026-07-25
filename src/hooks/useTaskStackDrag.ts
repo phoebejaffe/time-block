@@ -29,23 +29,29 @@ type StackDragState = {
 type UseTaskStackDragOptions = {
   shellRef: RefObject<HTMLElement | null>
   getVisual: () => StackDragVisual
+  /** Called each drag frame after mirror/sibling transforms (e.g. refresh labels). */
+  onDragFrame?: () => void
 }
 
 /**
- * Visually moves one group's task stack while dragging a block in that group.
+ * Nudges FullCalendar's drag mirror and applies an immediate translateY to
+ * sibling blocks while dragging.
  *
- * FullCalendar hides the source and shows a snapped `.fc-event-mirror` for the
- * dragged block. Siblings (and a constant mirror nudge) are positioned from the
- * same grab-corrected deltaMs so preview matches commit and scroll can't desync.
+ * Siblings can't wait on a React re-render (that lags a frame behind FC's
+ * mirror). CalendarView keeps unshifted `groups` during drag and moves
+ * siblings here; App's `previewGroups` still shifts the anchor for sidebar.
  */
 export function useTaskStackDrag({
   shellRef,
   getVisual,
+  onDragFrame,
 }: UseTaskStackDragOptions) {
   const stackDragRef = useRef<StackDragState | null>(null)
   const stackDragRafRef = useRef<number | null>(null)
   const getVisualRef = useRef(getVisual)
   getVisualRef.current = getVisual
+  const onDragFrameRef = useRef(onDragFrame)
+  onDragFrameRef.current = onDragFrame
 
   function clearStackDragTransforms() {
     shellRef.current
@@ -100,6 +106,8 @@ export function useTaskStackDrag({
 
     const mirror = shell.querySelector<HTMLElement>('.fc-event-mirror')
     if (mirror) {
+      mirror.dataset.groupId = drag.groupId
+      mirror.dataset.taskId = drag.taskId
       // FC forces mirrors to left:0/right:0 (full column). Restore the
       // subject's horizontal size so it matches the rest of the stack.
       const mirrorHarness = mirror.closest<HTMLElement>(
@@ -116,6 +124,7 @@ export function useTaskStackDrag({
     shell.querySelectorAll<HTMLElement>(`.${TASK_STACK_CLASS}`).forEach((el) => {
       if (el.classList.contains('fc-event-mirror')) return
       if (el.dataset.groupId !== drag.groupId) return
+      if (el.dataset.taskId === drag.taskId) return
       el.style.transform = siblingTransform
     })
   }
@@ -153,6 +162,7 @@ export function useTaskStackDrag({
     const tick = () => {
       if (!stackDragRef.current) return
       syncStackDragTransforms()
+      onDragFrameRef.current?.()
       stackDragRafRef.current = requestAnimationFrame(tick)
     }
     stackDragRafRef.current = requestAnimationFrame(tick)
@@ -167,6 +177,7 @@ export function useTaskStackDrag({
     handleEventDragStart,
     handleEventDragStop,
     cancelStackDrag,
+    syncStackDragTransforms,
   }
 }
 
