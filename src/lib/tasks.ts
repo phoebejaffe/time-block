@@ -11,6 +11,15 @@ export type Task = {
   empty?: boolean
 }
 
+/**
+ * A snapshot of a group's blocks, saved as the "default" version the user
+ * can always get back to after making one-off adjustments.
+ */
+export type BlockGroupCheckpoint = {
+  tasks: Array<{ title: string; durationMinutes: number; empty?: boolean }>
+  savedAt: string
+}
+
 /** One independent stack of blocks with its own start/end anchor. */
 export type BlockGroup = {
   id: string
@@ -22,6 +31,8 @@ export type BlockGroup = {
   color?: string
   /** When false, the group is collapsed in the sidebar and omitted from the calendar. */
   enabled?: boolean
+  /** Saved "default" block list this group can be reverted to. */
+  checkpoint?: BlockGroupCheckpoint
 }
 
 export const DEFAULT_GROUP_COLOR = '#0f6e56'
@@ -128,6 +139,48 @@ export function isGroupEnabled(group: BlockGroup): boolean {
   return group.enabled !== false
 }
 
+/** Snapshot the given tasks into a checkpoint (titles/durations/order only). */
+export function createCheckpoint(tasks: Task[]): BlockGroupCheckpoint {
+  return {
+    tasks: tasks.map((t) => ({
+      title: t.title,
+      durationMinutes: t.durationMinutes,
+      ...(t.empty ? { empty: true } : {}),
+    })),
+    savedAt: new Date().toISOString(),
+  }
+}
+
+/** Rebuild a fresh task list (new ids) from a saved checkpoint. */
+export function tasksFromCheckpoint(checkpoint: BlockGroupCheckpoint): Task[] {
+  return checkpoint.tasks.map((t) =>
+    createTask({
+      title: t.title,
+      durationMinutes: t.durationMinutes,
+      ...(t.empty ? { empty: true } : {}),
+    }),
+  )
+}
+
+/**
+ * True when the group's current blocks match its checkpoint — compares
+ * title, duration, order, and empty-state only (not ids or timing).
+ */
+export function tasksMatchCheckpoint(
+  tasks: Task[],
+  checkpoint: BlockGroupCheckpoint,
+): boolean {
+  if (tasks.length !== checkpoint.tasks.length) return false
+  return tasks.every((task, i) => {
+    const saved = checkpoint.tasks[i]!
+    return (
+      task.title === saved.title &&
+      task.durationMinutes === saved.durationMinutes &&
+      isTaskEmpty(task) === (saved.empty === true)
+    )
+  })
+}
+
 function pad(n: number): string {
   return String(n).padStart(2, '0')
 }
@@ -186,6 +239,31 @@ function normalizeAnchor(raw: unknown): StackAnchor {
   return defaultAnchor()
 }
 
+function normalizeCheckpoint(raw: unknown): BlockGroupCheckpoint | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const c = raw as Partial<BlockGroupCheckpoint>
+  if (!Array.isArray(c.tasks)) return undefined
+  const tasks = c.tasks
+    .filter(
+      (t): t is { title: string; durationMinutes: number; empty?: boolean } =>
+        Boolean(t) &&
+        typeof t === 'object' &&
+        typeof (t as { title?: unknown }).title === 'string' &&
+        typeof (t as { durationMinutes?: unknown }).durationMinutes ===
+          'number',
+    )
+    .map((t) => ({
+      title: t.title,
+      durationMinutes: Math.max(1, Math.round(t.durationMinutes) || 1),
+      ...(t.empty === true ? { empty: true } : {}),
+    }))
+  return {
+    tasks,
+    savedAt:
+      typeof c.savedAt === 'string' ? c.savedAt : new Date().toISOString(),
+  }
+}
+
 function normalizeGroup(raw: unknown): BlockGroup | null {
   if (!raw || typeof raw !== 'object') return null
   const g = raw as Partial<BlockGroup>
@@ -199,6 +277,7 @@ function normalizeGroup(raw: unknown): BlockGroup | null {
     g.enabled === false || (legacyHidden && g.enabled !== true)
       ? false
       : undefined
+  const checkpoint = normalizeCheckpoint(g.checkpoint)
   return {
     id: g.id,
     tasks: normalizeTasks(g.tasks),
@@ -206,6 +285,7 @@ function normalizeGroup(raw: unknown): BlockGroup | null {
     ...(name ? { name } : {}),
     ...(color ? { color } : {}),
     ...(enabled === false ? { enabled: false } : {}),
+    ...(checkpoint ? { checkpoint } : {}),
   }
 }
 

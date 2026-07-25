@@ -725,7 +725,7 @@ body.is-datetime-scrubbing .task-form-duration input {
 
 .task-new-trigger {
   display: block;
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
   margin: 0;
   padding: 0;
@@ -737,6 +737,7 @@ body.is-datetime-scrubbing .task-form-duration input {
   font-weight: 500;
   line-height: 1.2;
   text-align: left;
+  white-space: nowrap;
   cursor: pointer;
 }
 
@@ -793,10 +794,26 @@ body.is-datetime-scrubbing .task-form-duration input {
   flex-shrink: 0;
 }
 
+.task-new-revert {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.7rem;
+  padding: 0.18rem 0.45rem;
+  flex-shrink: 0;
+}
+
+.task-new-revert svg {
+  flex-shrink: 0;
+}
+
 .task-new-triggers {
   display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: baseline;
+  row-gap: 0.15rem;
+  column-gap: 0.85rem;
   flex: 1;
   min-width: 0;
 }
@@ -808,7 +825,6 @@ body.is-datetime-scrubbing .task-form-duration input {
 
 .task-new-library {
   position: relative;
-  width: 100%;
 }
 
 .block-library-picker {

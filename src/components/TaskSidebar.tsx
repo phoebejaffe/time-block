@@ -25,6 +25,7 @@ import {
   resolveSavedBlocksFromKeys,
   resolveStack,
   tasksFromSavedList,
+  tasksMatchCheckpoint,
   toLocalTimeValue,
 } from '../lib/tasks'
 import {
@@ -80,6 +81,8 @@ type TaskSidebarProps = {
   onReplaceTasks: (groupId: string, tasks: Task[]) => void
   onDeleteGroup: (groupId: string) => void
   onDuplicateGroup: (groupId: string) => void
+  onSaveCheckpoint: (groupId: string) => void
+  onRevertToCheckpoint: (groupId: string) => void
   onAddGroup: () => void
   onSetGroupEnabled: (groupId: string, enabled: boolean) => void
   onSetGroupName: (groupId: string, name: string) => void
@@ -124,6 +127,8 @@ export function TaskSidebar({
   onReplaceTasks,
   onDeleteGroup,
   onDuplicateGroup,
+  onSaveCheckpoint,
+  onRevertToCheckpoint,
   onAddGroup,
   onSetGroupEnabled,
   onSetGroupName,
@@ -323,6 +328,8 @@ export function TaskSidebar({
             onAnchorChange={(anchor) => onAnchorChange(group.id, anchor)}
             onDeleteGroup={() => onDeleteGroup(group.id)}
             onDuplicateGroup={() => onDuplicateGroup(group.id)}
+            onSaveCheckpoint={() => onSaveCheckpoint(group.id)}
+            onRevertToCheckpoint={() => onRevertToCheckpoint(group.id)}
             onSetGroupEnabled={(enabled) => onSetGroupEnabled(group.id, enabled)}
             onOpenSave={() => openModal('save', group.id)}
             onOpenRestore={() => openModal('restore', group.id)}
@@ -541,6 +548,8 @@ type BlockGroupPanelProps = {
   onAnchorChange: (anchor: StackAnchor) => void
   onDeleteGroup: () => void
   onDuplicateGroup: () => void
+  onSaveCheckpoint: () => void
+  onRevertToCheckpoint: () => void
   onSetGroupEnabled: (enabled: boolean) => void
   onOpenSave: () => void
   onOpenRestore: () => void
@@ -602,6 +611,8 @@ function BlockGroupPanel({
   onAnchorChange,
   onDeleteGroup,
   onDuplicateGroup,
+  onSaveCheckpoint,
+  onRevertToCheckpoint,
   onSetGroupEnabled,
   onOpenSave,
   onOpenRestore,
@@ -841,6 +852,9 @@ function BlockGroupPanel({
         resolved.filter((task) => !isTaskEmpty(task)),
       ),
     )
+  const hasCheckpointDrift = Boolean(
+    group.checkpoint && !tasksMatchCheckpoint(tasks, group.checkpoint),
+  )
   function beginAnchorScrub(e: React.PointerEvent<HTMLInputElement>) {
     if (e.button !== 0) return
     const input = e.currentTarget
@@ -1409,7 +1423,7 @@ function BlockGroupPanel({
                   onClick={onStartAdd}
                   disabled={busy}
                 >
-                  New custom block +
+                  Custom +
                 </button>
               </div>
               <div className="task-new-list-actions">
@@ -1485,6 +1499,19 @@ function BlockGroupPanel({
                         type="button"
                         role="menuitem"
                         className="calendar-menu-item"
+                        disabled={busy || tasks.length === 0}
+                        onClick={() => {
+                          setListMenuOpen(false)
+                          onSaveCheckpoint()
+                        }}
+                      >
+                        {group.checkpoint ? 'Update default blocks' : 'Save as default'}
+                      </button>
+                      <div className="calendar-menu-sep" role="separator" />
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="calendar-menu-item"
                         disabled={busy || !onCalendar}
                         onClick={() => {
                           setListMenuOpen(false)
@@ -1508,6 +1535,18 @@ function BlockGroupPanel({
                     </div>
                   )}
                 </div>
+                {hasCheckpointDrift && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm task-new-revert"
+                    disabled={busy}
+                    title="Restore this group's default blocks"
+                    onClick={() => onRevertToCheckpoint()}
+                  >
+                    <RevertIcon />
+                    Revert
+                  </button>
+                )}
                 <button
                   type="button"
                   className={[
@@ -1639,6 +1678,25 @@ function CalendarIcon() {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
+    </svg>
+  )
+}
+
+function RevertIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M1 4v6h6" />
+      <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
     </svg>
   )
 }

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   anchorOnDay,
   blockLibraryKey,
+  createCheckpoint,
   defaultBlockLibrary,
   formatCalendarDay,
   formatCalendarRange,
@@ -17,7 +18,9 @@ import {
   resolveStack,
   shortWeekday,
   startOfLocalDay,
+  tasksFromCheckpoint,
   tasksFromSavedBlocks,
+  tasksMatchCheckpoint,
   type BlockLibrary,
   type StackAnchor,
   type Task,
@@ -316,6 +319,53 @@ describe('block library', () => {
   it('normalizes invalid library payloads to empty categories', () => {
     expect(normalizeBlockLibrary(null).categories).toEqual([])
     expect(normalizeBlockLibrary({ categories: 'nope' }).categories).toEqual([])
+  })
+})
+
+describe('checkpoints', () => {
+  it('matches when tasks are identical in title/duration/order/empty', () => {
+    const checkpoint = createCheckpoint(tasks)
+    expect(tasksMatchCheckpoint(tasks, checkpoint)).toBe(true)
+  })
+
+  it('detects drift from an edited title, duration, reorder, or added/removed task', () => {
+    const checkpoint = createCheckpoint(tasks)
+    expect(
+      tasksMatchCheckpoint(
+        [{ ...tasks[0]!, title: 'Changed' }, tasks[1]!, tasks[2]!],
+        checkpoint,
+      ),
+    ).toBe(false)
+    expect(
+      tasksMatchCheckpoint(
+        [{ ...tasks[0]!, durationMinutes: 99 }, tasks[1]!, tasks[2]!],
+        checkpoint,
+      ),
+    ).toBe(false)
+    expect(
+      tasksMatchCheckpoint([tasks[1]!, tasks[0]!, tasks[2]!], checkpoint),
+    ).toBe(false)
+    expect(tasksMatchCheckpoint([tasks[0]!, tasks[1]!], checkpoint)).toBe(
+      false,
+    )
+  })
+
+  it('ignores ids when comparing, so re-saving after a revert still matches', () => {
+    const checkpoint = createCheckpoint(tasks)
+    const rebuilt = tasksFromCheckpoint(checkpoint)
+    expect(rebuilt.map((t) => t.id)).not.toEqual(tasks.map((t) => t.id))
+    expect(tasksMatchCheckpoint(rebuilt, checkpoint)).toBe(true)
+  })
+
+  it('preserves empty blocks through save and restore', () => {
+    const withEmpty: Task[] = [
+      { id: 'a', title: 'A', durationMinutes: 30 },
+      { id: 'gap', title: 'Gap', durationMinutes: 15, empty: true },
+    ]
+    const checkpoint = createCheckpoint(withEmpty)
+    const rebuilt = tasksFromCheckpoint(checkpoint)
+    expect(rebuilt[1]!.empty).toBe(true)
+    expect(tasksMatchCheckpoint(withEmpty, checkpoint)).toBe(true)
   })
 })
 

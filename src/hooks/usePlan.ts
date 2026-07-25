@@ -1,9 +1,11 @@
 import { useCallback, useState } from 'react'
 import {
   createBlockGroup,
+  createCheckpoint,
   createTask,
   defaultPlan,
   shiftAnchor,
+  tasksFromCheckpoint,
   type BlockGroup,
   type Plan,
   type StackAnchor,
@@ -260,6 +262,31 @@ export function usePlan() {
     [updatePlan],
   )
 
+  /** Save the group's current blocks as the checkpoint to revert to later. */
+  const saveCheckpoint = useCallback(
+    (groupId: string) => {
+      updatePlan((prev) => ({
+        groups: mapGroup(prev.groups, groupId, (g) => ({
+          ...g,
+          checkpoint: createCheckpoint(g.tasks),
+        })),
+      }))
+    },
+    [updatePlan],
+  )
+
+  /** Replace the group's blocks with its saved checkpoint, if any. */
+  const revertToCheckpoint = useCallback(
+    (groupId: string) => {
+      updatePlan((prev) => ({
+        groups: mapGroup(prev.groups, groupId, (g) =>
+          g.checkpoint ? { ...g, tasks: tasksFromCheckpoint(g.checkpoint) } : g,
+        ),
+      }))
+    },
+    [updatePlan],
+  )
+
   const setGroupColor = useCallback(
     (groupId: string, color: string | undefined) => {
       const trimmed = color?.trim()
@@ -310,6 +337,8 @@ export function usePlan() {
     setGroupEnabled,
     setGroupName,
     setGroupColor,
+    saveCheckpoint,
+    revertToCheckpoint,
     clear,
     replacePlan,
     findGroupForTask,

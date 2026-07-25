@@ -187,6 +187,27 @@ export default function App() {
     clear()
   }
 
+  function handleSaveCheckpoint(groupId: string) {
+    const group = plan.plan.groups.find((g) => g.id === groupId)
+    if (!group) return
+    if (
+      group.checkpoint &&
+      !window.confirm(
+        'Overwrite your saved default blocks with the current list?',
+      )
+    ) {
+      return
+    }
+    plan.saveCheckpoint(groupId)
+    show('info', 'Saved as default blocks.')
+  }
+
+  function handleRevertToCheckpoint(groupId: string) {
+    plan.revertToCheckpoint(groupId)
+    handleEditingIdChange(null)
+    clear()
+  }
+
   /** Returns true when the commit modal should close (full success). */
   async function handleCommit(
     groupId: string,
@@ -402,6 +423,8 @@ export default function App() {
             onReplaceTasks={handleReplaceTasks}
             onDeleteGroup={handleDeleteGroup}
             onDuplicateGroup={handleDuplicateGroup}
+            onSaveCheckpoint={handleSaveCheckpoint}
+            onRevertToCheckpoint={handleRevertToCheckpoint}
             onAddGroup={handleAddGroup}
             onSetGroupEnabled={plan.setGroupEnabled}
             onSetGroupName={plan.setGroupName}
