@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { HowItWorksModal } from './HowItWorksModal'
 import { BlockLibraryModal } from './BlockLibraryModal'
 import type { BlockLibrary } from '../lib/tasks'
+import type { NoticeOptions } from '../lib/notice'
 
 type SettingsMenuProps = {
   busy?: boolean
@@ -10,6 +11,8 @@ type SettingsMenuProps = {
   onSignOut?: () => void
   blockLibrary: BlockLibrary
   onReplaceBlockLibrary: (library: BlockLibrary) => void
+  onShowNotice?: (text: string, options?: NoticeOptions) => void
+  onClearNotice?: () => void
 }
 
 function formatBuildTime(iso: string): string {
@@ -30,6 +33,8 @@ export function SettingsMenu({
   onSignOut,
   blockLibrary,
   onReplaceBlockLibrary,
+  onShowNotice,
+  onClearNotice,
 }: SettingsMenuProps) {
   const [open, setOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
@@ -145,6 +150,8 @@ export function SettingsMenu({
           library={blockLibrary}
           onChange={onReplaceBlockLibrary}
           onClose={() => setLibraryOpen(false)}
+          onShowNotice={onShowNotice}
+          onClearNotice={onClearNotice}
         />
       )}
     </div>

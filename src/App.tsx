@@ -471,6 +471,8 @@ export default function App() {
             pushSnapshots={userData.pushSnapshots}
             blockLibrary={userData.blockLibrary}
             onReplaceBlockLibrary={userData.replaceBlockLibrary}
+            onShowNotice={(text, options) => show('info', text, options)}
+            onClearNotice={clear}
           />
 
           <SidebarResizeHandle

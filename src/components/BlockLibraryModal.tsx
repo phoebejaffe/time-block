@@ -10,6 +10,8 @@ import {
   touchBlockLibrary,
 } from '../lib/tasks'
 import { TaskFieldsForm } from './TaskFieldsForm'
+import { EditIcon, TrashIcon } from './icons'
+import type { NoticeOptions } from '../lib/notice'
 
 const DRAG_ACTIVATE_PX = 5
 
@@ -17,14 +19,22 @@ type BlockLibraryModalProps = {
   library: BlockLibrary
   onChange: (library: BlockLibrary) => void
   onClose: () => void
+  onShowNotice?: (text: string, options?: NoticeOptions) => void
+  onClearNotice?: () => void
 }
 
 export function BlockLibraryModal({
   library,
   onChange,
   onClose,
+  onShowNotice,
+  onClearNotice,
 }: BlockLibraryModalProps) {
   const [editingKey, setEditingKey] = useState<string | null>(null)
+  const [renamingCategoryId, setRenamingCategoryId] = useState<string | null>(
+    null,
+  )
+  const [categoryNameInput, setCategoryNameInput] = useState('')
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -57,7 +67,10 @@ export function BlockLibraryModal({
   }
 
   function removeCategory(categoryId: string) {
-    if (!window.confirm('Delete this category and all its blocks?')) return
+    const category = library.categories.find((c) => c.id === categoryId)
+    if (!category) return
+    const label = category.name.trim() || 'Untitled'
+    if (!window.confirm(`Delete "${label}" and all its blocks?`)) return
     commitCategories(library.categories.filter((c) => c.id !== categoryId))
     if (editingKey?.startsWith(`${categoryId}:`)) setEditingKey(null)
   }
@@ -103,11 +116,32 @@ export function BlockLibraryModal({
   }
 
   function removeBlock(categoryId: string, blockId: string) {
+    const category = library.categories.find((c) => c.id === categoryId)
+    const index = category?.blocks.findIndex((b) => b.id === blockId) ?? -1
+    const block = index >= 0 ? category!.blocks[index] : undefined
+    if (!block) return
+
     updateCategory(categoryId, (c) => ({
       ...c,
       blocks: c.blocks.filter((b) => b.id !== blockId),
     }))
     if (editingKey === `${categoryId}:${blockId}`) setEditingKey(null)
+
+    const label = isTaskEmpty(block)
+      ? 'Empty block'
+      : `"${block.title.trim() || 'Untitled'}"`
+    onShowNotice?.(`${label} deleted`, {
+      actionLabel: 'Undo',
+      progressMs: 5_000,
+      onAction: () => {
+        updateCategory(categoryId, (c) => {
+          const blocks = [...c.blocks]
+          blocks.splice(index, 0, block)
+          return { ...c, blocks }
+        })
+        onClearNotice?.()
+      },
+    })
   }
 
   function reorderBlocks(
@@ -132,6 +166,32 @@ export function BlockLibraryModal({
       return { ...c, blocks }
     })
   }
+
+  function openRenameCategory(categoryId: string) {
+    const category = library.categories.find((c) => c.id === categoryId)
+    if (!category) return
+    setRenamingCategoryId(categoryId)
+    setCategoryNameInput(category.name)
+  }
+
+  function closeRenameCategory() {
+    setRenamingCategoryId(null)
+    setCategoryNameInput('')
+  }
+
+  function handleRenameCategory(e: React.FormEvent) {
+    e.preventDefault()
+    if (!renamingCategoryId) return
+    updateCategory(renamingCategoryId, (c) => ({
+      ...c,
+      name: categoryNameInput.trim() || 'Untitled',
+    }))
+    closeRenameCategory()
+  }
+
+  const renamingCategory = renamingCategoryId
+    ? library.categories.find((c) => c.id === renamingCategoryId)
+    : null
 
   return (
     <div
@@ -169,13 +229,11 @@ export function BlockLibraryModal({
               <CategorySection
                 key={category.id}
                 category={category}
-                categoryIndex={categoryIndex}
-                categoryCount={library.categories.length}
                 editingKey={editingKey}
                 onEditingKeyChange={setEditingKey}
-                onRename={(name) =>
-                  updateCategory(category.id, (c) => ({ ...c, name }))
-                }
+                canMoveUp={categoryIndex > 0}
+                canMoveDown={categoryIndex < library.categories.length - 1}
+                onOpenRename={() => openRenameCategory(category.id)}
                 onMoveUp={() => moveCategory(category.id, -1)}
                 onMoveDown={() => moveCategory(category.id, 1)}
                 onDelete={() => removeCategory(category.id)}
@@ -193,30 +251,76 @@ export function BlockLibraryModal({
 
           <button
             type="button"
-            className="btn btn-ghost btn-sm block-library-add-category"
+            className="task-new-trigger block-library-add-category"
             onClick={addCategory}
           >
             New category +
           </button>
         </div>
-
-        <div className="modal-actions">
-          <button type="button" className="btn btn-primary btn-sm" onClick={onClose}>
-            Done
-          </button>
-        </div>
       </div>
+
+      {renamingCategory && (
+        <div
+          className="modal-backdrop modal-backdrop-nested"
+          role="presentation"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) closeRenameCategory()
+          }}
+        >
+          <div
+            className="modal-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Rename category"
+          >
+            <div className="modal-header">
+              <h2>Rename category</h2>
+              <button
+                type="button"
+                className="icon-btn"
+                aria-label="Close"
+                onClick={closeRenameCategory}
+              >
+                ×
+              </button>
+            </div>
+            <form className="modal-form" onSubmit={handleRenameCategory}>
+              <label>
+                <span>Name</span>
+                <input
+                  value={categoryNameInput}
+                  onChange={(e) => setCategoryNameInput(e.target.value)}
+                  placeholder="Morning"
+                  autoFocus
+                />
+              </label>
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={closeRenameCategory}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary btn-sm">
+                  Save
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
 function CategorySection({
   category,
-  categoryIndex,
-  categoryCount,
   editingKey,
   onEditingKeyChange,
-  onRename,
+  canMoveUp,
+  canMoveDown,
+  onOpenRename,
   onMoveUp,
   onMoveDown,
   onDelete,
@@ -226,11 +330,11 @@ function CategorySection({
   onReorderBlocks,
 }: {
   category: BlockLibraryCategory
-  categoryIndex: number
-  categoryCount: number
   editingKey: string | null
   onEditingKeyChange: (key: string | null) => void
-  onRename: (name: string) => void
+  canMoveUp: boolean
+  canMoveDown: boolean
+  onOpenRename: () => void
   onMoveUp: () => void
   onMoveDown: () => void
   onDelete: () => void
@@ -239,16 +343,35 @@ function CategorySection({
   onRemoveBlock: (blockId: string) => void
   onReorderBlocks: (fromIndex: number, toIndex: number) => void
 }) {
-  const [name, setName] = useState(category.name)
   const listRef = useRef<HTMLUListElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const [menuOpen, setMenuOpen] = useState(false)
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   const [dropLineIndex, setDropLineIndex] = useState<number | null>(null)
   const dropLineIndexRef = useRef<number | null>(null)
   const suppressClickRef = useRef(false)
 
   useEffect(() => {
-    setName(category.name)
-  }, [category.name])
+    if (!menuOpen) return
+
+    function handlePointerDown(event: MouseEvent) {
+      const target = event.target
+      if (!(target instanceof Node)) return
+      if (menuRef.current?.contains(target)) return
+      setMenuOpen(false)
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') setMenuOpen(false)
+    }
+
+    document.addEventListener('mousedown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [menuOpen])
 
   function blockKey(blockId: string) {
     return `${category.id}:${blockId}`
@@ -360,39 +483,78 @@ function CategorySection({
   return (
     <section className="block-library-category">
       <div className="block-library-category-header">
-        <input
-          className="block-library-category-name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onBlur={() => onRename(name.trim() || 'Untitled')}
-          aria-label="Category name"
-        />
-        <div className="block-library-category-actions">
+        <h3 className="block-library-category-title">
+          {category.name.trim() || 'Untitled'}
+        </h3>
+        <div className="task-new-menu block-library-category-menu" ref={menuRef}>
           <button
             type="button"
-            className="btn btn-ghost btn-sm"
-            disabled={categoryIndex === 0}
-            onClick={onMoveUp}
-            aria-label="Move category up"
+            className="btn btn-text btn-icon task-new-menu-btn"
+            aria-label="Category options"
+            aria-expanded={menuOpen}
+            aria-haspopup="true"
+            onClick={() => setMenuOpen((open) => !open)}
           >
-            ↑
+            ···
           </button>
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm"
-            disabled={categoryIndex >= categoryCount - 1}
-            onClick={onMoveDown}
-            aria-label="Move category down"
-          >
-            ↓
-          </button>
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm"
-            onClick={onDelete}
-          >
-            Delete
-          </button>
+          {menuOpen && (
+            <div className="task-new-menu-dropdown" role="menu">
+              <button
+                type="button"
+                role="menuitem"
+                className="calendar-menu-item"
+                onClick={() => {
+                  setMenuOpen(false)
+                  onOpenRename()
+                }}
+              >
+                Rename
+              </button>
+              {(canMoveUp || canMoveDown) && (
+                <>
+                  <div className="calendar-menu-sep" role="separator" />
+                  {canMoveUp && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="calendar-menu-item"
+                      onClick={() => {
+                        setMenuOpen(false)
+                        onMoveUp()
+                      }}
+                    >
+                      Move up
+                    </button>
+                  )}
+                  {canMoveDown && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="calendar-menu-item"
+                      onClick={() => {
+                        setMenuOpen(false)
+                        onMoveDown()
+                      }}
+                    >
+                      Move down
+                    </button>
+                  )}
+                </>
+              )}
+              <div className="calendar-menu-sep" role="separator" />
+              <button
+                type="button"
+                role="menuitem"
+                className="calendar-menu-item"
+                onClick={() => {
+                  setMenuOpen(false)
+                  onDelete()
+                }}
+              >
+                Delete category
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -461,7 +623,7 @@ function CategorySection({
                         onEditingKeyChange(key)
                       }}
                     >
-                      ✎
+                      <EditIcon />
                     </button>
                     <button
                       type="button"
@@ -473,7 +635,7 @@ function CategorySection({
                         onRemoveBlock(block.id)
                       }}
                     >
-                      ×
+                      <TrashIcon />
                     </button>
                   </div>
                 </>
@@ -485,7 +647,7 @@ function CategorySection({
 
       <button
         type="button"
-        className="btn btn-ghost btn-sm block-library-add-block"
+        className="task-new-trigger block-library-add-block"
         onClick={onAddBlock}
       >
         New block +
