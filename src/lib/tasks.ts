@@ -627,7 +627,7 @@ export function createSavedBlock(
 ): SavedBlock {
   return {
     id: input.id ?? newId(),
-    title: input.title.trim() || 'Untitled',
+    title: input.title.trim(),
     durationMinutes: Math.max(1, Math.round(input.durationMinutes) || 1),
     ...(input.empty ? { empty: true } : {}),
   }

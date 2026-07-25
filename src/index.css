@@ -1790,6 +1790,10 @@ body.is-task-reordering .task-sidebar {
   vertical-align: middle;
 }
 
+.calendar-shell .fc .fc-timegrid-now-indicator-line {
+  border-top-width: 2px;
+}
+
 .calendar-shell .fc {
   height: 100%;
   font-family: var(--font-body);

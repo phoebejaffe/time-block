@@ -115,6 +115,14 @@ export function BlockLibraryModal({
     }))
   }
 
+  function discardBlock(categoryId: string, blockId: string) {
+    updateCategory(categoryId, (c) => ({
+      ...c,
+      blocks: c.blocks.filter((b) => b.id !== blockId),
+    }))
+    if (editingKey === `${categoryId}:${blockId}`) setEditingKey(null)
+  }
+
   function removeBlock(categoryId: string, blockId: string) {
     const category = library.categories.find((c) => c.id === categoryId)
     const index = category?.blocks.findIndex((b) => b.id === blockId) ?? -1
@@ -242,6 +250,7 @@ export function BlockLibraryModal({
                   updateBlock(category.id, blockId, next)
                 }
                 onRemoveBlock={(blockId) => removeBlock(category.id, blockId)}
+                onDiscardBlock={(blockId) => discardBlock(category.id, blockId)}
                 onReorderBlocks={(from, to) =>
                   reorderBlocks(category.id, from, to)
                 }
@@ -327,6 +336,7 @@ function CategorySection({
   onAddBlock,
   onUpdateBlock,
   onRemoveBlock,
+  onDiscardBlock,
   onReorderBlocks,
 }: {
   category: BlockLibraryCategory
@@ -341,6 +351,7 @@ function CategorySection({
   onAddBlock: () => void
   onUpdateBlock: (blockId: string, next: Omit<SavedBlock, 'id'>) => void
   onRemoveBlock: (blockId: string) => void
+  onDiscardBlock: (blockId: string) => void
   onReorderBlocks: (fromIndex: number, toIndex: number) => void
 }) {
   const listRef = useRef<HTMLUListElement>(null)
@@ -588,7 +599,10 @@ function CategorySection({
                   initialDuration={block.durationMinutes}
                   initialEmpty={block.empty === true}
                   submitLabel="Save"
-                  onCancel={() => onEditingKeyChange(null)}
+                  onCancel={() => {
+                    if (!block.title.trim()) onDiscardBlock(block.id)
+                    else onEditingKeyChange(null)
+                  }}
                   onSubmit={(next) => {
                     onUpdateBlock(block.id, next)
                     onEditingKeyChange(null)
@@ -605,7 +619,9 @@ function CategorySection({
                     }}
                   >
                     <span className="task-title">
-                      <span className="task-title-text">{block.title}</span>
+                      <span className="task-title-text">
+                        {block.title.trim() || 'Untitled'}
+                      </span>
                       <span className="muted task-duration">
                         · {block.durationMinutes} min
                       </span>

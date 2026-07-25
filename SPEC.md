@@ -15,8 +15,9 @@ a title and a duration) in a sidebar. Each list ("block group") is anchored
 to a single time — either "this group **starts** at 9:00am" or "this group
 **ends** at 5:00pm" — and the app lays the blocks out sequentially,
 back-to-back, from that anchor. The user can drag the whole stack around on
-the calendar, reorder/edit/delete individual blocks, save/restore named
-block lists, maintain a personal library of reusable blocks, and — when
+the calendar, reorder/edit/delete individual blocks, reorder whole groups,
+save a group's blocks as a "default" checkpoint and revert back to it later,
+maintain a personal library of reusable blocks, and — when
 ready — push ("Add to calendar" / "Update") the resolved blocks as real
 events onto a chosen Google Calendar. The plan and all related settings sync
 in real time across devices via a cloud database (Firestore), keyed by the
@@ -65,9 +66,9 @@ components (a sidebar and a calendar view):
   user is editing). This is *not* persisted directly; it's the local
   editing buffer that gets mirrored to/from the cross-device store.
 - `useUserData` — owns everything that must sync across devices: the Plan
-  (via a callback into `usePlan`), saved block lists, the block library,
-  the chosen "target calendar" for pushing, and calendar-push history. Uses
-  a Firestore real-time listener plus a debounced writer.
+  (via a callback into `usePlan`), the block library, the chosen "target
+  calendar" for pushing, and calendar-push history. Uses a Firestore
+  real-time listener plus a debounced writer.
 - `useNotice` — small toast/snackbar state (success/error/info messages,
   optional "Undo" action button, optional auto-dismiss countdown).
 - `useSidebarWidth`, `useMobileSplit` — persist (to `localStorage`) and
@@ -79,10 +80,11 @@ components (a sidebar and a calendar view):
 
 Two data domains are kept deliberately separate:
 
-1. **Cross-device data** (synced via Firestore): the Plan (block groups and
-   their tasks/anchors), saved task lists, the block library, the chosen
-   target calendar id, and the history of what's been pushed to Google
-   Calendar (so the app can tell "Add" from "Update" and detect drift).
+1. **Cross-device data** (synced via Firestore): the Plan (block groups,
+   their tasks/anchors, and each group's optional saved checkpoint), the
+   block library, the chosen target calendar id, and the history of what's
+   been pushed to Google Calendar (so the app can tell "Add" from "Update"
+   and detect drift).
 2. **Device-local data** (kept in `localStorage`, never synced): whether the
    browser remembers the Google session, the sidebar width, and the
    mobile split percentage. A couple of legacy/local-only keys exist purely
@@ -98,16 +100,18 @@ type Task = {
   id: string               // uuid
   title: string
   durationMinutes: number  // integer >= 1
-  empty?: boolean          // true = "spacer": reserves time but is invisible
-                            // in the calendar/on Google Calendar
+  empty?: boolean          // true = "spacer": reserves time in the stack but
+                            // is never sent to Google Calendar
 }
 ```
 
 - Duration is always rounded to a positive integer minute count; the UI
   nudges it in 5-minute steps (arrow keys, or by "scrubbing" — see §7).
 - An "empty" task is a placeholder that still consumes time in the stack
-  layout (e.g. a deliberate gap) but is never rendered on the calendar and
-  is skipped/removed when syncing to Google Calendar.
+  layout (e.g. a deliberate gap). It's still rendered as an event on the
+  in-app calendar overlay — with desaturated/muted colors and a reduced
+  style in the sidebar row — so the gap is visible, but it is always
+  skipped/removed when syncing to Google Calendar (§4.8, §8.5).
 
 ### 4.2 StackAnchor
 
@@ -135,14 +139,17 @@ type BlockGroup = {
                             // in-app calendar overlay (its tasks are *not*
                             // deleted, and existing Google Calendar events
                             // pushed for it are untouched)
+  checkpoint?: BlockGroupCheckpoint  // saved "default" blocks; see §4.6
 }
 ```
 
 A "Plan" is `{ groups: BlockGroup[] }`. There is always at least one group;
-the UI never allows deleting the last remaining group. Groups are edited,
-reordered visually top-to-bottom in the sidebar, but are otherwise
-independent — each has its own anchor, its own enabled state, and its own
-push history.
+the UI never allows deleting the last remaining group. Groups are edited
+independently — each has its own anchor, its own enabled state, its own
+checkpoint, and its own push history — and can be reordered top-to-bottom in
+the sidebar via explicit "Move up"/"Move down" menu actions (there is no
+group drag-to-reorder; that's reserved for tasks within a group and blocks
+within a library category — see §7.8).
 
 ### 4.4 Resolving a stack (turning tasks into concrete times)
 
