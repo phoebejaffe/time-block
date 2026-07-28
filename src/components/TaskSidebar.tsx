@@ -38,7 +38,7 @@ import {
 } from '../lib/pushedEvents'
 import { SettingsMenu } from './SettingsMenu'
 import { TaskFieldsForm } from './TaskFieldsForm'
-import { EditIcon, TrashIcon } from './icons'
+import { BlockIcon, EditIcon, LibraryIcon, TrashIcon } from './icons'
 import type { NoticeOptions } from '../lib/notice'
 
 const timeFmt = new Intl.DateTimeFormat(undefined, {
@@ -1379,7 +1379,8 @@ function BlockGroupPanel({
                       setListMenuOpen(false)
                     }}
                   >
-                    New block +
+                    <LibraryIcon />
+                    <span className="task-new-trigger-label">Library block</span>
                   </button>
                   {libraryOpen &&
                     createPortal(
@@ -1474,7 +1475,8 @@ function BlockGroupPanel({
                   onClick={onStartAdd}
                   disabled={busy}
                 >
-                  Custom +
+                  <BlockIcon />
+                  <span className="task-new-trigger-label">Custom</span>
                 </button>
               </div>
               <div className="task-new-list-actions">

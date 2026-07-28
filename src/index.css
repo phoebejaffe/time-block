@@ -741,12 +741,15 @@ body.is-datetime-scrubbing .task-form-duration input {
 }
 
 .task-new-trigger {
-  display: block;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
   flex: 0 1 auto;
   min-width: 0;
   margin: 0;
-  padding: 0;
+  padding: 0.08rem 0.15rem;
   border: 0;
+  border-radius: 4px;
   background: transparent;
   color: var(--ink-muted);
   font: inherit;
@@ -756,6 +759,22 @@ body.is-datetime-scrubbing .task-form-duration input {
   text-align: left;
   white-space: nowrap;
   cursor: pointer;
+}
+
+.task-new-trigger:focus {
+  outline: none;
+}
+
+.task-new-trigger:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.task-new-trigger svg {
+  flex-shrink: 0;
+  display: block;
+  width: 0.95em;
+  height: 0.95em;
 }
 
 .task-new-list-actions {
@@ -841,8 +860,21 @@ body.is-datetime-scrubbing .task-form-duration input {
 }
 
 .task-new-trigger-secondary {
-  font-size: 0.76rem;
   opacity: 0.85;
+}
+
+.task-new-trigger-secondary svg {
+  width: 0.82em;
+  height: 0.82em;
+  transform: translateY(-0.08em);
+}
+
+.task-new-trigger-secondary .task-new-trigger-label {
+  transform: translateY(-1px);
+}
+
+.task-new-trigger-label {
+  line-height: 1.2;
 }
 
 .task-new-library {
