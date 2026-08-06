@@ -6,7 +6,11 @@ import {
   defaultBlockLibrary,
   formatCalendarDay,
   formatCalendarRange,
+  applyDurationSpinnerStep,
+  combineDurationMinutes,
   formatDurationMinutes,
+  splitDurationMinutes,
+  stepDurationMinutes,
   groupEventColors,
   hasCommittedOnDay,
   loadCommittedDays,
@@ -257,6 +261,45 @@ describe('groupEventColors', () => {
   it('derives a darker border from hex group colors', () => {
     expect(groupEventColors('#336699').backgroundColor).toBe('#336699')
     expect(groupEventColors('#336699').borderColor).toBe('#25496e')
+  })
+})
+
+describe('splitDurationMinutes', () => {
+  it('splits total minutes into hours and minutes', () => {
+    expect(splitDurationMinutes(135)).toEqual({ hours: 2, minutes: 15 })
+    expect(splitDurationMinutes(45)).toEqual({ hours: 0, minutes: 45 })
+    expect(splitDurationMinutes(60)).toEqual({ hours: 1, minutes: 0 })
+  })
+})
+
+describe('combineDurationMinutes', () => {
+  it('combines hours and minutes with a minimum of 1', () => {
+    expect(combineDurationMinutes(2, 15)).toBe(135)
+    expect(combineDurationMinutes(0, 0)).toBe(1)
+  })
+})
+
+describe('stepDurationMinutes', () => {
+  it('steps up to the next 5-minute mark', () => {
+    expect(stepDurationMinutes(30, 'up')).toBe(35)
+    expect(stepDurationMinutes(32, 'up')).toBe(35)
+  })
+
+  it('steps down to the previous 5-minute mark', () => {
+    expect(stepDurationMinutes(35, 'down')).toBe(30)
+    expect(stepDurationMinutes(32, 'down')).toBe(30)
+  })
+})
+
+describe('applyDurationSpinnerStep', () => {
+  it('corrects native +1 spinner clicks to the 5-minute grid', () => {
+    expect(applyDurationSpinnerStep(30, 31)).toBe(35)
+    expect(applyDurationSpinnerStep(32, 33)).toBe(35)
+    expect(applyDurationSpinnerStep(35, 34)).toBe(30)
+  })
+
+  it('preserves manually typed values', () => {
+    expect(applyDurationSpinnerStep(30, 47)).toBe(47)
   })
 })
 

@@ -1,8 +1,26 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { Task } from '../lib/tasks'
+import {
+  combineDurationMinutes,
+  splitDurationMinutes,
+  stepDurationMinutes,
+} from '../lib/tasks'
 
 const ANCHOR_SCRUB_PX = 25
 const ANCHOR_SCRUB_ACTIVATE_PX = 8
+
+function normalizeDurationFields(
+  hours: number | '',
+  minutes: number | '',
+): { hours: number; minutes: number } {
+  let hoursVal = hours === '' ? 0 : Math.max(0, Math.round(hours))
+  let minutesVal = minutes === '' ? 0 : Math.max(0, Math.round(minutes))
+  if (minutesVal >= 60) {
+    hoursVal += Math.floor(minutesVal / 60)
+    minutesVal = minutesVal % 60
+  }
+  return { hours: hoursVal, minutes: minutesVal }
+}
 
 export function TaskFieldsForm({
   initialTitle,
@@ -33,30 +51,30 @@ export function TaskFieldsForm({
   onSubmit: (task: Omit<Task, 'id'>) => void
   onCancel: () => void
 }) {
+  const initialSplit = splitDurationMinutes(initialDuration)
   const [title, setTitle] = useState(initialTitle)
-  const [durationMinutes, setDurationMinutes] = useState<number | ''>(
-    initialDuration,
-  )
+  const [hours, setHours] = useState<number | ''>(initialSplit.hours)
+  const [minutes, setMinutes] = useState<number | ''>(initialSplit.minutes)
   const [empty, setEmpty] = useState(initialEmpty)
-  const durationRef = useRef(durationMinutes)
-  durationRef.current = durationMinutes
+
+  function resolveTotalMinutes(h: number | '', m: number | ''): number {
+    if (h === '' && m === '') return initialDuration
+    return combineDurationMinutes(h === '' ? 0 : h, m === '' ? 0 : m)
+  }
 
   useEffect(() => {
     if (!onTaskEditPreview || !previewGroupId || !previewTaskId) return
-    const duration =
-      durationMinutes === ''
-        ? initialDuration
-        : Math.max(1, Math.round(durationMinutes) || initialDuration)
     onTaskEditPreview({
       groupId: previewGroupId,
       taskId: previewTaskId,
       title: title.trim() || initialTitle,
-      durationMinutes: duration,
+      durationMinutes: resolveTotalMinutes(hours, minutes),
       ...(empty ? { empty: true } : {}),
     })
   }, [
     title,
-    durationMinutes,
+    hours,
+    minutes,
     empty,
     previewGroupId,
     previewTaskId,
@@ -75,22 +93,65 @@ export function TaskFieldsForm({
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [onCancel])
 
-  function parseDuration(value: number | ''): number {
-    if (value === '') return 15
-    return Math.max(1, Math.round(value) || 15)
+  function setTotalDuration(total: number) {
+    const split = splitDurationMinutes(total)
+    setHours(split.hours)
+    setMinutes(split.minutes)
   }
 
-  function stepDurationByFive(
-    current: number | '',
-    direction: 'up' | 'down',
-  ): number {
-    const value = parseDuration(current)
-    if (direction === 'up') {
-      if (value % 5 === 0) return value + 5
-      return Math.ceil(value / 5) * 5
+  function commitDurationBlur() {
+    if (hours === '' && minutes === '') {
+      setTotalDuration(initialDuration)
+      return
     }
-    if (value % 5 === 0) return Math.max(1, value - 5)
-    return Math.max(1, Math.floor(value / 5) * 5)
+    const normalized = normalizeDurationFields(hours, minutes)
+    setHours(normalized.hours)
+    setMinutes(normalized.minutes)
+  }
+
+  function handleHoursChange(raw: string) {
+    if (raw === '') {
+      setHours('')
+      return
+    }
+    const next = Number(raw)
+    if (!Number.isFinite(next)) return
+    const prev = typeof hours === 'number' ? hours : 0
+    const delta = next - prev
+    if (Math.abs(delta) === 1) {
+      setHours(Math.max(0, prev + delta))
+      return
+    }
+    setHours(Math.max(0, Math.round(next)))
+  }
+
+  function handleMinutesChange(raw: string) {
+    if (raw === '') {
+      setMinutes('')
+      return
+    }
+    const next = Number(raw)
+    if (!Number.isFinite(next)) return
+    const prev = typeof minutes === 'number' ? minutes : 0
+    const hoursVal = hours === '' ? 0 : hours
+    const delta = next - prev
+    if (next !== prev) {
+      const isSpinner =
+        Math.abs(delta) === 1 ||
+        (Math.abs(delta) === 5 && prev % 5 !== 0)
+      if (isSpinner) {
+        const prevTotal = combineDurationMinutes(hoursVal, prev)
+        const nextTotal = combineDurationMinutes(hoursVal, next)
+        setTotalDuration(
+          stepDurationMinutes(
+            prevTotal,
+            nextTotal > prevTotal ? 'up' : 'down',
+          ),
+        )
+        return
+      }
+    }
+    setMinutes(Math.max(0, Math.round(next)))
   }
 
   function beginDurationScrub(e: React.PointerEvent<HTMLInputElement>) {
@@ -101,7 +162,7 @@ export function TaskFieldsForm({
     const pointerId = e.pointerId
     let active = false
     let lastTick = 0
-    const origin = parseDuration(durationRef.current)
+    const origin = resolveTotalMinutes(hours, minutes)
 
     function durationForTick(tick: number): number {
       if (tick === 0) return origin
@@ -136,7 +197,7 @@ export function TaskFieldsForm({
       const tick = Math.trunc(-dy / ANCHOR_SCRUB_PX)
       if (tick === lastTick) return
       lastTick = tick
-      setDurationMinutes(durationForTick(tick))
+      setTotalDuration(durationForTick(tick))
     }
 
     function cleanup(focusForTyping: boolean) {
@@ -167,16 +228,34 @@ export function TaskFieldsForm({
     document.addEventListener('pointercancel', onUp)
   }
 
-  function nudgeDuration(direction: 'up' | 'down') {
-    setDurationMinutes((current) => stepDurationByFive(current, direction))
+  function nudgeTotalDuration(direction: 'up' | 'down') {
+    setTotalDuration(
+      stepDurationMinutes(
+        resolveTotalMinutes(hours, minutes),
+        direction,
+      ),
+    )
+  }
+
+  function nudgeHours(direction: 'up' | 'down') {
+    const current = typeof hours === 'number' ? hours : 0
+    if (direction === 'up') {
+      setHours(current + 1)
+      return
+    }
+    setHours(Math.max(0, current - 1))
   }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!title.trim()) return
+    const normalized = normalizeDurationFields(hours, minutes)
     onSubmit({
       title: title.trim(),
-      durationMinutes: parseDuration(durationMinutes),
+      durationMinutes: combineDurationMinutes(
+        normalized.hours,
+        normalized.minutes,
+      ),
       ...(empty ? { empty: true } : {}),
     })
   }
@@ -196,31 +275,21 @@ export function TaskFieldsForm({
         <div className="task-form-duration">
           <input
             type="number"
-            min={1}
-            step={5}
-            value={durationMinutes}
-            onChange={(e) => {
-              const raw = e.target.value
-              if (raw === '') {
-                setDurationMinutes('')
-                return
-              }
-              const next = Number(raw)
-              setDurationMinutes(Number.isFinite(next) ? next : '')
-            }}
-            onBlur={() => {
-              setDurationMinutes(parseDuration(durationMinutes))
-            }}
-            onPointerDown={beginDurationScrub}
+            inputMode="numeric"
+            min={0}
+            step={1}
+            value={hours}
+            onChange={(e) => handleHoursChange(e.target.value)}
+            onBlur={commitDurationBlur}
             onKeyDown={(e) => {
               if (e.key === 'ArrowUp') {
                 e.preventDefault()
-                nudgeDuration('up')
+                nudgeHours('up')
                 return
               }
               if (e.key === 'ArrowDown') {
                 e.preventDefault()
-                nudgeDuration('down')
+                nudgeHours('down')
                 return
               }
               if (e.key === 'Enter') {
@@ -228,9 +297,37 @@ export function TaskFieldsForm({
                 e.currentTarget.form?.requestSubmit()
               }
             }}
-            aria-label="Duration in minutes"
+            aria-label="Duration hours"
           />
-          <span className="muted">mins</span>
+          <span className="muted">h</span>
+          <input
+            type="number"
+            inputMode="numeric"
+            min={0}
+            step={5}
+            value={minutes}
+            onChange={(e) => handleMinutesChange(e.target.value)}
+            onBlur={commitDurationBlur}
+            onPointerDown={beginDurationScrub}
+            onKeyDown={(e) => {
+              if (e.key === 'ArrowUp') {
+                e.preventDefault()
+                nudgeTotalDuration('up')
+                return
+              }
+              if (e.key === 'ArrowDown') {
+                e.preventDefault()
+                nudgeTotalDuration('down')
+                return
+              }
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                e.currentTarget.form?.requestSubmit()
+              }
+            }}
+            aria-label="Duration minutes"
+          />
+          <span className="muted">m</span>
         </div>
         <button
           type="button"

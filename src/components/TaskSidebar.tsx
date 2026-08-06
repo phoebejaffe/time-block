@@ -1303,7 +1303,7 @@ function BlockGroupPanel({
                         ))}
                       <span className="task-title-text">{task.title}</span>
                       <span className="muted task-duration">
-                        · {task.durationMinutes} min
+                        · {formatDurationMinutes(task.durationMinutes)}
                       </span>
                     </span>
                   </div>
@@ -1442,7 +1442,9 @@ function BlockGroupPanel({
                                         {block.title}
                                       </span>
                                       <span className="muted block-library-picker-duration">
-                                        {block.durationMinutes} min
+                                        {formatDurationMinutes(
+                                          block.durationMinutes,
+                                        )}
                                       </span>
                                     </button>
                                   )

@@ -6,6 +6,7 @@ import type {
 } from '../lib/tasks'
 import {
   createSavedBlock,
+  formatDurationMinutes,
   isTaskEmpty,
   touchBlockLibrary,
 } from '../lib/tasks'
@@ -623,7 +624,7 @@ function CategorySection({
                         {block.title.trim() || 'Untitled'}
                       </span>
                       <span className="muted task-duration">
-                        · {block.durationMinutes} min
+                        · {formatDurationMinutes(block.durationMinutes)}
                       </span>
                     </span>
                   </div>

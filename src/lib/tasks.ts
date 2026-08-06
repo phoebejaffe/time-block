@@ -140,6 +140,55 @@ export function formatDurationMinutes(minutes: number): string {
   return `${hours}h ${mins}m`
 }
 
+export function splitDurationMinutes(totalMinutes: number): {
+  hours: number
+  minutes: number
+} {
+  const total = Math.max(0, Math.round(totalMinutes))
+  return { hours: Math.floor(total / 60), minutes: total % 60 }
+}
+
+export function combineDurationMinutes(
+  hours: number,
+  minutes: number,
+): number {
+  const h = Math.max(0, Math.round(hours))
+  const m = Math.max(0, Math.round(minutes))
+  return Math.max(1, h * 60 + m)
+}
+
+/** Step total duration by 5 minutes (spinner / arrow keys). */
+export function stepDurationMinutes(
+  totalMinutes: number,
+  direction: 'up' | 'down',
+): number {
+  const value = Math.max(1, Math.round(totalMinutes))
+  if (direction === 'up') {
+    if (value % 5 === 0) return value + 5
+    return Math.ceil(value / 5) * 5
+  }
+  if (value % 5 === 0) return Math.max(1, value - 5)
+  return Math.max(1, Math.floor(value / 5) * 5)
+}
+
+/** Correct native number spinners that nudge by 1 (or mis-step by 5). */
+export function applyDurationSpinnerStep(
+  prevTotal: number,
+  nextTotal: number,
+): number {
+  const prev = Math.max(1, Math.round(prevTotal))
+  const next = Math.max(1, Math.round(nextTotal))
+  const delta = next - prev
+  if (delta === 0) return prev
+  if (
+    Math.abs(delta) === 1 ||
+    (Math.abs(delta) === 5 && prev % 5 !== 0)
+  ) {
+    return stepDurationMinutes(prev, delta > 0 ? 'up' : 'down')
+  }
+  return next
+}
+
 /** Overlay in-progress sidebar edits onto groups for live calendar preview. */
 export function applyTaskEditPreview(
   groups: BlockGroup[],

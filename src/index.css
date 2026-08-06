@@ -270,8 +270,8 @@ body.is-sidebar-resizing .main-panel {
 }
 
 .task-form-duration input {
-  width: 4rem;
-  min-width: 4rem;
+  width: 2.5rem;
+  min-width: 2.5rem;
   text-align: right;
 }
 
