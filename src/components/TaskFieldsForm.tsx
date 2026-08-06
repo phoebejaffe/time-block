@@ -8,6 +8,8 @@ import {
 
 const ANCHOR_SCRUB_PX = 25
 const ANCHOR_SCRUB_ACTIVATE_PX = 8
+/** `type="time"` caps at 23:59 — dual fields for longer blocks only. */
+const NATIVE_DURATION_MAX_MINUTES = 23 * 60 + 59
 
 function normalizeDurationFields(
   hours: number | '',
@@ -22,39 +24,15 @@ function normalizeDurationFields(
   return { hours: hoursVal, minutes: minutesVal }
 }
 
-/**
- * Prefer a single native picker on phones/tablets. There is no HTML duration
- * input; `type="time"` is the closest (iOS wheels). Detect via pointer media
- * queries — UA sniffing fails when iOS "Request Desktop Website" is on.
- */
-function prefersNativeDurationPicker(): boolean {
-  if (typeof window === 'undefined' || typeof navigator === 'undefined') {
-    return false
-  }
-  try {
-    if (window.matchMedia('(pointer: coarse)').matches) return true
-    if (
-      navigator.maxTouchPoints > 0 &&
-      window.matchMedia('(hover: none)').matches
-    ) {
-      return true
-    }
-  } catch {
-    /* matchMedia unavailable */
-  }
-  const ua = navigator.userAgent
-  if (/iPhone|iPod|iPad/.test(ua)) return true
-  if (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1) return true
-  return false
-}
-
 function pad2(n: number): string {
   return String(Math.max(0, Math.round(n))).padStart(2, '0')
 }
 
-/** `type="time"` only supports 00:00–23:59; treat that as a duration. */
+/** Map total minutes onto `type="time"` (duration, not clock time). */
 function durationToTimeValue(totalMinutes: number): string {
-  const split = splitDurationMinutes(Math.min(totalMinutes, 23 * 60 + 59))
+  const split = splitDurationMinutes(
+    Math.min(Math.max(0, totalMinutes), NATIVE_DURATION_MAX_MINUTES),
+  )
   return `${pad2(split.hours)}:${pad2(split.minutes)}`
 }
 
@@ -101,15 +79,15 @@ export function TaskFieldsForm({
   const [hours, setHours] = useState<number | ''>(initialSplit.hours)
   const [minutes, setMinutes] = useState<number | ''>(initialSplit.minutes)
   const [empty, setEmpty] = useState(initialEmpty)
-  // Native time wheels only go to 23:59 — keep dual fields for longer blocks.
-  const [nativeDuration] = useState(
-    () => prefersNativeDurationPicker() && initialDuration < 24 * 60,
-  )
 
   function resolveTotalMinutes(h: number | '', m: number | ''): number {
     if (h === '' && m === '') return initialDuration
     return combineDurationMinutes(h === '' ? 0 : h, m === '' ? 0 : m)
   }
+
+  const totalMinutes = resolveTotalMinutes(hours, minutes)
+  // Always use native time wheels when possible — no UA/PWA sniffing.
+  const useNativeDuration = totalMinutes <= NATIVE_DURATION_MAX_MINUTES
 
   useEffect(() => {
     if (!onTaskEditPreview || !previewGroupId || !previewTaskId) return
@@ -117,7 +95,7 @@ export function TaskFieldsForm({
       groupId: previewGroupId,
       taskId: previewTaskId,
       title: title.trim() || initialTitle,
-      durationMinutes: resolveTotalMinutes(hours, minutes),
+      durationMinutes: totalMinutes,
       ...(empty ? { empty: true } : {}),
     })
   }, [
@@ -130,6 +108,7 @@ export function TaskFieldsForm({
     onTaskEditPreview,
     initialTitle,
     initialDuration,
+    totalMinutes,
   ])
 
   useEffect(() => {
@@ -314,9 +293,7 @@ export function TaskFieldsForm({
     })
   }
 
-  const nativeTimeValue = durationToTimeValue(
-    resolveTotalMinutes(hours, minutes),
-  )
+  const nativeTimeValue = durationToTimeValue(totalMinutes)
 
   return (
     <form className="task-form" onSubmit={handleSubmit} noValidate>
@@ -333,12 +310,12 @@ export function TaskFieldsForm({
         <div
           className={[
             'task-form-duration',
-            nativeDuration ? 'task-form-duration-native' : '',
+            useNativeDuration ? 'task-form-duration-native' : '',
           ]
             .filter(Boolean)
             .join(' ')}
         >
-          {nativeDuration ? (
+          {useNativeDuration ? (
             <>
               <input
                 type="time"
