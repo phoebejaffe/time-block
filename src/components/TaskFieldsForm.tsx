@@ -8,8 +8,6 @@ import {
 
 const ANCHOR_SCRUB_PX = 25
 const ANCHOR_SCRUB_ACTIVATE_PX = 8
-/** `type="time"` caps at 23:59 — dual fields for longer blocks only. */
-const NATIVE_DURATION_MAX_MINUTES = 23 * 60 + 59
 
 function normalizeDurationFields(
   hours: number | '',
@@ -24,15 +22,23 @@ function normalizeDurationFields(
   return { hours: hoursVal, minutes: minutesVal }
 }
 
+/** iPhone/iPad — native `type="time"` wheels are the closest duration picker. */
+function prefersNativeDurationPicker(): boolean {
+  if (typeof navigator === 'undefined') return false
+  const ua = navigator.userAgent
+  if (/iPhone|iPod/.test(ua)) return true
+  // iPadOS 13+ reports as MacIntel with touch.
+  if (/iPad/.test(ua)) return true
+  return navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1
+}
+
 function pad2(n: number): string {
   return String(Math.max(0, Math.round(n))).padStart(2, '0')
 }
 
-/** Map total minutes onto `type="time"` (duration, not clock time). */
+/** `type="time"` only supports 00:00–23:59; treat that as a duration. */
 function durationToTimeValue(totalMinutes: number): string {
-  const split = splitDurationMinutes(
-    Math.min(Math.max(0, totalMinutes), NATIVE_DURATION_MAX_MINUTES),
-  )
+  const split = splitDurationMinutes(Math.min(totalMinutes, 23 * 60 + 59))
   return `${pad2(split.hours)}:${pad2(split.minutes)}`
 }
 
@@ -79,15 +85,15 @@ export function TaskFieldsForm({
   const [hours, setHours] = useState<number | ''>(initialSplit.hours)
   const [minutes, setMinutes] = useState<number | ''>(initialSplit.minutes)
   const [empty, setEmpty] = useState(initialEmpty)
+  // Native time wheels only go to 23:59 — keep dual fields for longer blocks.
+  const [nativeDuration] = useState(
+    () => prefersNativeDurationPicker() && initialDuration < 24 * 60,
+  )
 
   function resolveTotalMinutes(h: number | '', m: number | ''): number {
     if (h === '' && m === '') return initialDuration
     return combineDurationMinutes(h === '' ? 0 : h, m === '' ? 0 : m)
   }
-
-  const totalMinutes = resolveTotalMinutes(hours, minutes)
-  // Always use native time wheels when possible — no UA/PWA sniffing.
-  const useNativeDuration = totalMinutes <= NATIVE_DURATION_MAX_MINUTES
 
   useEffect(() => {
     if (!onTaskEditPreview || !previewGroupId || !previewTaskId) return
@@ -95,7 +101,7 @@ export function TaskFieldsForm({
       groupId: previewGroupId,
       taskId: previewTaskId,
       title: title.trim() || initialTitle,
-      durationMinutes: totalMinutes,
+      durationMinutes: resolveTotalMinutes(hours, minutes),
       ...(empty ? { empty: true } : {}),
     })
   }, [
@@ -108,7 +114,6 @@ export function TaskFieldsForm({
     onTaskEditPreview,
     initialTitle,
     initialDuration,
-    totalMinutes,
   ])
 
   useEffect(() => {
@@ -293,7 +298,9 @@ export function TaskFieldsForm({
     })
   }
 
-  const nativeTimeValue = durationToTimeValue(totalMinutes)
+  const nativeTimeValue = durationToTimeValue(
+    resolveTotalMinutes(hours, minutes),
+  )
 
   return (
     <form className="task-form" onSubmit={handleSubmit} noValidate>
@@ -310,21 +317,21 @@ export function TaskFieldsForm({
         <div
           className={[
             'task-form-duration',
-            useNativeDuration ? 'task-form-duration-native' : '',
+            nativeDuration ? 'task-form-duration-native' : '',
           ]
             .filter(Boolean)
             .join(' ')}
         >
-          {useNativeDuration ? (
+          {nativeDuration ? (
             <>
               <input
                 type="time"
                 step={300}
                 value={nativeTimeValue}
                 onChange={(e) => handleNativeDurationChange(e.target.value)}
-                aria-label="Duration (hours and minutes)"
+                aria-label="Duration"
               />
-              <span className="muted">h:m</span>
+              <span className="muted">duration</span>
             </>
           ) : (
             <>
