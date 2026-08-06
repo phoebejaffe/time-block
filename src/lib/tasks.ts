@@ -109,6 +109,56 @@ export function groupEventColors(color?: string): {
   return { backgroundColor: trimmed, borderColor: trimmed }
 }
 
+/** Relative luminance 0–1 (WCAG) for contrast checks. */
+function hexLuminance(hex: string): number | null {
+  const rgb = hexToRgb(hex)
+  if (!rgb) return null
+  const channel = (n: number) => {
+    const s = n / 255
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4
+  }
+  const [r, g, b] = rgb.map(channel) as [number, number, number]
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b
+}
+
+/** WCAG contrast ratio between two hex colors (1–21). */
+function contrastRatio(a: string, b: string): number | null {
+  const la = hexLuminance(a)
+  const lb = hexLuminance(b)
+  if (la == null || lb == null) return null
+  const lighter = Math.max(la, lb)
+  const darker = Math.min(la, lb)
+  return (lighter + 0.05) / (darker + 0.05)
+}
+
+function mixHex(a: string, b: string, amountA = 0.75): string {
+  const rgbA = hexToRgb(a)
+  const rgbB = hexToRgb(b)
+  if (!rgbA || !rgbB) return a
+  const t = Math.max(0, Math.min(1, amountA))
+  return rgbToHex(
+    rgbA[0] * t + rgbB[0] * (1 - t),
+    rgbA[1] * t + rgbB[1] * (1 - t),
+    rgbA[2] * t + rgbB[2] * (1 - t),
+  )
+}
+
+/** Minimum contrast vs white for a thin sidebar accent (WCAG UI/graphic). */
+const SIDEBAR_ACCENT_MIN_CONTRAST_VS_WHITE = 3
+
+/**
+ * Sidebar left-edge accent: calendar fill when it already reads on white;
+ * otherwise a 75/25 mix toward the darker calendar border.
+ */
+export function groupSidebarAccentColor(color?: string): string {
+  const { backgroundColor, borderColor } = groupEventColors(color)
+  const vsWhite = contrastRatio(backgroundColor, '#ffffff')
+  if (vsWhite == null || vsWhite >= SIDEBAR_ACCENT_MIN_CONTRAST_VS_WHITE) {
+    return backgroundColor
+  }
+  return mixHex(backgroundColor, borderColor, 0.75)
+}
+
 export type Plan = {
   groups: BlockGroup[]
 }

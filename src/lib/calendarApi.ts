@@ -716,7 +716,8 @@ export async function deleteGroupFromCalendar(
 }
 
 export function calendarsWritable(calendars: GoogleCalendar[]): GoogleCalendar[] {
-  return calendars.filter(
-    (c) => c.accessRole === 'owner' || c.accessRole === 'writer',
-  )
+  return calendars.filter((c) => {
+    const role = (c.accessRole || '').toLowerCase()
+    return role === 'owner' || role === 'writer'
+  })
 }

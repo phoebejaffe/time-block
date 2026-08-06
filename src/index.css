@@ -1129,6 +1129,7 @@ body.is-datetime-scrubbing .task-form-duration input {
   min-width: 0;
   padding: 0.7rem 0.65rem 0.65rem;
   border: 1px solid var(--line);
+  border-left: 4px solid var(--group-accent, var(--accent));
   border-radius: 4px;
   background: var(--group);
   /* Let the ··· menu paint over neighboring groups in the grid. */
@@ -2118,10 +2119,10 @@ body.is-task-reordering .task-sidebar {
 }
 
 .auth-diagnostics-toggle {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
+  display: flex;
   align-items: center;
-  gap: 0.45rem 0.55rem;
+  justify-content: space-between;
+  gap: 0.55rem;
   width: 100%;
   margin: 0;
   padding: 0.25rem 0;
@@ -2131,14 +2132,6 @@ body.is-task-reordering .task-sidebar {
   font: inherit;
   text-align: left;
   cursor: pointer;
-}
-
-.auth-diagnostics-summary {
-  min-width: 0;
-  overflow: hidden;
-  font-size: 0.8rem;
-  white-space: nowrap;
-  text-overflow: ellipsis;
 }
 
 .auth-diagnostics-chevron {

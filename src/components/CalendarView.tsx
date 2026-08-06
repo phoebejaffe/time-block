@@ -291,23 +291,38 @@ export function CalendarView({
     if (!el || !api) return false
     if (el.clientHeight < 2 || el.clientWidth < 2) return false
     api.updateSize()
+    // Container can be sized while FC's internal scroller is still 0×0.
+    const scroller = el.querySelector('.fc-scroller') as HTMLElement | null
+    if (scroller && scroller.clientHeight < 2) return false
     return true
   }
 
   function scheduleCalendarSizeRefresh() {
-    if (refreshCalendarSize()) return
-
     let attempts = 0
-    const retry = () => {
-      if (refreshCalendarSize()) return
-      if (++attempts >= 24) return
-      requestAnimationFrame(retry)
-    }
-    requestAnimationFrame(retry)
+    const maxAttempts = 60
+    let settled = false
 
-    window.setTimeout(refreshCalendarSize, 50)
-    window.setTimeout(refreshCalendarSize, 150)
-    window.setTimeout(refreshCalendarSize, 400)
+    const tick = () => {
+      const ok = refreshCalendarSize()
+      if (ok) {
+        if (!settled) {
+          settled = true
+          // One more pass after paint — FC sometimes needs a second updateSize.
+          window.setTimeout(() => refreshCalendarSize(), 0)
+          window.setTimeout(() => refreshCalendarSize(), 100)
+        }
+        return
+      }
+      if (++attempts >= maxAttempts) return
+      requestAnimationFrame(tick)
+    }
+
+    requestAnimationFrame(tick)
+    window.setTimeout(tick, 50)
+    window.setTimeout(tick, 150)
+    window.setTimeout(tick, 400)
+    window.setTimeout(tick, 800)
+    window.setTimeout(() => refreshCalendarSize(), 1200)
   }
 
   const resolvedTaskEvents = useMemo(
@@ -554,12 +569,17 @@ export function CalendarView({
       if (document.visibilityState === 'hidden') return
       scheduleCalendarSizeRefresh()
     }
+    function onWindowResize() {
+      refreshCalendarSize()
+    }
     window.addEventListener('focus', onShow)
+    window.addEventListener('resize', onWindowResize)
     document.addEventListener('visibilitychange', onShow)
 
     return () => {
       observer.disconnect()
       window.removeEventListener('focus', onShow)
+      window.removeEventListener('resize', onWindowResize)
       document.removeEventListener('visibilitychange', onShow)
       setCalendarDragging(false)
     }

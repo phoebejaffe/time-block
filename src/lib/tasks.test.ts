@@ -12,6 +12,7 @@ import {
   splitDurationMinutes,
   stepDurationMinutes,
   groupEventColors,
+  groupSidebarAccentColor,
   hasCommittedOnDay,
   loadCommittedDays,
   localDateKey,
@@ -261,6 +262,20 @@ describe('groupEventColors', () => {
   it('derives a darker border from hex group colors', () => {
     expect(groupEventColors('#336699').backgroundColor).toBe('#336699')
     expect(groupEventColors('#336699').borderColor).toBe('#25496e')
+  })
+})
+
+describe('groupSidebarAccentColor', () => {
+  it('keeps fills that already contrast enough against white', () => {
+    expect(groupSidebarAccentColor('#0f6e56')).toBe('#0f6e56')
+    expect(groupSidebarAccentColor('#336699')).toBe('#336699')
+  })
+
+  it('nudges low-contrast-on-white fills toward the darker border', () => {
+    const yellow = '#f5e663'
+    const accent = groupSidebarAccentColor(yellow)
+    expect(accent).not.toBe(yellow)
+    expect(accent).not.toBe(groupEventColors(yellow).borderColor)
   })
 })
 

@@ -418,8 +418,8 @@ export default function App() {
       String(import.meta.env.VITE_GOOGLE_CLIENT_ID).includes('your-client-id'))
   const missingFirebase = import.meta.env.DEV && !isFirebaseConfigured()
 
-  // After OAuth, the main grid mounts with zero-sized flex children until layout
-  // settles — nudge FullCalendar the same way a manual window resize does.
+  // After OAuth, the main grid mounts once Firestore finishes loading. FullCalendar
+  // often paints at 0 height until a resize — keep nudging past the first paint.
   useLayoutEffect(() => {
     if (!session.ready || !session.signedIn || userData.loading) return
 
@@ -429,12 +429,12 @@ export default function App() {
 
     nudgeLayout()
     requestAnimationFrame(nudgeLayout)
-    const t1 = window.setTimeout(nudgeLayout, 50)
-    const t2 = window.setTimeout(nudgeLayout, 200)
+    const timers = [50, 150, 400, 800, 1200].map((ms) =>
+      window.setTimeout(nudgeLayout, ms),
+    )
 
     return () => {
-      window.clearTimeout(t1)
-      window.clearTimeout(t2)
+      for (const id of timers) window.clearTimeout(id)
     }
   }, [session.ready, session.signedIn, userData.loading])
 

@@ -19,6 +19,7 @@ import {
   DEFAULT_GROUP_COLOR,
   formatDurationMinutes,
   fromLocalTimeValue,
+  groupSidebarAccentColor,
   isGroupEnabled,
   isTaskEmpty,
   localDateKey,
@@ -251,6 +252,17 @@ export function TaskSidebar({
   const modalIsUpdate =
     Boolean(modalGroupId) &&
     hasPushedGroupOnDay(pushedEvents, modalGroupId || '', modalDayKey)
+  const commitCalendars = useMemo(() => {
+    const selected = new Set(selectedCommitIds)
+    return [...writableCalendars].sort((a, b) => {
+      const aSelected = selected.has(a.id)
+      const bSelected = selected.has(b.id)
+      if (aSelected !== bSelected) return aSelected ? -1 : 1
+      if (a.primary && !b.primary) return -1
+      if (!a.primary && b.primary) return 1
+      return a.summary.localeCompare(b.summary)
+    })
+  }, [writableCalendars, selectedCommitIds])
 
   return (
     <aside className="task-sidebar">
@@ -342,13 +354,13 @@ export function TaskSidebar({
         >
           <div className="modal-form">
             <fieldset className="calendar-multi-select">
-              <legend>Calendars</legend>
-              {writableCalendars.length === 0 ? (
+              <legend>Calendars you can edit</legend>
+              {commitCalendars.length === 0 ? (
                 <p className="muted calendar-multi-select-empty">
                   Sign in to choose calendars
                 </p>
               ) : (
-                writableCalendars.map((calendar) => (
+                commitCalendars.map((calendar) => (
                   <label key={calendar.id} className="checkbox-row">
                     <input
                       type="checkbox"
@@ -728,6 +740,9 @@ function BlockGroupPanel({
   const dayKey = localDateKey(anchor.at)
   const onCalendar = hasPushedGroupOnDay(pushedEvents, group.id, dayKey)
   const isUpdate = onCalendar
+  const groupStyle = {
+    ['--group-accent' as string]: groupSidebarAccentColor(group.color),
+  }
   const hasCheckpointDrift = Boolean(
     group.checkpoint && !tasksMatchCheckpoint(tasks, group.checkpoint),
   )
@@ -1125,7 +1140,10 @@ function BlockGroupPanel({
 
   if (!enabled) {
     return (
-      <section className="block-group block-group-collapsed block-group-disabled">
+      <section
+        className="block-group block-group-collapsed block-group-disabled"
+        style={groupStyle}
+      >
         <div className="block-group-collapsed-row">
           <button
             type="button"
@@ -1168,7 +1186,7 @@ function BlockGroupPanel({
   }
 
   return (
-    <section className="block-group">
+    <section className="block-group" style={groupStyle}>
       <div className="stack-anchor">
         <button
           type="button"

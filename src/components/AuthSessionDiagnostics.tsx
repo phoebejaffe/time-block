@@ -61,10 +61,6 @@ export function AuthSessionDiagnostics({
   const recoverLabel = d.canRecoverWithoutOauth
     ? 'Recover session'
     : 'Test refresh'
-  const summary = d.canRecoverWithoutOauth
-    ? 'Restore failed — expand for details'
-    : status
-
   return (
     <div
       className={[
@@ -83,7 +79,6 @@ export function AuthSessionDiagnostics({
         onClick={() => setExpanded((open) => !open)}
       >
         <span className="auth-diagnostics-title">Session diagnostics</span>
-        <span className="auth-diagnostics-summary muted">{summary}</span>
         <span className="auth-diagnostics-chevron" aria-hidden>
           {expanded ? '▾' : '▸'}
         </span>
