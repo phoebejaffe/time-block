@@ -34,6 +34,12 @@ import {
 } from './CalendarToolbar'
 
 const NARROW_BREAKPOINT = 560
+/** Touch: hold before stack drag so vertical swipes scroll the calendar. */
+const TASK_EVENT_LONG_PRESS_MS = 400
+
+function setCalendarDragging(active: boolean) {
+  document.body.classList.toggle('is-calendar-dragging', active)
+}
 
 type CalendarViewProps = {
   googleEvents: CalendarEvent[]
@@ -416,6 +422,7 @@ export function CalendarView({
     dragGroupIdRef.current = null
     dragTaskIdRef.current = null
     discardDragRef.current = false
+    setCalendarDragging(false)
 
     if (!discard && origin && groupId && deltaMs != null && deltaMs !== 0) {
       // Leave preview times in place until FC remounts with the commit.
@@ -428,6 +435,7 @@ export function CalendarView({
 
   function handleDragStart(arg: Parameters<typeof handleEventDragStart>[0]) {
     if (pinchingRef.current) return
+    setCalendarDragging(true)
     const groupId = arg.event.extendedProps.groupId as string | undefined
     const taskId = arg.event.extendedProps.taskId as string | undefined
     const group = groups.find((g) => g.id === groupId)
@@ -553,6 +561,7 @@ export function CalendarView({
       observer.disconnect()
       window.removeEventListener('focus', onShow)
       document.removeEventListener('visibilitychange', onShow)
+      setCalendarDragging(false)
     }
   }, [])
 
@@ -798,8 +807,7 @@ export function CalendarView({
           selectable={false}
           eventStartEditable
           eventDurationEditable={false}
-          // Immediate event drag on touch; slot select is disabled (no create).
-          eventLongPressDelay={0}
+          eventLongPressDelay={TASK_EVENT_LONG_PRESS_MS}
           events={events}
           datesSet={handleDatesSet}
           eventAllow={handleEventAllow}

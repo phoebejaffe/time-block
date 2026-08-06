@@ -24,6 +24,7 @@ import {
   pickViewDate,
   shiftAnchor,
   startOfLocalDay,
+  type StackAnchor,
   type Task,
   type TaskEditPreview,
 } from './lib/tasks'
@@ -191,6 +192,30 @@ export default function App() {
   function handleMoveGroup(groupId: string, direction: 'up' | 'down') {
     plan.moveGroup(groupId, direction)
     clear()
+  }
+
+  function handleCalendarAnchorCommit(groupId: string, next: StackAnchor) {
+    setStackDragPreview(null)
+    const group = plan.plan.groups.find((g) => g.id === groupId)
+    if (!group) return
+
+    const previousAnchor = { ...group.anchor }
+    if (
+      previousAnchor.kind === next.kind &&
+      previousAnchor.at === next.at
+    ) {
+      return
+    }
+
+    plan.setAnchor(groupId, next)
+    show('info', 'Blocks moved.', {
+      actionLabel: 'Undo',
+      progressMs: 5_000,
+      onAction: () => {
+        plan.setAnchor(groupId, previousAnchor)
+        clear()
+      },
+    })
   }
 
   function handleSaveCheckpoint(groupId: string) {
@@ -493,10 +518,7 @@ export default function App() {
               onToggleCalendar={calendars.toggleCalendar}
               groups={calendarGroups}
               onDatesSet={handleDatesSet}
-              onAnchorCommit={(groupId, next) => {
-                setStackDragPreview(null)
-                plan.setAnchor(groupId, next)
-              }}
+              onAnchorCommit={handleCalendarAnchorCommit}
               onStackShiftPreview={(groupId, deltaMs) => {
                 if (groupId == null || deltaMs == null) {
                   setStackDragPreview(null)
