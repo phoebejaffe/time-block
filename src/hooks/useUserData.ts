@@ -9,6 +9,7 @@ import {
   normalizePushedEvents,
   prunePushedEvents,
   clearGroupDayPushSnapshots,
+  clearGroupDayCalendarPushSnapshot,
   upsertPushSnapshot,
   type PushSnapshot,
   type PushedEvent,
@@ -246,19 +247,33 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
   }, [])
 
   const applyCalendarSync = useCallback(
-    (events: PushedEvent[], snapshot: PushSnapshot | null) => {
+    (
+      events: PushedEvent[],
+      snapshots: PushSnapshot[],
+      removedCalendarIds: { calendarId: string; groupId: string; dayKey: string }[] = [],
+    ) => {
       setPushedEvents(prunePushedEvents(events))
-      if (snapshot) {
-        setPushSnapshots((prev) =>
-          upsertPushSnapshot(
-            prev,
+      setPushSnapshots((prev) => {
+        let next = prev
+        for (const removed of removedCalendarIds) {
+          next = clearGroupDayCalendarPushSnapshot(
+            next,
+            removed.calendarId,
+            removed.groupId,
+            removed.dayKey,
+          )
+        }
+        for (const snapshot of snapshots) {
+          next = upsertPushSnapshot(
+            next,
             snapshot.calendarId,
             snapshot.groupId,
             snapshot.dayKey,
             snapshot.fingerprint,
-          ),
-        )
-      }
+          )
+        }
+        return next
+      })
     },
     [],
   )

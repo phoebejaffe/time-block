@@ -136,4 +136,21 @@ describe('pushedEvents', () => {
       false,
     )
   })
+
+  it('keeps independent snapshots per calendar on the same group/day', () => {
+    const snapshots = upsertPushSnapshot(
+      upsertPushSnapshot([], 'cal-a', 'group-1', '2026-07-18', 'fp-a'),
+      'cal-b',
+      'group-1',
+      '2026-07-18',
+      'fp-b',
+    )
+    expect(snapshots).toHaveLength(2)
+    expect(isPushUnchanged(snapshots, 'cal-a', 'group-1', '2026-07-18', 'fp-a')).toBe(
+      true,
+    )
+    expect(isPushUnchanged(snapshots, 'cal-b', 'group-1', '2026-07-18', 'fp-b')).toBe(
+      true,
+    )
+  })
 })

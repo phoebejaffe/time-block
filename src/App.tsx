@@ -1,5 +1,6 @@
 import { useLayoutEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { AuthButton } from './components/AuthButton'
+import { AuthSessionDiagnostics } from './components/AuthSessionDiagnostics'
 import { CalendarView } from './components/CalendarView'
 import { MobileSplitHandle } from './components/MobileSplitHandle'
 import { NoticeToast } from './components/NoticeToast'
@@ -12,7 +13,7 @@ import { useNotice } from './hooks/useNotice'
 import { usePlan } from './hooks/usePlan'
 import { useSidebarWidth } from './hooks/useSidebarWidth'
 import { useUserData } from './hooks/useUserData'
-import { calendarNamesForPushedGroupDay, deleteGroupFromCalendar, syncTasksToCalendar } from './lib/calendarApi'
+import { calendarNamesForPushedGroupDay, deleteGroupFromCalendar, syncGroupToCalendars } from './lib/calendarApi'
 import { isFirebaseConfigured } from './lib/firebase'
 import { formatError } from './lib/errors'
 import { ensureWriteScope } from './lib/google'
@@ -263,13 +264,17 @@ export default function App() {
   /** Returns true when the commit modal should close (full success). */
   async function handleCommit(
     groupId: string,
-    calendarId: string,
+    calendarIds: string[],
   ): Promise<boolean> {
     const group = plan.plan.groups.find((g) => g.id === groupId)
     if (!group) return false
     const anchor = anchorOnDay(group.anchor, viewDate)
     const dayKey = localDateKey(anchor.at)
     const isUpdate = hasPushedGroupOnDay(userData.pushedEvents, groupId, dayKey)
+    if (calendarIds.length === 0) {
+      show('info', 'Choose at least one calendar.')
+      return false
+    }
     if (group.tasks.length === 0 && !isUpdate) {
       show('info', 'Add at least one block before adding to a calendar.')
       return false
@@ -284,15 +289,30 @@ export default function App() {
       if (group.anchor.at !== anchor.at) {
         plan.setAnchor(groupId, anchor)
       }
-      const { updated, created, removed, failures, pushedEvents, pushSnapshot } =
-        await syncTasksToCalendar(
-        calendarId,
+      const {
+        updated,
+        created,
+        removed,
+        failures,
+        pushedEvents,
+        pushSnapshots,
+        removedCalendarIds,
+      } = await syncGroupToCalendars(
+        calendarIds,
         groupId,
         group.tasks,
         anchor,
         userData.pushedEvents,
       )
-      userData.applyCalendarSync(pushedEvents, pushSnapshot)
+      userData.applyCalendarSync(
+        pushedEvents,
+        pushSnapshots,
+        removedCalendarIds.map((calendarId) => ({
+          calendarId,
+          groupId,
+          dayKey,
+        })),
+      )
       await calendars.refreshEvents()
 
       if (failures.length > 0) {
@@ -445,15 +465,49 @@ export default function App() {
           <div className="empty-state">
             <h2>Your day, blocked out</h2>
             <p>
-              Sign in with Google to overlay your calendars, then draft
-              morning blocks that end when you need to leave. Your plan syncs
-              to your Google account, so sign in is required to use it.
+              {session.diagnostics.canRecoverWithoutOauth
+                ? 'Silent sign-in failed after reopen (often a cold auth backend). Try Recover session below — you usually do not need the full Google consent popup.'
+                : 'Sign in with Google to overlay your calendars, then draft morning blocks that end when you need to leave. Your plan syncs to your Google account, so sign in is required to use it.'}
             </p>
-            <AuthButton
-              signedIn={false}
-              busy={busy || missingClientId || missingFirebase}
-              onSignIn={() => void handleSignIn()}
-              onSignOut={handleSignOut}
+            {session.diagnostics.canRecoverWithoutOauth ? (
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={
+                  session.testRefreshBusy ||
+                  busy ||
+                  missingClientId ||
+                  missingFirebase
+                }
+                onClick={() => void session.testRefresh()}
+              >
+                {session.testRefreshBusy
+                  ? 'Recovering…'
+                  : 'Recover session'}
+              </button>
+            ) : (
+              <AuthButton
+                signedIn={false}
+                busy={busy || missingClientId || missingFirebase}
+                onSignIn={() => void handleSignIn()}
+                onSignOut={handleSignOut}
+              />
+            )}
+            {session.diagnostics.canRecoverWithoutOauth && (
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                disabled={busy || session.testRefreshBusy}
+                onClick={() => void handleSignIn()}
+              >
+                Sign in with Google instead
+              </button>
+            )}
+            <AuthSessionDiagnostics
+              diagnostics={session.diagnostics}
+              signedIn={session.signedIn}
+              testBusy={session.testRefreshBusy}
+              onTestRefresh={() => void session.testRefresh()}
             />
           </div>
         </div>
@@ -490,6 +544,10 @@ export default function App() {
             signedIn={session.signedIn}
             onSignIn={() => void handleSignIn()}
             onSignOut={handleSignOut}
+            authDiagnostics={session.diagnostics}
+            authSignedIn={session.signedIn}
+            authTestRefreshBusy={session.testRefreshBusy}
+            onAuthTestRefresh={() => void session.testRefresh()}
             targetCalendarId={userData.targetCalendarId}
             onTargetCalendarChange={userData.setTargetCalendarId}
             pushedEvents={userData.pushedEvents}

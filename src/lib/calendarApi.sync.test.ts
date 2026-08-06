@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { syncTasksToCalendar } from './calendarApi'
+import { syncGroupToCalendars, syncTasksToCalendar } from './calendarApi'
 import type { Task } from './tasks'
 
 type FakeEvent = { id: string; summary: string; start: string; end: string }
@@ -205,5 +205,58 @@ describe('syncTasksToCalendar — per-day isolation', () => {
     expect(second.created).toBe(1)
     expect(second.pushedEvents.filter((e) => e.taskId === 't1')).toHaveLength(0)
     expect(second.pushedEvents.find((e) => e.taskId === 't2')).toBeTruthy()
+  })
+})
+
+describe('syncGroupToCalendars — multi-calendar', () => {
+  beforeEach(() => {
+    mockGapiCalendar()
+  })
+
+  const tasks: Task[] = [{ id: 't1', title: 'Focus', durationMinutes: 60 }]
+  const anchor = {
+    kind: 'start' as const,
+    at: new Date('2026-07-23T15:00:00.000Z').toISOString(),
+  }
+
+  it('syncs the same group to multiple calendars', async () => {
+    const result = await syncGroupToCalendars(
+      ['cal-a', 'cal-b'],
+      'group-1',
+      tasks,
+      anchor,
+      [],
+    )
+
+    expect(result.created).toBe(2)
+    expect(result.failures).toHaveLength(0)
+    expect(result.pushSnapshots).toHaveLength(2)
+    expect(result.pushedEvents).toHaveLength(2)
+    expect(
+      new Set(result.pushedEvents.map((event) => event.calendarId)),
+    ).toEqual(new Set(['cal-a', 'cal-b']))
+  })
+
+  it('deletes from calendars removed from the selection', async () => {
+    const first = await syncGroupToCalendars(
+      ['cal-a', 'cal-b'],
+      'group-1',
+      tasks,
+      anchor,
+      [],
+    )
+    const second = await syncGroupToCalendars(
+      ['cal-a'],
+      'group-1',
+      tasks,
+      anchor,
+      first.pushedEvents,
+    )
+
+    expect(second.removed).toBe(1)
+    expect(second.removedCalendarIds).toEqual(['cal-b'])
+    expect(second.pushedEvents.every((event) => event.calendarId === 'cal-a')).toBe(
+      true,
+    )
   })
 })

@@ -558,6 +558,27 @@ body.is-datetime-scrubbing .task-form-duration input {
   gap: 0.5rem !important;
 }
 
+.calendar-multi-select {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.calendar-multi-select legend {
+  font-size: 0.85rem;
+  color: var(--ink-muted);
+  padding: 0;
+  margin-bottom: 0.15rem;
+}
+
+.calendar-multi-select-empty {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
 .segmented {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1163,15 +1184,46 @@ body.is-datetime-scrubbing .task-form-duration input {
   min-width: 0;
 }
 
-.block-group-collapsed-row .block-group-collapsed-toggle {
+.block-group-collapsed-row .block-group-header {
   flex: 1;
   min-width: 0;
 }
 
-.block-group-disabled .power-toggle,
-.block-group-disabled .block-group-collapsed-toggle {
+.block-group-disabled .block-group-header {
   opacity: 0.52;
   filter: grayscale(0.35);
+}
+
+.block-group-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  width: 100%;
+  margin: 0;
+  padding: 0.15rem 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.block-group-header:hover:not(:disabled) .stack-anchor-name,
+.block-group-header:hover:not(:disabled) .block-group-collapsed-title {
+  color: var(--accent);
+}
+
+.block-group-header:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.block-group-disabled .power-toggle,
+.block-group-disabled .block-group-collapsed-toggle {
+  opacity: 1;
+  filter: none;
 }
 
 .block-group-disabled .task-card,
@@ -1192,7 +1244,7 @@ body.is-datetime-scrubbing .task-form-duration input {
   border-radius: 999px;
   background: rgba(26, 31, 28, 0.05);
   color: var(--ink-muted);
-  cursor: pointer;
+  pointer-events: none;
 }
 
 .power-toggle.is-on {
@@ -1201,14 +1253,9 @@ body.is-datetime-scrubbing .task-form-duration input {
   color: var(--accent);
 }
 
-.power-toggle:hover:not(:disabled) {
+.block-group-header:hover:not(:disabled) .power-toggle {
   border-color: rgba(15, 110, 86, 0.45);
   color: var(--accent);
-}
-
-.power-toggle:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
 }
 
 .block-group-collapsed-toggle {
@@ -2048,6 +2095,164 @@ body.is-task-reordering .task-sidebar {
 .empty-state p {
   margin: 0;
   color: var(--ink-muted);
+}
+
+.auth-diagnostics {
+  width: 100%;
+  max-width: 26rem;
+  margin-top: 0.35rem;
+  padding: 0.35rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255, 253, 248, 0.85);
+  text-align: left;
+}
+
+.auth-diagnostics.is-expanded {
+  padding: 0.55rem 0.75rem 0.75rem;
+}
+
+.auth-diagnostics-recoverable {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
+  background: color-mix(in srgb, var(--accent) 6%, #fffdf8);
+}
+
+.auth-diagnostics-toggle {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.45rem 0.55rem;
+  width: 100%;
+  margin: 0;
+  padding: 0.25rem 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.auth-diagnostics-summary {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.auth-diagnostics-chevron {
+  color: var(--ink-muted);
+  font-size: 0.75rem;
+  line-height: 1;
+}
+
+.auth-diagnostics-body {
+  margin-top: 0.45rem;
+  padding-top: 0.45rem;
+  border-top: 1px solid var(--line);
+}
+
+.auth-diagnostics-banner {
+  margin: 0 0 0.55rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--ink);
+}
+
+.auth-diagnostics-compact {
+  max-width: none;
+  margin: 0.35rem 0 0;
+  padding: 0.35rem 0.55rem;
+  border-radius: 8px;
+  font-size: 0.8rem;
+}
+
+.auth-diagnostics-compact.is-expanded {
+  padding: 0.45rem 0.55rem 0.55rem;
+}
+
+.auth-diagnostics-title {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.auth-diagnostics-list {
+  margin: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.auth-diagnostics-list > div {
+  display: grid;
+  grid-template-columns: 6.5rem 1fr;
+  gap: 0.35rem 0.5rem;
+  align-items: baseline;
+}
+
+.auth-diagnostics-compact .auth-diagnostics-list > div {
+  grid-template-columns: 5.5rem 1fr;
+}
+
+.auth-diagnostics-list dt {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: 0.78rem;
+}
+
+.auth-diagnostics-list dd {
+  margin: 0;
+  font-size: 0.82rem;
+  word-break: break-word;
+}
+
+.auth-diagnostics-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.72rem;
+}
+
+.auth-diagnostics-ok {
+  color: var(--accent);
+}
+
+.auth-diagnostics-err {
+  color: #b42318;
+}
+
+.auth-diagnostics-hint {
+  margin: 0.55rem 0 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.auth-diagnostics-hint strong {
+  font-weight: 600;
+}
+
+.auth-diagnostics-test {
+  margin-top: 0.55rem;
+}
+
+.settings-menu-dropdown .auth-diagnostics {
+  border: 0;
+  background: transparent;
+  padding: 0.2rem 0.75rem 0.35rem;
+}
+
+.settings-menu-dropdown .auth-diagnostics.is-expanded {
+  padding: 0.2rem 0.75rem 0.55rem;
+}
+
+.settings-menu-dropdown .auth-diagnostics-title {
+  font-size: 0.72rem;
+}
+
+.settings-menu-dropdown .auth-diagnostics-body {
+  border-top-color: rgba(26, 31, 28, 0.08);
 }
 
 .spinner {

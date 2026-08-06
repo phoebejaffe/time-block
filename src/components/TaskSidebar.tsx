@@ -30,9 +30,8 @@ import {
 import {
   hasPushedGroupOnDay,
   hasPushedTaskOnDay,
-  isPushUnchanged,
   isTaskPushUnchanged,
-  stackPushFingerprint,
+  pushedCalendarIdsForGroupDay,
   type PushedEvent,
   type PushSnapshot,
 } from '../lib/pushedEvents'
@@ -40,6 +39,7 @@ import { SettingsMenu } from './SettingsMenu'
 import { TaskFieldsForm } from './TaskFieldsForm'
 import { BlockIcon, EditIcon, LibraryIcon, TrashIcon } from './icons'
 import type { NoticeOptions } from '../lib/notice'
+import type { SessionDiagnostics } from '../lib/google'
 
 const timeFmt = new Intl.DateTimeFormat(undefined, {
   hour: 'numeric',
@@ -88,7 +88,7 @@ type TaskSidebarProps = {
   onSetGroupEnabled: (groupId: string, enabled: boolean) => void
   onSetGroupName: (groupId: string, name: string) => void
   onSetGroupColor: (groupId: string, color: string | undefined) => void
-  onCommit: (groupId: string, calendarId: string) => Promise<boolean>
+  onCommit: (groupId: string, calendarIds: string[]) => Promise<boolean>
   onDeleteFromCalendar: (groupId: string) => Promise<void>
   onTaskEditPreview: (preview: {
     groupId: string
@@ -103,6 +103,10 @@ type TaskSidebarProps = {
   signedIn?: boolean
   onSignIn?: () => void
   onSignOut?: () => void
+  authDiagnostics?: SessionDiagnostics
+  authSignedIn?: boolean
+  authTestRefreshBusy?: boolean
+  onAuthTestRefresh?: () => void
   /** Cross-device data — owned and synced by the caller (see useUserData). */
   targetCalendarId: string
   onTargetCalendarChange: (id: string) => void
@@ -142,6 +146,10 @@ export function TaskSidebar({
   signedIn,
   onSignIn,
   onSignOut,
+  authDiagnostics,
+  authSignedIn,
+  authTestRefreshBusy,
+  onAuthTestRefresh,
   targetCalendarId,
   onTargetCalendarChange,
   pushedEvents,
@@ -155,6 +163,21 @@ export function TaskSidebar({
   const [modal, setModal] = useState<ModalKind | null>(null)
   const [modalGroupId, setModalGroupId] = useState<string | null>(null)
   const [addingGroupId, setAddingGroupId] = useState<string | null>(null)
+  const [selectedCommitIds, setSelectedCommitIds] = useState<string[]>([])
+
+  const defaultCommitCalendarId = useMemo(() => {
+    if (
+      targetCalendarId &&
+      writableCalendars.some((c) => c.id === targetCalendarId)
+    ) {
+      return targetCalendarId
+    }
+    return (
+      writableCalendars.find((c) => c.primary)?.id ||
+      writableCalendars[0]?.id ||
+      ''
+    )
+  }, [targetCalendarId, writableCalendars])
 
   const modalGroup = groups.find((g) => g.id === modalGroupId) ?? null
   const unnamedGroupLabels = useMemo(() => {
@@ -168,19 +191,6 @@ export function TaskSidebar({
     }
     return labels
   }, [groups])
-  const selectedCommitId = useMemo(() => {
-    if (
-      targetCalendarId &&
-      writableCalendars.some((c) => c.id === targetCalendarId)
-    ) {
-      return targetCalendarId
-    }
-    return (
-      writableCalendars.find((c) => c.primary)?.id ||
-      writableCalendars[0]?.id ||
-      ''
-    )
-  }, [targetCalendarId, writableCalendars])
 
   useEffect(() => {
     if (!editingId || editingId === NEW_EDIT_ID) return
@@ -195,6 +205,22 @@ export function TaskSidebar({
       const group = groups.find((g) => g.id === groupId)
       setGroupNameInput(group?.name ?? '')
     }
+    if (kind === 'commit') {
+      const group = groups.find((g) => g.id === groupId)
+      const dayKey = group ? localDateKey(group.anchor.at) : ''
+      const pushedCalIds = pushedCalendarIdsForGroupDay(
+        pushedEvents,
+        groupId,
+        dayKey,
+      ).filter((id) => writableCalendars.some((c) => c.id === id))
+      setSelectedCommitIds(
+        pushedCalIds.length > 0
+          ? pushedCalIds
+          : defaultCommitCalendarId
+            ? [defaultCommitCalendarId]
+            : [],
+      )
+    }
     setModal(kind)
   }
 
@@ -204,9 +230,14 @@ export function TaskSidebar({
   }
 
   async function handleCommit() {
-    if (!selectedCommitId || !modalGroupId) return
-    const ok = await onCommit(modalGroupId, selectedCommitId)
-    if (ok) closeModal()
+    if (selectedCommitIds.length === 0 || !modalGroupId) return
+    const ok = await onCommit(modalGroupId, selectedCommitIds)
+    if (ok) {
+      if (selectedCommitIds[0]) {
+        onTargetCalendarChange(selectedCommitIds[0])
+      }
+      closeModal()
+    }
   }
 
   function handleNameGroup(e: React.FormEvent) {
@@ -216,26 +247,10 @@ export function TaskSidebar({
     closeModal()
   }
 
-  const modalResolved = modalGroup
-    ? resolveStack(modalGroup.tasks, modalGroup.anchor)
-    : []
   const modalDayKey = modalGroup ? localDateKey(modalGroup.anchor.at) : ''
   const modalIsUpdate =
     Boolean(modalGroupId) &&
     hasPushedGroupOnDay(pushedEvents, modalGroupId || '', modalDayKey)
-  const modalPushUnchanged =
-    modalIsUpdate &&
-    modalGroup != null &&
-    isPushUnchanged(
-      pushSnapshots,
-      selectedCommitId,
-      modalGroup.id,
-      modalDayKey,
-      stackPushFingerprint(
-        modalGroup.anchor,
-        modalResolved.filter((task) => !isTaskEmpty(task)),
-      ),
-    )
 
   return (
     <aside className="task-sidebar">
@@ -250,6 +265,10 @@ export function TaskSidebar({
             signedIn={signedIn}
             onSignIn={onSignIn}
             onSignOut={onSignOut}
+            authDiagnostics={authDiagnostics}
+            authSignedIn={authSignedIn}
+            authTestRefreshBusy={authTestRefreshBusy}
+            onAuthTestRefresh={onAuthTestRefresh}
             blockLibrary={blockLibrary}
             onReplaceBlockLibrary={onReplaceBlockLibrary}
             onShowNotice={onShowNotice}
@@ -270,7 +289,6 @@ export function TaskSidebar({
             busy={busy}
             pushedEvents={pushedEvents}
             pushSnapshots={pushSnapshots}
-            selectedCommitId={selectedCommitId}
             editingId={editingId}
             adding={addingGroupId === group.id && editingId === NEW_EDIT_ID}
             onEditingIdChange={onEditingIdChange}
@@ -323,24 +341,32 @@ export function TaskSidebar({
           onClose={closeModal}
         >
           <div className="modal-form">
-            <label>
-              <span>Target calendar</span>
-              <select
-                value={selectedCommitId}
-                onChange={(e) => onTargetCalendarChange(e.target.value)}
-                disabled={!writableCalendars.length || busy}
-              >
-                {writableCalendars.length === 0 ? (
-                  <option value="">Sign in to choose a calendar</option>
-                ) : (
-                  writableCalendars.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.summary}
-                    </option>
-                  ))
-                )}
-              </select>
-            </label>
+            <fieldset className="calendar-multi-select">
+              <legend>Calendars</legend>
+              {writableCalendars.length === 0 ? (
+                <p className="muted calendar-multi-select-empty">
+                  Sign in to choose calendars
+                </p>
+              ) : (
+                writableCalendars.map((calendar) => (
+                  <label key={calendar.id} className="checkbox-row">
+                    <input
+                      type="checkbox"
+                      checked={selectedCommitIds.includes(calendar.id)}
+                      disabled={busy}
+                      onChange={(e) => {
+                        setSelectedCommitIds((current) =>
+                          e.target.checked
+                            ? [...current, calendar.id]
+                            : current.filter((id) => id !== calendar.id),
+                        )
+                      }}
+                    />
+                    <span>{calendar.summary}</span>
+                  </label>
+                ))
+              )}
+            </fieldset>
             <div className="modal-actions">
               <button
                 type="button"
@@ -356,13 +382,7 @@ export function TaskSidebar({
                 disabled={
                   busy ||
                   (!modalIsUpdate && modalGroup.tasks.length === 0) ||
-                  !selectedCommitId ||
-                  modalPushUnchanged
-                }
-                title={
-                  modalPushUnchanged
-                    ? 'Calendar already matches this list'
-                    : undefined
+                  selectedCommitIds.length === 0
                 }
               >
                 {busy
@@ -420,7 +440,6 @@ type BlockGroupPanelProps = {
   busy?: boolean
   pushedEvents: PushedEvent[]
   pushSnapshots: PushSnapshot[]
-  selectedCommitId: string
   editingId: string | null
   adding: boolean
   onEditingIdChange: (id: string | null) => void
@@ -485,7 +504,6 @@ function BlockGroupPanel({
   busy,
   pushedEvents,
   pushSnapshots,
-  selectedCommitId,
   editingId,
   adding,
   onEditingIdChange,
@@ -710,18 +728,6 @@ function BlockGroupPanel({
   const dayKey = localDateKey(anchor.at)
   const onCalendar = hasPushedGroupOnDay(pushedEvents, group.id, dayKey)
   const isUpdate = onCalendar
-  const pushUnchanged =
-    isUpdate &&
-    isPushUnchanged(
-      pushSnapshots,
-      selectedCommitId,
-      group.id,
-      dayKey,
-      stackPushFingerprint(
-        anchor,
-        resolved.filter((task) => !isTaskEmpty(task)),
-      ),
-    )
   const hasCheckpointDrift = Boolean(
     group.checkpoint && !tasksMatchCheckpoint(tasks, group.checkpoint),
   )
@@ -1121,18 +1127,16 @@ function BlockGroupPanel({
     return (
       <section className="block-group block-group-collapsed block-group-disabled">
         <div className="block-group-collapsed-row">
-          <PowerToggle
-            enabled={enabled}
-            disabled={busy}
-            onChange={handlePowerChange}
-          />
           <button
             type="button"
-            className="block-group-collapsed-toggle"
+            className="block-group-header"
             onClick={() => onSetGroupEnabled(true)}
             disabled={busy}
             aria-expanded={false}
+            aria-label="Turn on and expand group"
+            title="Turn on and expand group"
           >
+            <PowerIndicator enabled={enabled} />
             <span className="block-group-collapsed-title">
               {collapsedLabel}
               {totalDurationMinutes > 0 && (
@@ -1166,14 +1170,18 @@ function BlockGroupPanel({
   return (
     <section className="block-group">
       <div className="stack-anchor">
-        <div className="stack-anchor-name-row">
-          <PowerToggle
-            enabled={enabled}
-            disabled={busy}
-            onChange={handlePowerChange}
-          />
+        <button
+          type="button"
+          className="block-group-header stack-anchor-name-row"
+          onClick={() => handlePowerChange(false)}
+          disabled={busy}
+          aria-expanded={true}
+          aria-label="Turn off and collapse group"
+          title="Turn off and collapse group"
+        >
+          <PowerIndicator enabled={enabled} />
           <span className="stack-anchor-name">{collapsedLabel}</span>
-        </div>
+        </button>
         <div className="stack-anchor-row">
           <div className="segmented segmented-sm segmented-single">
             <button
@@ -1511,19 +1519,9 @@ function BlockGroupPanel({
                 )}
                 <button
                   type="button"
-                  className={[
-                    'btn btn-primary btn-sm task-new-commit',
-                    pushUnchanged ? 'is-appearance-disabled' : '',
-                  ]
-                    .filter(Boolean)
-                    .join(' ')}
+                  className="btn btn-primary btn-sm task-new-commit"
                   onClick={onOpenCommit}
                   disabled={busy || (!isUpdate && tasks.length === 0)}
-                  title={
-                    pushUnchanged
-                      ? 'Already up to date — open to change calendar'
-                      : undefined
-                  }
                 >
                   {isUpdate ? 'Update' : 'Add'}
                   <CalendarIcon />
@@ -1663,27 +1661,14 @@ function RevertIcon() {
   )
 }
 
-function PowerToggle({
-  enabled,
-  disabled,
-  onChange,
-}: {
-  enabled: boolean
-  disabled?: boolean
-  onChange: (enabled: boolean) => void
-}) {
+function PowerIndicator({ enabled }: { enabled: boolean }) {
   return (
-    <button
-      type="button"
+    <span
       className={['power-toggle', enabled ? 'is-on' : ''].filter(Boolean).join(' ')}
-      aria-label={enabled ? 'Turn off group' : 'Turn on group'}
-      aria-pressed={enabled}
-      title={enabled ? 'Turn off and collapse group' : 'Turn on and expand group'}
-      disabled={disabled}
-      onClick={() => onChange(!enabled)}
+      aria-hidden
     >
       <PowerIcon />
-    </button>
+    </span>
   )
 }
 

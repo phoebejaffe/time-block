@@ -1,14 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { HowItWorksModal } from './HowItWorksModal'
 import { BlockLibraryModal } from './BlockLibraryModal'
+import { AuthSessionDiagnostics } from './AuthSessionDiagnostics'
 import type { BlockLibrary } from '../lib/tasks'
 import type { NoticeOptions } from '../lib/notice'
+import type { SessionDiagnostics } from '../lib/google'
 
 type SettingsMenuProps = {
   busy?: boolean
   signedIn?: boolean
   onSignIn?: () => void
   onSignOut?: () => void
+  authDiagnostics?: SessionDiagnostics
+  authSignedIn?: boolean
+  authTestRefreshBusy?: boolean
+  onAuthTestRefresh?: () => void
   blockLibrary: BlockLibrary
   onReplaceBlockLibrary: (library: BlockLibrary) => void
   onShowNotice?: (text: string, options?: NoticeOptions) => void
@@ -31,6 +37,10 @@ export function SettingsMenu({
   signedIn,
   onSignIn,
   onSignOut,
+  authDiagnostics,
+  authSignedIn,
+  authTestRefreshBusy,
+  onAuthTestRefresh,
   blockLibrary,
   onReplaceBlockLibrary,
   onShowNotice,
@@ -141,6 +151,15 @@ export function SettingsMenu({
                   Log in
                 </button>
               )}
+          {authDiagnostics && (
+            <AuthSessionDiagnostics
+              diagnostics={authDiagnostics}
+              signedIn={authSignedIn ?? Boolean(signedIn)}
+              testBusy={authTestRefreshBusy}
+              onTestRefresh={onAuthTestRefresh}
+              compact
+            />
+          )}
           <p className="settings-menu-build">{buildTime}</p>
         </div>
       )}

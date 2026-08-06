@@ -251,9 +251,8 @@ export type SyncTasksResult = {
  * Push the current stack to Google Calendar.
  * Updates events we previously created (tracked in synced push history for ~1 month),
  * recreates any that were deleted elsewhere, inserts new blocks, and removes
- * leftover events from an earlier push on the same day. If the target calendar
- * changed, also deletes that group/day's events from the previous calendar(s).
- * Continues after individual event failures and reports them in `failures`.
+ * leftover events from an earlier push on the same day. Continues after
+ * individual event failures and reports them in `failures`.
  */
 export async function syncTasksToCalendar(
   calendarId: string,
@@ -277,12 +276,6 @@ export async function syncTasksToCalendar(
       e.dayKey === dayKey,
   )
   const unusedDay = [...dayPool]
-  const previousCalendars = tracked.filter(
-    (e) =>
-      e.groupId === groupId &&
-      e.dayKey === dayKey &&
-      e.calendarId !== calendarId,
-  )
 
   // Dedup within this group/calendar/day only — a block pushed to one day
   // must never be conflated with the same block pushed to a different day.
@@ -310,36 +303,6 @@ export async function syncTasksToCalendar(
           e.eventId === event.eventId
         ),
     )
-  }
-
-  // Target calendar changed — delete this stack's events from the old one(s).
-  for (const orphan of previousCalendars) {
-    try {
-      const stillThere = await isActiveCalendarEvent(
-        orphan.calendarId,
-        orphan.eventId,
-      )
-      if (stillThere) {
-        await gapi.client.calendar.events.delete({
-          calendarId: orphan.calendarId,
-          eventId: orphan.eventId,
-        })
-      }
-      forgetTracked(orphan)
-      removed += 1
-    } catch (err) {
-      if (isNotFoundError(err)) {
-        forgetTracked(orphan)
-        removed += 1
-        continue
-      }
-      failures.push({
-        taskId: orphan.taskId,
-        title: 'Previously synced event',
-        action: 'remove',
-        message: formatError(err),
-      })
-    }
   }
 
   for (const task of resolved) {
@@ -544,6 +507,150 @@ export function calendarNamesForPushedGroupDay(
     ),
   ]
   return ids.map((id) => calendars.find((c) => c.id === id)?.summary ?? id)
+}
+
+export type SyncGroupCalendarsResult = {
+  updated: number
+  created: number
+  removed: number
+  failures: SyncTaskFailure[]
+  pushedEvents: PushedEvent[]
+  pushSnapshots: PushSnapshot[]
+  removedCalendarIds: string[]
+}
+
+/** Sync a group to multiple calendars; delete from deselected calendars. */
+export async function syncGroupToCalendars(
+  calendarIds: string[],
+  groupId: string,
+  tasks: Task[],
+  anchor: StackAnchor,
+  pushedEvents: PushedEvent[],
+): Promise<SyncGroupCalendarsResult> {
+  const dayKey = localDateKey(anchor.at)
+  const previouslyPushed = [
+    ...new Set(
+      pushedEvents
+        .filter((e) => e.groupId === groupId && e.dayKey === dayKey)
+        .map((e) => e.calendarId),
+    ),
+  ]
+  const removedCalendarIds = previouslyPushed.filter(
+    (id) => !calendarIds.includes(id),
+  )
+
+  let tracked = [...pushedEvents]
+  let updated = 0
+  let created = 0
+  let removed = 0
+  const failures: SyncTaskFailure[] = []
+  const pushSnapshots: PushSnapshot[] = []
+
+  for (const calendarId of removedCalendarIds) {
+    const result = await deleteGroupFromCalendarOnCalendar(
+      groupId,
+      dayKey,
+      calendarId,
+      tracked,
+    )
+    tracked = result.pushedEvents
+    removed += result.removed
+    failures.push(...result.failures)
+  }
+
+  for (const calendarId of calendarIds) {
+    const result = await syncTasksToCalendar(
+      calendarId,
+      groupId,
+      tasks,
+      anchor,
+      tracked,
+    )
+    tracked = result.pushedEvents
+    updated += result.updated
+    created += result.created
+    removed += result.removed
+    failures.push(...result.failures)
+    if (result.pushSnapshot) {
+      pushSnapshots.push(result.pushSnapshot)
+    }
+  }
+
+  return {
+    updated,
+    created,
+    removed,
+    failures,
+    pushedEvents: tracked,
+    pushSnapshots,
+    removedCalendarIds,
+  }
+}
+
+/** Delete pushed events for this group/day on one calendar. */
+export async function deleteGroupFromCalendarOnCalendar(
+  groupId: string,
+  dayKey: string,
+  calendarId: string,
+  pushedEvents: PushedEvent[],
+): Promise<DeleteFromCalendarResult> {
+  const toDelete = pushedEvents.filter(
+    (e) =>
+      e.groupId === groupId &&
+      e.dayKey === dayKey &&
+      e.calendarId === calendarId,
+  )
+  let tracked = [...pushedEvents]
+  let removed = 0
+  const failures: SyncTaskFailure[] = []
+
+  function forgetTracked(
+    event: Pick<PushedEvent, 'calendarId' | 'groupId' | 'eventId'>,
+  ) {
+    tracked = tracked.filter(
+      (e) =>
+        !(
+          e.calendarId === event.calendarId &&
+          e.groupId === event.groupId &&
+          e.eventId === event.eventId
+        ),
+    )
+  }
+
+  for (const event of toDelete) {
+    try {
+      const stillThere = await isActiveCalendarEvent(
+        event.calendarId,
+        event.eventId,
+      )
+      if (stillThere) {
+        await gapi.client.calendar.events.delete({
+          calendarId: event.calendarId,
+          eventId: event.eventId,
+        })
+      }
+      forgetTracked(event)
+      removed += 1
+    } catch (err) {
+      if (isNotFoundError(err)) {
+        forgetTracked(event)
+        removed += 1
+        continue
+      }
+      failures.push({
+        taskId: event.taskId,
+        title: 'Calendar event',
+        action: 'remove',
+        message: formatError(err),
+      })
+    }
+  }
+
+  return {
+    removed,
+    failures,
+    pushedEvents: prunePushedEvents(tracked),
+  }
 }
 
 /** Delete all calendar events we previously pushed for this group on this day. */

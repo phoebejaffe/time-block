@@ -169,7 +169,23 @@ export function hasPushedTaskOnDay(
   return events.some((e) => e.taskId === taskId && e.dayKey === dayKey)
 }
 
-/** True when this block matches what was last pushed for its group/day. */
+/** Calendar ids this group was pushed to on a given day. */
+export function pushedCalendarIdsForGroupDay(
+  events: PushedEvent[],
+  groupId: string,
+  dayKey: string,
+): string[] {
+  if (!groupId || !dayKey) return []
+  return [
+    ...new Set(
+      events
+        .filter((e) => e.groupId === groupId && e.dayKey === dayKey)
+        .map((e) => e.calendarId),
+    ),
+  ]
+}
+
+/** True when this block matches what was last pushed for its group/day on every calendar. */
 export function isTaskPushUnchanged(
   events: PushedEvent[],
   snapshots: PushSnapshot[],
@@ -177,34 +193,36 @@ export function isTaskPushUnchanged(
   dayKey: string,
   task: { id: string; title: string; start: Date; end: Date },
 ): boolean {
-  const push = events.find(
+  const pushes = events.filter(
     (e) =>
       e.taskId === task.id && e.groupId === groupId && e.dayKey === dayKey,
   )
-  if (!push) return false
+  if (pushes.length === 0) return false
 
-  const snapshot = snapshots.find(
-    (s) =>
-      s.calendarId === push.calendarId &&
-      s.groupId === groupId &&
-      s.dayKey === dayKey,
-  )
-  if (!snapshot) return false
-
-  try {
-    const parsed = JSON.parse(snapshot.fingerprint) as {
-      items?: [string, string, string, string][]
-    }
-    const item = parsed.items?.find(([id]) => id === task.id)
-    if (!item) return false
-    return (
-      item[1] === task.title &&
-      item[2] === task.start.toISOString() &&
-      item[3] === task.end.toISOString()
+  return pushes.every((push) => {
+    const snapshot = snapshots.find(
+      (s) =>
+        s.calendarId === push.calendarId &&
+        s.groupId === groupId &&
+        s.dayKey === dayKey,
     )
-  } catch {
-    return false
-  }
+    if (!snapshot) return false
+
+    try {
+      const parsed = JSON.parse(snapshot.fingerprint) as {
+        items?: [string, string, string, string][]
+      }
+      const item = parsed.items?.find(([id]) => id === task.id)
+      if (!item) return false
+      return (
+        item[1] === task.title &&
+        item[2] === task.start.toISOString() &&
+        item[3] === task.end.toISOString()
+      )
+    } catch {
+      return false
+    }
+  })
 }
 
 /** Stable fingerprint of what a sync would write for this stack. */
@@ -249,9 +267,32 @@ export function upsertPushSnapshot(
     savedAt: new Date().toISOString(),
   }
   const filtered = snapshots.filter(
-    (s) => !(s.groupId === groupId && s.dayKey === dayKey),
+    (s) =>
+      !(
+        s.groupId === groupId &&
+        s.dayKey === dayKey &&
+        s.calendarId === calendarId
+      ),
   )
   return prunePushSnapshots([...filtered, next])
+}
+
+/** Remove synced state for one calendar on a group/day. */
+export function clearGroupDayCalendarPushSnapshot(
+  snapshots: PushSnapshot[],
+  calendarId: string,
+  groupId: string,
+  dayKey: string,
+): PushSnapshot[] {
+  if (!calendarId || !groupId || !dayKey) return snapshots
+  return snapshots.filter(
+    (s) =>
+      !(
+        s.calendarId === calendarId &&
+        s.groupId === groupId &&
+        s.dayKey === dayKey
+      ),
+  )
 }
 
 /** Remove synced state for a group on a given day (after deleting from calendar). */
