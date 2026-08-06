@@ -418,8 +418,8 @@ export default function App() {
       String(import.meta.env.VITE_GOOGLE_CLIENT_ID).includes('your-client-id'))
   const missingFirebase = import.meta.env.DEV && !isFirebaseConfigured()
 
-  // After OAuth, the main grid mounts once Firestore finishes loading. FullCalendar
-  // often paints at 0 height until a resize — keep nudging past the first paint.
+  // After OAuth → app-body mounts; give flex layout a moment then the calendar
+  // measures itself via ResizeObserver (pixel height, not percentage).
   useLayoutEffect(() => {
     if (!session.ready || !session.signedIn || userData.loading) return
 
@@ -429,9 +429,7 @@ export default function App() {
 
     nudgeLayout()
     requestAnimationFrame(nudgeLayout)
-    const timers = [50, 150, 400, 800, 1200].map((ms) =>
-      window.setTimeout(nudgeLayout, ms),
-    )
+    const timers = [50, 150, 400].map((ms) => window.setTimeout(nudgeLayout, ms))
 
     return () => {
       for (const id of timers) window.clearTimeout(id)

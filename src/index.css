@@ -270,9 +270,20 @@ body.is-sidebar-resizing .main-panel {
 }
 
 .task-form-duration input {
-  width: 2.5rem;
-  min-width: 2.5rem;
+  width: 2.75rem;
+  min-width: 2.75rem;
   text-align: right;
+}
+
+.task-form-duration input.task-form-duration-mins {
+  width: 3.025rem;
+  min-width: 3.025rem;
+}
+
+.task-form-duration-native input[type='time'] {
+  width: auto;
+  min-width: 6.5rem;
+  text-align: left;
 }
 
 .task-empty-toggle.is-active {

@@ -267,6 +267,8 @@ export function CalendarView({
   const calendarBodyRef = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const calendarsMenuRef = useRef<HTMLDivElement>(null)
+  /** Pixel height — `height="100%"` breaks after the OAuth gate; numeric height sticks across re-renders. */
+  const [calendarHeight, setCalendarHeight] = useState(0)
   const dragOriginStartRef = useRef<number | null>(null)
   /** First FC span.start during a drag — cancels useEventCenter jump. */
   const dragSpanOriginRef = useRef<number | null>(null)
@@ -284,45 +286,28 @@ export function CalendarView({
   onAnchorCommitRef.current = onAnchorCommit
   onStackShiftPreviewRef.current = onStackShiftPreview
 
-  /** FullCalendar with height="100%" often lays out at 0 after OAuth gate swap. */
-  function refreshCalendarSize(): boolean {
+  /**
+   * Measure the flex parent and feed FullCalendar an integer height.
+   * Percentage height is unreliable after the sign-in gate mounts the grid,
+   * and React re-renders would reset `height="100%"` after updateSize().
+   */
+  function syncCalendarHeight() {
     const el = calendarBodyRef.current
-    const api = calendarRef.current?.getApi()
-    if (!el || !api) return false
-    if (el.clientHeight < 2 || el.clientWidth < 2) return false
-    api.updateSize()
-    // Container can be sized while FC's internal scroller is still 0×0.
-    const scroller = el.querySelector('.fc-scroller') as HTMLElement | null
-    if (scroller && scroller.clientHeight < 2) return false
-    return true
+    if (!el) return
+    const next = Math.floor(el.getBoundingClientRect().height)
+    if (next < 2) return
+    setCalendarHeight((prev) => (prev === next ? prev : next))
   }
 
-  function scheduleCalendarSizeRefresh() {
-    let attempts = 0
-    const maxAttempts = 60
-    let settled = false
-
-    const tick = () => {
-      const ok = refreshCalendarSize()
-      if (ok) {
-        if (!settled) {
-          settled = true
-          // One more pass after paint — FC sometimes needs a second updateSize.
-          window.setTimeout(() => refreshCalendarSize(), 0)
-          window.setTimeout(() => refreshCalendarSize(), 100)
-        }
-        return
-      }
-      if (++attempts >= maxAttempts) return
-      requestAnimationFrame(tick)
-    }
-
-    requestAnimationFrame(tick)
-    window.setTimeout(tick, 50)
-    window.setTimeout(tick, 150)
-    window.setTimeout(tick, 400)
-    window.setTimeout(tick, 800)
-    window.setTimeout(() => refreshCalendarSize(), 1200)
+  function scheduleCalendarHeightSync() {
+    syncCalendarHeight()
+    requestAnimationFrame(() => {
+      syncCalendarHeight()
+      requestAnimationFrame(syncCalendarHeight)
+    })
+    window.setTimeout(syncCalendarHeight, 50)
+    window.setTimeout(syncCalendarHeight, 150)
+    window.setTimeout(syncCalendarHeight, 400)
   }
 
   const resolvedTaskEvents = useMemo(
@@ -361,7 +346,10 @@ export function CalendarView({
 
   const { zoom, pinchingRef } = useCalendarZoom({
     bodyRef: calendarBodyRef,
-    onZoomChange: () => calendarRef.current?.getApi().updateSize(),
+    onZoomChange: () => {
+      syncCalendarHeight()
+      calendarRef.current?.getApi().updateSize()
+    },
     onPinchStart: () => {
       // Two fingers: zoom only — never create or commit a stack move.
       discardDragRef.current = true
@@ -555,31 +543,29 @@ export function CalendarView({
   }, [])
 
   useLayoutEffect(() => {
-    scheduleCalendarSizeRefresh()
+    scheduleCalendarHeightSync()
 
-    const targets = [shellRef.current, calendarBodyRef.current].filter(
-      (el): el is HTMLDivElement => el != null,
-    )
+    const el = calendarBodyRef.current
+    if (!el) return
+
     const observer = new ResizeObserver(() => {
-      refreshCalendarSize()
+      syncCalendarHeight()
     })
-    for (const target of targets) observer.observe(target)
+    observer.observe(el)
+    if (shellRef.current) observer.observe(shellRef.current)
 
     function onShow() {
       if (document.visibilityState === 'hidden') return
-      scheduleCalendarSizeRefresh()
-    }
-    function onWindowResize() {
-      refreshCalendarSize()
+      scheduleCalendarHeightSync()
     }
     window.addEventListener('focus', onShow)
-    window.addEventListener('resize', onWindowResize)
+    window.addEventListener('resize', syncCalendarHeight)
     document.addEventListener('visibilitychange', onShow)
 
     return () => {
       observer.disconnect()
       window.removeEventListener('focus', onShow)
-      window.removeEventListener('resize', onWindowResize)
+      window.removeEventListener('resize', syncCalendarHeight)
       document.removeEventListener('visibilitychange', onShow)
       setCalendarDragging(false)
     }
@@ -716,7 +702,7 @@ export function CalendarView({
       !isTodayOrTomorrow(pickViewDate(arg.start, arg.end, now)),
     )
     onDatesSet(arg.start, arg.end)
-    scheduleCalendarSizeRefresh()
+    scheduleCalendarHeightSync()
   }
 
   function changeView(next: CalendarViewType) {
@@ -818,10 +804,8 @@ export function CalendarView({
             },
           }}
           dayHeaders={false}
-          height="100%"
-          windowResize={() => {
-            refreshCalendarSize()
-          }}
+          height={calendarHeight > 0 ? calendarHeight : '100%'}
+          windowResize={syncCalendarHeight}
           nowIndicator
           editable
           selectable={false}

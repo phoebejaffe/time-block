@@ -22,6 +22,35 @@ function normalizeDurationFields(
   return { hours: hoursVal, minutes: minutesVal }
 }
 
+/** iPhone/iPad — native `type="time"` wheels are the closest duration picker. */
+function prefersNativeDurationPicker(): boolean {
+  if (typeof navigator === 'undefined') return false
+  const ua = navigator.userAgent
+  if (/iPhone|iPod/.test(ua)) return true
+  // iPadOS 13+ reports as MacIntel with touch.
+  if (/iPad/.test(ua)) return true
+  return navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1
+}
+
+function pad2(n: number): string {
+  return String(Math.max(0, Math.round(n))).padStart(2, '0')
+}
+
+/** `type="time"` only supports 00:00–23:59; treat that as a duration. */
+function durationToTimeValue(totalMinutes: number): string {
+  const split = splitDurationMinutes(Math.min(totalMinutes, 23 * 60 + 59))
+  return `${pad2(split.hours)}:${pad2(split.minutes)}`
+}
+
+function timeValueToDuration(value: string): number {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(value.trim())
+  if (!match) return 15
+  const h = Number(match[1])
+  const m = Number(match[2])
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return 15
+  return combineDurationMinutes(h, m)
+}
+
 export function TaskFieldsForm({
   initialTitle,
   initialDuration,
@@ -56,6 +85,10 @@ export function TaskFieldsForm({
   const [hours, setHours] = useState<number | ''>(initialSplit.hours)
   const [minutes, setMinutes] = useState<number | ''>(initialSplit.minutes)
   const [empty, setEmpty] = useState(initialEmpty)
+  // Native time wheels only go to 23:59 — keep dual fields for longer blocks.
+  const [nativeDuration] = useState(
+    () => prefersNativeDurationPicker() && initialDuration < 24 * 60,
+  )
 
   function resolveTotalMinutes(h: number | '', m: number | ''): number {
     if (h === '' && m === '') return initialDuration
@@ -152,6 +185,11 @@ export function TaskFieldsForm({
       }
     }
     setMinutes(Math.max(0, Math.round(next)))
+  }
+
+  function handleNativeDurationChange(raw: string) {
+    if (!raw) return
+    setTotalDuration(timeValueToDuration(raw))
   }
 
   function beginDurationScrub(e: React.PointerEvent<HTMLInputElement>) {
@@ -260,6 +298,10 @@ export function TaskFieldsForm({
     })
   }
 
+  const nativeTimeValue = durationToTimeValue(
+    resolveTotalMinutes(hours, minutes),
+  )
+
   return (
     <form className="task-form" onSubmit={handleSubmit} noValidate>
       <input
@@ -272,62 +314,85 @@ export function TaskFieldsForm({
         autoFocus
       />
       <div className="task-form-row">
-        <div className="task-form-duration">
-          <input
-            type="number"
-            inputMode="numeric"
-            min={0}
-            step={1}
-            value={hours}
-            onChange={(e) => handleHoursChange(e.target.value)}
-            onBlur={commitDurationBlur}
-            onKeyDown={(e) => {
-              if (e.key === 'ArrowUp') {
-                e.preventDefault()
-                nudgeHours('up')
-                return
-              }
-              if (e.key === 'ArrowDown') {
-                e.preventDefault()
-                nudgeHours('down')
-                return
-              }
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                e.currentTarget.form?.requestSubmit()
-              }
-            }}
-            aria-label="Duration hours"
-          />
-          <span className="muted">h</span>
-          <input
-            type="number"
-            inputMode="numeric"
-            min={0}
-            step={5}
-            value={minutes}
-            onChange={(e) => handleMinutesChange(e.target.value)}
-            onBlur={commitDurationBlur}
-            onPointerDown={beginDurationScrub}
-            onKeyDown={(e) => {
-              if (e.key === 'ArrowUp') {
-                e.preventDefault()
-                nudgeTotalDuration('up')
-                return
-              }
-              if (e.key === 'ArrowDown') {
-                e.preventDefault()
-                nudgeTotalDuration('down')
-                return
-              }
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                e.currentTarget.form?.requestSubmit()
-              }
-            }}
-            aria-label="Duration minutes"
-          />
-          <span className="muted">m</span>
+        <div
+          className={[
+            'task-form-duration',
+            nativeDuration ? 'task-form-duration-native' : '',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+        >
+          {nativeDuration ? (
+            <>
+              <input
+                type="time"
+                step={300}
+                value={nativeTimeValue}
+                onChange={(e) => handleNativeDurationChange(e.target.value)}
+                aria-label="Duration"
+              />
+              <span className="muted">duration</span>
+            </>
+          ) : (
+            <>
+              <input
+                type="number"
+                inputMode="numeric"
+                min={0}
+                step={1}
+                value={hours}
+                onChange={(e) => handleHoursChange(e.target.value)}
+                onBlur={commitDurationBlur}
+                onKeyDown={(e) => {
+                  if (e.key === 'ArrowUp') {
+                    e.preventDefault()
+                    nudgeHours('up')
+                    return
+                  }
+                  if (e.key === 'ArrowDown') {
+                    e.preventDefault()
+                    nudgeHours('down')
+                    return
+                  }
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    e.currentTarget.form?.requestSubmit()
+                  }
+                }}
+                aria-label="Duration hours"
+              />
+              <span className="muted">h</span>
+              <input
+                type="number"
+                inputMode="numeric"
+                min={0}
+                step={5}
+                className="task-form-duration-mins"
+                value={minutes}
+                onChange={(e) => handleMinutesChange(e.target.value)}
+                onBlur={commitDurationBlur}
+                onPointerDown={beginDurationScrub}
+                onKeyDown={(e) => {
+                  if (e.key === 'ArrowUp') {
+                    e.preventDefault()
+                    nudgeTotalDuration('up')
+                    return
+                  }
+                  if (e.key === 'ArrowDown') {
+                    e.preventDefault()
+                    nudgeTotalDuration('down')
+                    return
+                  }
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    e.currentTarget.form?.requestSubmit()
+                  }
+                }}
+                aria-label="Duration minutes"
+              />
+              <span className="muted">m</span>
+            </>
+          )}
         </div>
         <button
           type="button"
