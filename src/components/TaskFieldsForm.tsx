@@ -22,14 +22,30 @@ function normalizeDurationFields(
   return { hours: hoursVal, minutes: minutesVal }
 }
 
-/** iPhone/iPad — native `type="time"` wheels are the closest duration picker. */
+/**
+ * Prefer a single native picker on phones/tablets. There is no HTML duration
+ * input; `type="time"` is the closest (iOS wheels). Detect via pointer media
+ * queries — UA sniffing fails when iOS "Request Desktop Website" is on.
+ */
 function prefersNativeDurationPicker(): boolean {
-  if (typeof navigator === 'undefined') return false
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+    return false
+  }
+  try {
+    if (window.matchMedia('(pointer: coarse)').matches) return true
+    if (
+      navigator.maxTouchPoints > 0 &&
+      window.matchMedia('(hover: none)').matches
+    ) {
+      return true
+    }
+  } catch {
+    /* matchMedia unavailable */
+  }
   const ua = navigator.userAgent
-  if (/iPhone|iPod/.test(ua)) return true
-  // iPadOS 13+ reports as MacIntel with touch.
-  if (/iPad/.test(ua)) return true
-  return navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1
+  if (/iPhone|iPod|iPad/.test(ua)) return true
+  if (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1) return true
+  return false
 }
 
 function pad2(n: number): string {
@@ -329,9 +345,9 @@ export function TaskFieldsForm({
                 step={300}
                 value={nativeTimeValue}
                 onChange={(e) => handleNativeDurationChange(e.target.value)}
-                aria-label="Duration"
+                aria-label="Duration (hours and minutes)"
               />
-              <span className="muted">duration</span>
+              <span className="muted">h:m</span>
             </>
           ) : (
             <>
