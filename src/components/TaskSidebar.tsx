@@ -354,8 +354,11 @@ export function TaskSidebar({
           dialogClassName="modal-dialog-commit"
         >
           <div className="modal-form modal-form-commit">
-            <fieldset className="calendar-multi-select">
-              <legend>Calendars you can edit</legend>
+            <div
+              className="calendar-multi-select"
+              role="group"
+              aria-label="Calendars"
+            >
               {commitCalendars.length === 0 ? (
                 <p className="muted calendar-multi-select-empty">
                   Sign in to choose calendars
@@ -379,7 +382,7 @@ export function TaskSidebar({
                   </label>
                 ))
               )}
-            </fieldset>
+            </div>
             <div className="modal-actions">
               <button
                 type="button"
