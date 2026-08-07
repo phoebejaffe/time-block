@@ -5,6 +5,7 @@ import {
   splitDurationMinutes,
   stepDurationMinutes,
 } from '../lib/tasks'
+import { IosDurationPicker } from './IosDurationPicker'
 
 const ANCHOR_SCRUB_PX = 25
 const ANCHOR_SCRUB_ACTIVATE_PX = 8
@@ -22,8 +23,8 @@ function normalizeDurationFields(
   return { hours: hoursVal, minutes: minutesVal }
 }
 
-/** iPhone/iPad — `<select>` opens native wheel pickers (not clock-time). */
-function prefersNativeDurationWheels(): boolean {
+/** iPhone/iPad — custom HH:MM duration wheels (HTML has no duration input). */
+function prefersIosDurationPicker(): boolean {
   if (typeof navigator === 'undefined') return false
   const ua = navigator.userAgent
   if (/iPhone|iPod/.test(ua)) return true
@@ -31,9 +32,6 @@ function prefersNativeDurationWheels(): boolean {
   if (/iPad/.test(ua)) return true
   return navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1
 }
-
-const HOUR_WHEEL_OPTIONS = Array.from({ length: 24 }, (_, i) => i)
-const MINUTE_WHEEL_OPTIONS = Array.from({ length: 60 }, (_, i) => i)
 
 export function TaskFieldsForm({
   initialTitle,
@@ -69,9 +67,9 @@ export function TaskFieldsForm({
   const [hours, setHours] = useState<number | ''>(initialSplit.hours)
   const [minutes, setMinutes] = useState<number | ''>(initialSplit.minutes)
   const [empty, setEmpty] = useState(initialEmpty)
-  // Wheel selects cap at 23:59 — keep numeric fields for longer blocks.
-  const [nativeDurationWheels] = useState(
-    () => prefersNativeDurationWheels() && initialDuration < 24 * 60,
+  // Duration sheet caps at 23:59 — keep numeric fields for longer blocks.
+  const [iosDurationPicker] = useState(
+    () => prefersIosDurationPicker() && initialDuration < 24 * 60,
   )
 
   function resolveTotalMinutes(h: number | '', m: number | ''): number {
@@ -277,9 +275,6 @@ export function TaskFieldsForm({
     })
   }
 
-  const wheelHours = typeof hours === 'number' ? hours : 0
-  const wheelMinutes = typeof minutes === 'number' ? minutes : 0
-
   return (
     <form className="task-form" onSubmit={handleSubmit} noValidate>
       <input
@@ -295,39 +290,16 @@ export function TaskFieldsForm({
         <div
           className={[
             'task-form-duration',
-            nativeDurationWheels ? 'task-form-duration-native' : '',
+            iosDurationPicker ? 'task-form-duration-ios' : '',
           ]
             .filter(Boolean)
             .join(' ')}
         >
-          {nativeDurationWheels ? (
-            <>
-              <select
-                value={wheelHours}
-                onChange={(e) => setHours(Number(e.target.value))}
-                aria-label="Duration hours"
-              >
-                {HOUR_WHEEL_OPTIONS.map((h) => (
-                  <option key={h} value={h}>
-                    {h}
-                  </option>
-                ))}
-              </select>
-              <span className="muted">h</span>
-              <select
-                value={wheelMinutes}
-                onChange={(e) => setMinutes(Number(e.target.value))}
-                aria-label="Duration minutes"
-                className="task-form-duration-mins"
-              >
-                {MINUTE_WHEEL_OPTIONS.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
-                ))}
-              </select>
-              <span className="muted">m</span>
-            </>
+          {iosDurationPicker ? (
+            <IosDurationPicker
+              totalMinutes={resolveTotalMinutes(hours, minutes)}
+              onChange={setTotalDuration}
+            />
           ) : (
             <>
               <input
