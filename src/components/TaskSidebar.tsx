@@ -165,6 +165,8 @@ export function TaskSidebar({
   const [modalGroupId, setModalGroupId] = useState<string | null>(null)
   const [addingGroupId, setAddingGroupId] = useState<string | null>(null)
   const [selectedCommitIds, setSelectedCommitIds] = useState<string[]>([])
+  /** Snapshot of calendar order when the commit modal opens (selected first). */
+  const [commitCalendarOrder, setCommitCalendarOrder] = useState<string[]>([])
 
   const defaultCommitCalendarId = useMemo(() => {
     if (
@@ -214,12 +216,25 @@ export function TaskSidebar({
         groupId,
         dayKey,
       ).filter((id) => writableCalendars.some((c) => c.id === id))
-      setSelectedCommitIds(
+      const initialSelected =
         pushedCalIds.length > 0
           ? pushedCalIds
           : defaultCommitCalendarId
             ? [defaultCommitCalendarId]
-            : [],
+            : []
+      setSelectedCommitIds(initialSelected)
+      const selected = new Set(initialSelected)
+      setCommitCalendarOrder(
+        [...writableCalendars]
+          .sort((a, b) => {
+            const aSelected = selected.has(a.id)
+            const bSelected = selected.has(b.id)
+            if (aSelected !== bSelected) return aSelected ? -1 : 1
+            if (a.primary && !b.primary) return -1
+            if (!a.primary && b.primary) return 1
+            return a.summary.localeCompare(b.summary)
+          })
+          .map((calendar) => calendar.id),
       )
     }
     setModal(kind)
@@ -228,6 +243,7 @@ export function TaskSidebar({
   function closeModal() {
     setModal(null)
     setModalGroupId(null)
+    setCommitCalendarOrder([])
   }
 
   async function handleCommit() {
@@ -253,16 +269,18 @@ export function TaskSidebar({
     Boolean(modalGroupId) &&
     hasPushedGroupOnDay(pushedEvents, modalGroupId || '', modalDayKey)
   const commitCalendars = useMemo(() => {
-    const selected = new Set(selectedCommitIds)
-    return [...writableCalendars].sort((a, b) => {
-      const aSelected = selected.has(a.id)
-      const bSelected = selected.has(b.id)
-      if (aSelected !== bSelected) return aSelected ? -1 : 1
-      if (a.primary && !b.primary) return -1
-      if (!a.primary && b.primary) return 1
-      return a.summary.localeCompare(b.summary)
-    })
-  }, [writableCalendars, selectedCommitIds])
+    const byId = new Map(writableCalendars.map((c) => [c.id, c]))
+    const ordered = commitCalendarOrder
+      .map((id) => byId.get(id))
+      .filter((calendar): calendar is (typeof writableCalendars)[number] =>
+        Boolean(calendar),
+      )
+    const seen = new Set(commitCalendarOrder)
+    for (const calendar of writableCalendars) {
+      if (!seen.has(calendar.id)) ordered.push(calendar)
+    }
+    return ordered
+  }, [writableCalendars, commitCalendarOrder])
 
   return (
     <aside className="task-sidebar">

@@ -524,10 +524,13 @@ above everything else. Modals used:
   based on whether this group+day has already been pushed) — a multi-select
   checklist of the user's writable calendars (pre-checked from the last
   push for this group+day when updating; deselected calendars have that
-  group's events deleted on commit). The dialog is capped at 80% of the
-  viewport height with the calendar list scrolling and Cancel/Add|Update
-  pinned at the bottom. The primary action is disabled while busy, while
-  there are no tasks on a fresh Add, or while no calendar is selected.
+  group's events deleted on commit). On open, already-selected calendars
+  are bubbled to the top of the list; that order stays fixed while the
+  modal is open (toggling a checkbox does not reshuffle). The dialog is
+  capped at 80% of the viewport height with the calendar list scrolling
+  and Cancel/Add|Update pinned at the bottom. The primary action is
+  disabled while busy, while there are no tasks on a fresh Add, or while
+  no calendar is selected.
 - **Block library** (opened from the settings menu, not from a group) — a
   wider dialog listing every category, each with a name heading, a small
   "···" overflow menu (Rename — opens a nested "Rename category" modal
