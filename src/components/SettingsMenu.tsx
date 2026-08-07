@@ -5,6 +5,7 @@ import { AuthSessionDiagnostics } from './AuthSessionDiagnostics'
 import type { BlockLibrary } from '../lib/tasks'
 import type { NoticeOptions } from '../lib/notice'
 import type { SessionDiagnostics } from '../lib/google'
+import { hardReloadApp } from '../lib/hardReload'
 
 type SettingsMenuProps = {
   busy?: boolean
@@ -117,7 +118,7 @@ export function SettingsMenu({
             className="calendar-menu-item"
             onClick={() => {
               setOpen(false)
-              window.location.reload()
+              void hardReloadApp()
             }}
           >
             Reload App

@@ -555,10 +555,13 @@ above everything else. Modals used:
 ### 7.5 Settings menu (sidebar header)
 
 An icon-button dropdown containing, top to bottom: "Block library" (opens
-that modal), "How this works" (opens the help modal), "Reload App" (hard
-`location.reload()`), then either "Log out" or "Log in" depending on
-session state, and finally a small non-interactive line showing the app's
-build timestamp (for diagnosing which deployed version is running).
+that modal), "How this works" (opens the help modal), "Reload App" (clears
+Cache Storage / service workers if any, then navigates to the same URL with
+a cache-busting query so `index.html` and its hashed JS/CSS are fetched
+fresh — plain `location.reload()` is not enough on GitHub Pages / Safari),
+then either "Log out" or "Log in" depending on session state, and finally a
+small non-interactive line showing the app's build timestamp (for diagnosing
+which deployed version is running).
 
 ### 7.6 Notices / toasts
 
