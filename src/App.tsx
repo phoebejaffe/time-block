@@ -246,7 +246,8 @@ export default function App() {
   function handleRevertToCheckpoint(groupId: string) {
     const group = plan.plan.groups.find((g) => g.id === groupId)
     const previousTasks = group?.tasks
-    if (!previousTasks) return
+    const previousAnchor = group?.anchor
+    if (!previousTasks || !previousAnchor) return
 
     plan.revertToCheckpoint(groupId)
     handleEditingIdChange(null)
@@ -256,6 +257,7 @@ export default function App() {
       progressMs: 5_000,
       onAction: () => {
         plan.replaceTasks(groupId, previousTasks)
+        plan.setAnchor(groupId, previousAnchor)
         clear()
       },
     })

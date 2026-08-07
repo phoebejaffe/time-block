@@ -23,9 +23,10 @@ import {
   isGroupEnabled,
   isTaskEmpty,
   localDateKey,
+  groupMatchesCheckpoint,
   resolveSavedBlocksFromKeys,
   resolveStack,
-  tasksMatchCheckpoint,
+  toggleAnchorPreservingStack,
   toLocalTimeValue,
 } from '../lib/tasks'
 import {
@@ -765,14 +766,18 @@ function BlockGroupPanel({
   const groupStyle = {
     ['--group-accent' as string]: groupSidebarAccentColor(group.color),
   }
-  const hasCheckpointDrift = Boolean(
-    group.checkpoint && !tasksMatchCheckpoint(tasks, group.checkpoint),
-  )
-  const showSaveCheckpoint = !group.checkpoint || hasCheckpointDrift
   const totalDurationMinutes = tasks.reduce(
     (sum, task) => sum + task.durationMinutes,
     0,
   )
+  const hasCheckpointDrift = Boolean(
+    group.checkpoint &&
+      !groupMatchesCheckpoint(
+        { tasks, anchor },
+        group.checkpoint,
+      ),
+  )
+  const showSaveCheckpoint = !group.checkpoint || hasCheckpointDrift
 
   useLayoutEffect(() => {
     if (!listMenuOpen) {
@@ -1235,10 +1240,9 @@ function BlockGroupPanel({
                   : 'Starts at selected time; tap to anchor from end'
               }
               onClick={() =>
-                onAnchorChange({
-                  ...anchor,
-                  kind: anchor.kind === 'start' ? 'end' : 'start',
-                })
+                onAnchorChange(
+                  toggleAnchorPreservingStack(anchor, totalDurationMinutes),
+                )
               }
             >
               {anchor.kind === 'start' ? 'Starts' : 'Ends'}

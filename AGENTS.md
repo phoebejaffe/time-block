@@ -107,8 +107,10 @@ testing.
   never pushed to Google Calendar.** Don't let them leak into
   `syncTasksToCalendar`'s Google-side writes.
 - **Checkpoints are per-group, inline, single-slot.** `BlockGroup.checkpoint`
-  holds at most one saved snapshot; "drift" is computed by comparing
-  title/duration/empty in order (ids and resolved times don't count).
+  holds at most one saved snapshot (tasks + anchor); "drift" is computed by
+  comparing title/duration/empty in order plus anchor kind/clock time (ids
+  don't count). Toggling Starts/Ends shifts `anchor.at` by the stack duration
+  so blocks keep their calendar position.
 - **Push tracking (`PushedEvent`/`PushSnapshot`) is what makes "Add" vs.
   "Update" and the synced/out-of-sync icons work** — it's how the app knows
   what it already wrote to Google without re-fetching. Any change to the

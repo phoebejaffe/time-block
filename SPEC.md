@@ -184,6 +184,7 @@ that day. Default: a new group anchors "ends at 9:00am today."
 type BlockGroupCheckpoint = {
   tasks: Array<{ title: string; durationMinutes: number; empty?: boolean }>
   savedAt: string  // ISO
+  anchor?: StackAnchor  // saved with newer checkpoints; omitted on legacy ones
 }
 ```
 
@@ -194,23 +195,26 @@ making one-off adjustments (e.g. a daily routine that gets tweaked day to
 day but should be easy to reset).
 
 - **Save as default / Update default blocks** snapshots the group's current
-  tasks (title, duration, `empty` flag, and order only — no ids or resolved
-  times) as the checkpoint, overwriting any previous one. The overflow menu
-  labels this action "Save as default" if the group has no checkpoint yet,
-  or "Update default blocks" if it does; updating an existing checkpoint
-  asks for confirmation via a native dialog first. Only offered while the
-  group is enabled, and only when there either is no checkpoint yet or the
-  current tasks have "drifted" from it.
+  tasks (title, duration, `empty` flag, and order — no ids) and its current
+  anchor (kind + datetime) as the checkpoint, overwriting any previous one.
+  The overflow menu labels this action "Save as default" if the group has no
+  checkpoint yet, or "Update default blocks" if it does; updating an existing
+  checkpoint asks for confirmation via a native dialog first. Only offered
+  while the group is enabled, and only when there either is no checkpoint yet
+  or the current group has "drifted" from it.
 - **Drift** is computed by comparing the group's current tasks against the
-  checkpoint's tasks, in order, by title/duration/empty-state only (ids and
-  resolved times are ignored, and differing lengths always count as
-  drifted). While drifted, an inline **Revert** button (with its own icon)
-  appears next to the group's overflow-menu trigger — a one-click shortcut
-  that replaces the group's tasks wholesale with fresh copies (new ids)
-  rebuilt from the checkpoint, without opening the menu.
+  checkpoint's tasks, in order, by title/duration/empty-state (ids ignored;
+  differing lengths always count as drifted), **and** — when the checkpoint
+  includes an `anchor` — by comparing anchor `kind` and local clock time
+  (`HH:mm`). Changing Starts/Ends or the anchor time therefore shows Revert.
+  Legacy checkpoints without `anchor` only compare tasks. While drifted, an
+  inline **Revert** button (with its own icon) appears next to the group's
+  overflow-menu trigger — a one-click shortcut that replaces the group's
+  tasks wholesale with fresh copies (new ids) rebuilt from the checkpoint
+  and restores the saved anchor when present, without opening the menu.
 - Both saving and reverting show an "Undo" toast (§7.6) that restores the
-  exact previous state (the prior checkpoint, or the prior task list,
-  respectively) if clicked.
+  exact previous state (the prior checkpoint, or the prior task list and
+  anchor, respectively) if clicked.
 
 ### 4.7 Block library (reusable individual blocks, organized by category)
 
@@ -462,10 +466,13 @@ Top to bottom:
        the group's name (or its synthesized "Unnamed N" label), always
        visible above the anchor controls.
      - **Anchor row**: a two-state toggle button labeled "Starts" or "Ends"
-       (tapping flips the anchor's `kind`, keeping the same clock time);
-       the word "at"; a native time input showing the anchor's local time
-       (`HH:mm`, 5-minute step); and, if the group has any tasks, a
-       read-only summary of the whole stack's start–end time range.
+       (tapping flips the anchor's `kind` and shifts `at` by the stack's
+       total duration so the resolved blocks stay on the same calendar
+       times — start→end moves `at` forward by the duration; end→start
+       moves it backward); the word "at"; a native time input showing the
+       anchor's local time (`HH:mm`, 5-minute step); and, if the group has
+       any tasks, a read-only summary of the whole stack's start–end time
+       range.
      - **Task list**: one row per task, each showing (in order): if the
        task is currently reflected on Google Calendar for the day in view,
        a small icon — a checkmark if it exactly matches what was last

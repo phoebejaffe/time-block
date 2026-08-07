@@ -280,26 +280,33 @@ export function usePlan() {
     [updatePlan],
   )
 
-  /** Save the group's current blocks as the checkpoint to revert to later. */
+  /** Save the group's current blocks + anchor as the checkpoint to revert to later. */
   const saveCheckpoint = useCallback(
     (groupId: string) => {
       updatePlan((prev) => ({
         groups: mapGroup(prev.groups, groupId, (g) => ({
           ...g,
-          checkpoint: createCheckpoint(g.tasks),
+          checkpoint: createCheckpoint(g.tasks, g.anchor),
         })),
       }))
     },
     [updatePlan],
   )
 
-  /** Replace the group's blocks with its saved checkpoint, if any. */
+  /** Replace the group's blocks (and anchor, when saved) with its checkpoint. */
   const revertToCheckpoint = useCallback(
     (groupId: string) => {
       updatePlan((prev) => ({
-        groups: mapGroup(prev.groups, groupId, (g) =>
-          g.checkpoint ? { ...g, tasks: tasksFromCheckpoint(g.checkpoint) } : g,
-        ),
+        groups: mapGroup(prev.groups, groupId, (g) => {
+          if (!g.checkpoint) return g
+          return {
+            ...g,
+            tasks: tasksFromCheckpoint(g.checkpoint),
+            ...(g.checkpoint.anchor
+              ? { anchor: { ...g.checkpoint.anchor } }
+              : {}),
+          }
+        }),
       }))
     },
     [updatePlan],

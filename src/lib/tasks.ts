@@ -18,6 +18,8 @@ export type Task = {
 export type BlockGroupCheckpoint = {
   tasks: Array<{ title: string; durationMinutes: number; empty?: boolean }>
   savedAt: string
+  /** Anchor at save time; older checkpoints may omit this. */
+  anchor?: StackAnchor
 }
 
 /** One independent stack of blocks with its own start/end anchor. */
@@ -289,8 +291,11 @@ export function isGroupEnabled(group: BlockGroup): boolean {
   return group.enabled !== false
 }
 
-/** Snapshot the given tasks into a checkpoint (titles/durations/order only). */
-export function createCheckpoint(tasks: Task[]): BlockGroupCheckpoint {
+/** Snapshot the group's current blocks + anchor as a revertible default. */
+export function createCheckpoint(
+  tasks: Task[],
+  anchor: StackAnchor,
+): BlockGroupCheckpoint {
   return {
     tasks: tasks.map((t) => ({
       title: t.title,
@@ -298,6 +303,7 @@ export function createCheckpoint(tasks: Task[]): BlockGroupCheckpoint {
       ...(t.empty ? { empty: true } : {}),
     })),
     savedAt: new Date().toISOString(),
+    anchor: { kind: anchor.kind, at: anchor.at },
   }
 }
 
@@ -329,6 +335,44 @@ export function tasksMatchCheckpoint(
       isTaskEmpty(task) === (saved.empty === true)
     )
   })
+}
+
+/**
+ * True when the group matches its saved default — tasks plus anchor kind and
+ * local clock time. Legacy checkpoints without `anchor` only compare tasks.
+ */
+export function groupMatchesCheckpoint(
+  group: Pick<BlockGroup, 'tasks' | 'anchor'>,
+  checkpoint: BlockGroupCheckpoint,
+): boolean {
+  if (!tasksMatchCheckpoint(group.tasks, checkpoint)) return false
+  if (!checkpoint.anchor) return true
+  return (
+    group.anchor.kind === checkpoint.anchor.kind &&
+    toLocalTimeValue(group.anchor.at) ===
+      toLocalTimeValue(checkpoint.anchor.at)
+  )
+}
+
+/**
+ * Flip start↔end while shifting `at` by the stack's total duration so the
+ * resolved blocks stay on the same calendar times.
+ */
+export function toggleAnchorPreservingStack(
+  anchor: StackAnchor,
+  totalDurationMinutes: number,
+): StackAnchor {
+  const nextKind = anchor.kind === 'start' ? 'end' : 'start'
+  const minutes = Math.max(0, Math.round(totalDurationMinutes))
+  if (minutes === 0) return { ...anchor, kind: nextKind }
+  const at = new Date(anchor.at)
+  if (Number.isNaN(at.getTime())) return { ...anchor, kind: nextKind }
+  if (anchor.kind === 'start') {
+    at.setMinutes(at.getMinutes() + minutes)
+  } else {
+    at.setMinutes(at.getMinutes() - minutes)
+  }
+  return { kind: nextKind, at: at.toISOString() }
 }
 
 function pad(n: number): string {
@@ -407,10 +451,22 @@ function normalizeCheckpoint(raw: unknown): BlockGroupCheckpoint | undefined {
       durationMinutes: Math.max(1, Math.round(t.durationMinutes) || 1),
       ...(t.empty === true ? { empty: true } : {}),
     }))
+  const anchor =
+    c.anchor &&
+    typeof c.anchor === 'object' &&
+    ((c.anchor as StackAnchor).kind === 'start' ||
+      (c.anchor as StackAnchor).kind === 'end') &&
+    typeof (c.anchor as StackAnchor).at === 'string'
+      ? {
+          kind: (c.anchor as StackAnchor).kind,
+          at: (c.anchor as StackAnchor).at,
+        }
+      : undefined
   return {
     tasks,
     savedAt:
       typeof c.savedAt === 'string' ? c.savedAt : new Date().toISOString(),
+    ...(anchor ? { anchor } : {}),
   }
 }
 

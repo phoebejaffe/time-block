@@ -12,6 +12,7 @@ import {
   splitDurationMinutes,
   stepDurationMinutes,
   groupEventColors,
+  groupMatchesCheckpoint,
   groupSidebarAccentColor,
   hasCommittedOnDay,
   loadCommittedDays,
@@ -27,6 +28,7 @@ import {
   tasksFromCheckpoint,
   tasksFromSavedBlocks,
   tasksMatchCheckpoint,
+  toggleAnchorPreservingStack,
   type BlockLibrary,
   type StackAnchor,
   type Task,
@@ -403,13 +405,18 @@ describe('block library', () => {
 })
 
 describe('checkpoints', () => {
+  const anchor: StackAnchor = {
+    kind: 'end',
+    at: '2026-07-18T17:00:00.000Z',
+  }
+
   it('matches when tasks are identical in title/duration/order/empty', () => {
-    const checkpoint = createCheckpoint(tasks)
+    const checkpoint = createCheckpoint(tasks, anchor)
     expect(tasksMatchCheckpoint(tasks, checkpoint)).toBe(true)
   })
 
   it('detects drift from an edited title, duration, reorder, or added/removed task', () => {
-    const checkpoint = createCheckpoint(tasks)
+    const checkpoint = createCheckpoint(tasks, anchor)
     expect(
       tasksMatchCheckpoint(
         [{ ...tasks[0]!, title: 'Changed' }, tasks[1]!, tasks[2]!],
@@ -431,7 +438,7 @@ describe('checkpoints', () => {
   })
 
   it('ignores ids when comparing, so re-saving after a revert still matches', () => {
-    const checkpoint = createCheckpoint(tasks)
+    const checkpoint = createCheckpoint(tasks, anchor)
     const rebuilt = tasksFromCheckpoint(checkpoint)
     expect(rebuilt.map((t) => t.id)).not.toEqual(tasks.map((t) => t.id))
     expect(tasksMatchCheckpoint(rebuilt, checkpoint)).toBe(true)
@@ -442,10 +449,73 @@ describe('checkpoints', () => {
       { id: 'a', title: 'A', durationMinutes: 30 },
       { id: 'gap', title: 'Gap', durationMinutes: 15, empty: true },
     ]
-    const checkpoint = createCheckpoint(withEmpty)
+    const checkpoint = createCheckpoint(withEmpty, anchor)
     const rebuilt = tasksFromCheckpoint(checkpoint)
     expect(rebuilt[1]!.empty).toBe(true)
     expect(tasksMatchCheckpoint(withEmpty, checkpoint)).toBe(true)
+  })
+
+  it('stores the anchor and treats kind/time changes as drift', () => {
+    const checkpoint = createCheckpoint(tasks, anchor)
+    expect(checkpoint.anchor).toEqual(anchor)
+    expect(
+      groupMatchesCheckpoint({ tasks, anchor }, checkpoint),
+    ).toBe(true)
+    expect(
+      groupMatchesCheckpoint(
+        { tasks, anchor: { ...anchor, kind: 'start' } },
+        checkpoint,
+      ),
+    ).toBe(false)
+    expect(
+      groupMatchesCheckpoint(
+        { tasks, anchor: { ...anchor, at: '2026-07-18T18:00:00.000Z' } },
+        checkpoint,
+      ),
+    ).toBe(false)
+  })
+
+  it('ignores missing legacy checkpoint anchors when matching the group', () => {
+    const checkpoint = createCheckpoint(tasks, anchor)
+    delete checkpoint.anchor
+    expect(
+      groupMatchesCheckpoint(
+        { tasks, anchor: { kind: 'start', at: '2026-07-18T09:00:00.000Z' } },
+        checkpoint,
+      ),
+    ).toBe(true)
+  })
+})
+
+describe('toggleAnchorPreservingStack', () => {
+  it('shifts at by the stack duration so resolved times stay put', () => {
+    const startAnchor: StackAnchor = {
+      kind: 'start',
+      at: '2026-07-18T09:00:00.000Z',
+    }
+    const total = 90
+    const asEnd = toggleAnchorPreservingStack(startAnchor, total)
+    expect(asEnd).toEqual({
+      kind: 'end',
+      at: '2026-07-18T10:30:00.000Z',
+    })
+    expect(toggleAnchorPreservingStack(asEnd, total)).toEqual(startAnchor)
+
+    const fromStart = resolveStack(tasks, startAnchor)
+    const fromEnd = resolveStack(tasks, asEnd)
+    expect(fromEnd[0]!.start.toISOString()).toBe(fromStart[0]!.start.toISOString())
+    expect(fromEnd[2]!.end.toISOString()).toBe(fromStart[2]!.end.toISOString())
+  })
+
+  it('only flips kind when duration is zero', () => {
+    const anchor: StackAnchor = {
+      kind: 'end',
+      at: '2026-07-18T09:00:00.000Z',
+    }
+    expect(toggleAnchorPreservingStack(anchor, 0)).toEqual({
+      kind: 'start',
+      at: anchor.at,
+    })
   })
 })
 
