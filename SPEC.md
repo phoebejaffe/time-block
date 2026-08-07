@@ -479,12 +479,9 @@ Top to bottom:
        the trailing icon buttons) opens that task for inline editing.
      - **Inline task editor** (replaces a row, or appears as a fresh row at
        the bottom when adding): a text input for the title, separate hours
-       and minutes duration fields on desktop; on iPhone/iPad for blocks
-       under 24 hours, a single HH:MM duration control that opens a
-       countdown-style dual wheel sheet (hours + minutes — not a clock-time
-       picker), a toggle button for the "empty/spacer" flag, and
-       Cancel/Save (or Cancel/Add) buttons. See §7.7 for its interaction
-       details.
+       and minutes duration fields, a toggle button for the "empty/spacer"
+       flag, and Cancel/Save (or Cancel/Add) buttons. See §7.7 for its
+       interaction details.
      - **"Add new" row** (bottom of the list, when not actively adding or
        editing): a primary "New block +" trigger that opens a **block
        library picker** dropdown (grouped by category, each block showing
@@ -574,13 +571,10 @@ not be missed.
 
 ### 7.7 Time & duration "scrub" interaction
 
-Both the anchor's time `<input type="time">` and a task's duration numeric
-`<input type="number">` fields (hours/minutes on desktop, or blocks ≥ 24 h
-on iOS) support a secondary "click-and-drag vertically to change the value"
-interaction layered on top of their normal click-to-type behavior, tuned
-for both mouse and touch. On iPhone/iPad, shorter blocks use an HH:MM
-duration sheet with dual scroll wheels instead — that control does not
-scrub.
+Both the anchor's time `<input type="time">` and a task's duration
+hours/minutes `<input type="number">` fields support a secondary
+"click-and-drag vertically to change the value" interaction layered on top
+of their normal click-to-type behavior, tuned for both mouse and touch:
 
 - A small movement threshold (a few pixels) must be exceeded, and only if
   the drag is more vertical than horizontal, before scrubbing "activates";
@@ -589,14 +583,15 @@ scrub.
   without opening the picker (important on mobile, where opening the
   native time picker mid-drag would be disruptive).
 - Once active: dragging up increases the value, dragging down decreases it,
-  in fixed-size ticks per some number of pixels moved (duration always
-  moves in 5-minute increments off the nearest multiple of 5; the anchor
-  time moves in 5-minute increments for minutes, or whole-hour increments
-  if the drag started with the cursor/caret over the hour portion of the
-  `HH:mm` text).
-  - Duration can also be nudged by 5 minutes via the Up/Down arrow keys
-    while the field is focused, and by scroll-drag as above; minimum value
-    is 1 minute.
+  in fixed-size ticks per some number of pixels moved:
+  - Duration **minutes** field: 5-minute increments off the nearest
+    multiple of 5 (total duration minimum 1 minute).
+  - Duration **hours** field: 1-hour increments (minutes preserved).
+  - Anchor time: 5-minute increments for minutes, or whole-hour increments
+    if the drag started with the cursor/caret over the hour portion of the
+    `HH:mm` text.
+  - Duration minutes can also be nudged by 5 minutes (hours by 1 hour) via
+    the Up/Down arrow keys while the field is focused.
 - Releasing simply stops the drag; if scrubbing never activated (i.e. the
   pointer barely moved), the field still receives its normal click
   behavior (focus + select the text, for typing).

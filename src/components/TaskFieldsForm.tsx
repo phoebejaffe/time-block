@@ -5,10 +5,9 @@ import {
   splitDurationMinutes,
   stepDurationMinutes,
 } from '../lib/tasks'
-import { IosDurationPicker } from './IosDurationPicker'
 
-const ANCHOR_SCRUB_PX = 25
-const ANCHOR_SCRUB_ACTIVATE_PX = 8
+const SCRUB_PX = 25
+const SCRUB_ACTIVATE_PX = 8
 
 function normalizeDurationFields(
   hours: number | '',
@@ -23,14 +22,70 @@ function normalizeDurationFields(
   return { hours: hoursVal, minutes: minutesVal }
 }
 
-/** iPhone/iPad — custom HH:MM duration wheels (HTML has no duration input). */
-function prefersIosDurationPicker(): boolean {
-  if (typeof navigator === 'undefined') return false
-  const ua = navigator.userAgent
-  if (/iPhone|iPod/.test(ua)) return true
-  // iPadOS 13+ reports as MacIntel with touch.
-  if (/iPad/.test(ua)) return true
-  return navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1
+function beginVerticalScrub(
+  e: React.PointerEvent<HTMLInputElement>,
+  applyTick: (tick: number) => void,
+) {
+  if (e.button !== 0) return
+  const input = e.currentTarget
+  const startY = e.clientY
+  const startX = e.clientX
+  const pointerId = e.pointerId
+  let active = false
+  let lastTick = 0
+
+  function onMove(ev: PointerEvent) {
+    if (ev.pointerId !== pointerId) return
+    const dx = ev.clientX - startX
+    const dy = ev.clientY - startY
+    if (!active) {
+      if (Math.abs(dy) < SCRUB_ACTIVATE_PX) return
+      if (Math.abs(dy) < Math.abs(dx)) {
+        cleanup(false)
+        return
+      }
+      active = true
+      document.body.classList.add('is-datetime-scrubbing')
+      input.blur()
+      try {
+        input.setPointerCapture(pointerId)
+      } catch {
+        /* ignore */
+      }
+    }
+    ev.preventDefault()
+    const tick = Math.trunc(-dy / SCRUB_PX)
+    if (tick === lastTick) return
+    lastTick = tick
+    applyTick(tick)
+  }
+
+  function cleanup(focusForTyping: boolean) {
+    document.removeEventListener('pointermove', onMove)
+    document.removeEventListener('pointerup', onUp)
+    document.removeEventListener('pointercancel', onUp)
+    document.body.classList.remove('is-datetime-scrubbing')
+    try {
+      if (input.hasPointerCapture(pointerId)) {
+        input.releasePointerCapture(pointerId)
+      }
+    } catch {
+      /* ignore */
+    }
+    if (focusForTyping) {
+      input.focus()
+      input.select()
+    }
+  }
+
+  function onUp(ev: PointerEvent) {
+    if (ev.pointerId !== pointerId) return
+    cleanup(!active)
+  }
+
+  document.addEventListener('pointermove', onMove, { passive: false })
+  document.addEventListener('pointerup', onUp)
+  document.addEventListener('pointercancel', onUp)
 }
 
 export function TaskFieldsForm({
@@ -67,10 +122,6 @@ export function TaskFieldsForm({
   const [hours, setHours] = useState<number | ''>(initialSplit.hours)
   const [minutes, setMinutes] = useState<number | ''>(initialSplit.minutes)
   const [empty, setEmpty] = useState(initialEmpty)
-  // Duration sheet caps at 23:59 — keep numeric fields for longer blocks.
-  const [iosDurationPicker] = useState(
-    () => prefersIosDurationPicker() && initialDuration < 24 * 60,
-  )
 
   function resolveTotalMinutes(h: number | '', m: number | ''): number {
     if (h === '' && m === '') return initialDuration
@@ -169,86 +220,36 @@ export function TaskFieldsForm({
     setMinutes(Math.max(0, Math.round(next)))
   }
 
-  function beginDurationScrub(e: React.PointerEvent<HTMLInputElement>) {
-    if (e.button !== 0) return
-    const input = e.currentTarget
-    const startY = e.clientY
-    const startX = e.clientX
-    const pointerId = e.pointerId
-    let active = false
-    let lastTick = 0
-    const origin = resolveTotalMinutes(hours, minutes)
+  function beginHoursScrub(e: React.PointerEvent<HTMLInputElement>) {
+    const originHours = typeof hours === 'number' ? hours : 0
+    const originMinutes = typeof minutes === 'number' ? minutes : 0
+    beginVerticalScrub(e, (tick) => {
+      setTotalDuration(
+        combineDurationMinutes(Math.max(0, originHours + tick), originMinutes),
+      )
+    })
+  }
 
-    function durationForTick(tick: number): number {
-      if (tick === 0) return origin
+  function beginMinutesScrub(e: React.PointerEvent<HTMLInputElement>) {
+    const origin = resolveTotalMinutes(hours, minutes)
+    beginVerticalScrub(e, (tick) => {
+      if (tick === 0) {
+        setTotalDuration(origin)
+        return
+      }
       if (tick > 0) {
         const floor = Math.floor(origin / 5) * 5
-        return Math.max(1, floor + tick * 5)
+        setTotalDuration(Math.max(1, floor + tick * 5))
+        return
       }
       const ceil = Math.ceil(origin / 5) * 5
-      return Math.max(1, ceil + tick * 5)
-    }
-
-    function onMove(ev: PointerEvent) {
-      if (ev.pointerId !== pointerId) return
-      const dx = ev.clientX - startX
-      const dy = ev.clientY - startY
-      if (!active) {
-        if (Math.abs(dy) < ANCHOR_SCRUB_ACTIVATE_PX) return
-        if (Math.abs(dy) < Math.abs(dx)) {
-          cleanup(false)
-          return
-        }
-        active = true
-        document.body.classList.add('is-datetime-scrubbing')
-        input.blur()
-        try {
-          input.setPointerCapture(pointerId)
-        } catch {
-          /* ignore */
-        }
-      }
-      ev.preventDefault()
-      const tick = Math.trunc(-dy / ANCHOR_SCRUB_PX)
-      if (tick === lastTick) return
-      lastTick = tick
-      setTotalDuration(durationForTick(tick))
-    }
-
-    function cleanup(focusForTyping: boolean) {
-      document.removeEventListener('pointermove', onMove)
-      document.removeEventListener('pointerup', onUp)
-      document.removeEventListener('pointercancel', onUp)
-      document.body.classList.remove('is-datetime-scrubbing')
-      try {
-        if (input.hasPointerCapture(pointerId)) {
-          input.releasePointerCapture(pointerId)
-        }
-      } catch {
-        /* ignore */
-      }
-      if (focusForTyping) {
-        input.focus()
-        input.select()
-      }
-    }
-
-    function onUp(ev: PointerEvent) {
-      if (ev.pointerId !== pointerId) return
-      cleanup(!active)
-    }
-
-    document.addEventListener('pointermove', onMove, { passive: false })
-    document.addEventListener('pointerup', onUp)
-    document.addEventListener('pointercancel', onUp)
+      setTotalDuration(Math.max(1, ceil + tick * 5))
+    })
   }
 
   function nudgeTotalDuration(direction: 'up' | 'down') {
     setTotalDuration(
-      stepDurationMinutes(
-        resolveTotalMinutes(hours, minutes),
-        direction,
-      ),
+      stepDurationMinutes(resolveTotalMinutes(hours, minutes), direction),
     )
   }
 
@@ -287,79 +288,64 @@ export function TaskFieldsForm({
         autoFocus
       />
       <div className="task-form-row">
-        <div
-          className={[
-            'task-form-duration',
-            iosDurationPicker ? 'task-form-duration-ios' : '',
-          ]
-            .filter(Boolean)
-            .join(' ')}
-        >
-          {iosDurationPicker ? (
-            <IosDurationPicker
-              totalMinutes={resolveTotalMinutes(hours, minutes)}
-              onChange={setTotalDuration}
-            />
-          ) : (
-            <>
-              <input
-                type="number"
-                inputMode="numeric"
-                min={0}
-                step={1}
-                value={hours}
-                onChange={(e) => handleHoursChange(e.target.value)}
-                onBlur={commitDurationBlur}
-                onKeyDown={(e) => {
-                  if (e.key === 'ArrowUp') {
-                    e.preventDefault()
-                    nudgeHours('up')
-                    return
-                  }
-                  if (e.key === 'ArrowDown') {
-                    e.preventDefault()
-                    nudgeHours('down')
-                    return
-                  }
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    e.currentTarget.form?.requestSubmit()
-                  }
-                }}
-                aria-label="Duration hours"
-              />
-              <span className="muted">h</span>
-              <input
-                type="number"
-                inputMode="numeric"
-                min={0}
-                step={5}
-                className="task-form-duration-mins"
-                value={minutes}
-                onChange={(e) => handleMinutesChange(e.target.value)}
-                onBlur={commitDurationBlur}
-                onPointerDown={beginDurationScrub}
-                onKeyDown={(e) => {
-                  if (e.key === 'ArrowUp') {
-                    e.preventDefault()
-                    nudgeTotalDuration('up')
-                    return
-                  }
-                  if (e.key === 'ArrowDown') {
-                    e.preventDefault()
-                    nudgeTotalDuration('down')
-                    return
-                  }
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    e.currentTarget.form?.requestSubmit()
-                  }
-                }}
-                aria-label="Duration minutes"
-              />
-              <span className="muted">m</span>
-            </>
-          )}
+        <div className="task-form-duration">
+          <input
+            type="number"
+            inputMode="numeric"
+            min={0}
+            step={1}
+            value={hours}
+            onChange={(e) => handleHoursChange(e.target.value)}
+            onBlur={commitDurationBlur}
+            onPointerDown={beginHoursScrub}
+            onKeyDown={(e) => {
+              if (e.key === 'ArrowUp') {
+                e.preventDefault()
+                nudgeHours('up')
+                return
+              }
+              if (e.key === 'ArrowDown') {
+                e.preventDefault()
+                nudgeHours('down')
+                return
+              }
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                e.currentTarget.form?.requestSubmit()
+              }
+            }}
+            aria-label="Duration hours"
+          />
+          <span className="muted">h</span>
+          <input
+            type="number"
+            inputMode="numeric"
+            min={0}
+            step={5}
+            className="task-form-duration-mins"
+            value={minutes}
+            onChange={(e) => handleMinutesChange(e.target.value)}
+            onBlur={commitDurationBlur}
+            onPointerDown={beginMinutesScrub}
+            onKeyDown={(e) => {
+              if (e.key === 'ArrowUp') {
+                e.preventDefault()
+                nudgeTotalDuration('up')
+                return
+              }
+              if (e.key === 'ArrowDown') {
+                e.preventDefault()
+                nudgeTotalDuration('down')
+                return
+              }
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                e.currentTarget.form?.requestSubmit()
+              }
+            }}
+            aria-label="Duration minutes"
+          />
+          <span className="muted">m</span>
         </div>
         <button
           type="button"
