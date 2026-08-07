@@ -478,10 +478,12 @@ Top to bottom:
        being edited. Clicking anywhere on a row's main area (other than
        the trailing icon buttons) opens that task for inline editing.
      - **Inline task editor** (replaces a row, or appears as a fresh row at
-       the bottom when adding): a text input for the title, a numeric
-       input for duration in minutes (step 5), a toggle button for the
-       "empty/spacer" flag, and Cancel/Save (or Cancel/Add) buttons. See
-       §7.7 for its interaction details.
+       the bottom when adding): a text input for the title, separate hours
+       and minutes duration fields (numeric inputs on desktop; on iPhone/iPad
+       for blocks under 24 hours, native `<select>` wheel pickers labeled
+       "h"/"m"), a toggle button for the "empty/spacer" flag, and
+       Cancel/Save (or Cancel/Add) buttons. See §7.7 for its interaction
+       details.
      - **"Add new" row** (bottom of the list, when not actively adding or
        editing): a primary "New block +" trigger that opens a **block
        library picker** dropdown (grouped by category, each block showing
@@ -571,10 +573,13 @@ not be missed.
 
 ### 7.7 Time & duration "scrub" interaction
 
-Both the anchor's time `<input type="time">` and a task's duration
-`<input type="number">` support a secondary "click-and-drag vertically to
-change the value" interaction layered on top of their normal click-to-type
-behavior, tuned for both mouse and touch:
+Both the anchor's time `<input type="time">` and a task's duration numeric
+`<input type="number">` fields (hours/minutes on desktop, or blocks ≥ 24 h
+on iOS) support a secondary "click-and-drag vertically to change the value"
+interaction layered on top of their normal click-to-type behavior, tuned
+for both mouse and touch. On iPhone/iPad, shorter blocks use native
+`<select>` wheel pickers for hours and minutes instead — those do not
+scrub.
 
 - A small movement threshold (a few pixels) must be exceeded, and only if
   the drag is more vertical than horizontal, before scrubbing "activates";

@@ -22,8 +22,8 @@ function normalizeDurationFields(
   return { hours: hoursVal, minutes: minutesVal }
 }
 
-/** iPhone/iPad — native `type="time"` wheels are the closest duration picker. */
-function prefersNativeDurationPicker(): boolean {
+/** iPhone/iPad — `<select>` opens native wheel pickers (not clock-time). */
+function prefersNativeDurationWheels(): boolean {
   if (typeof navigator === 'undefined') return false
   const ua = navigator.userAgent
   if (/iPhone|iPod/.test(ua)) return true
@@ -32,24 +32,8 @@ function prefersNativeDurationPicker(): boolean {
   return navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1
 }
 
-function pad2(n: number): string {
-  return String(Math.max(0, Math.round(n))).padStart(2, '0')
-}
-
-/** `type="time"` only supports 00:00–23:59; treat that as a duration. */
-function durationToTimeValue(totalMinutes: number): string {
-  const split = splitDurationMinutes(Math.min(totalMinutes, 23 * 60 + 59))
-  return `${pad2(split.hours)}:${pad2(split.minutes)}`
-}
-
-function timeValueToDuration(value: string): number {
-  const match = /^(\d{1,2}):(\d{2})$/.exec(value.trim())
-  if (!match) return 15
-  const h = Number(match[1])
-  const m = Number(match[2])
-  if (!Number.isFinite(h) || !Number.isFinite(m)) return 15
-  return combineDurationMinutes(h, m)
-}
+const HOUR_WHEEL_OPTIONS = Array.from({ length: 24 }, (_, i) => i)
+const MINUTE_WHEEL_OPTIONS = Array.from({ length: 60 }, (_, i) => i)
 
 export function TaskFieldsForm({
   initialTitle,
@@ -85,9 +69,9 @@ export function TaskFieldsForm({
   const [hours, setHours] = useState<number | ''>(initialSplit.hours)
   const [minutes, setMinutes] = useState<number | ''>(initialSplit.minutes)
   const [empty, setEmpty] = useState(initialEmpty)
-  // Native time wheels only go to 23:59 — keep dual fields for longer blocks.
-  const [nativeDuration] = useState(
-    () => prefersNativeDurationPicker() && initialDuration < 24 * 60,
+  // Wheel selects cap at 23:59 — keep numeric fields for longer blocks.
+  const [nativeDurationWheels] = useState(
+    () => prefersNativeDurationWheels() && initialDuration < 24 * 60,
   )
 
   function resolveTotalMinutes(h: number | '', m: number | ''): number {
@@ -185,11 +169,6 @@ export function TaskFieldsForm({
       }
     }
     setMinutes(Math.max(0, Math.round(next)))
-  }
-
-  function handleNativeDurationChange(raw: string) {
-    if (!raw) return
-    setTotalDuration(timeValueToDuration(raw))
   }
 
   function beginDurationScrub(e: React.PointerEvent<HTMLInputElement>) {
@@ -298,9 +277,8 @@ export function TaskFieldsForm({
     })
   }
 
-  const nativeTimeValue = durationToTimeValue(
-    resolveTotalMinutes(hours, minutes),
-  )
+  const wheelHours = typeof hours === 'number' ? hours : 0
+  const wheelMinutes = typeof minutes === 'number' ? minutes : 0
 
   return (
     <form className="task-form" onSubmit={handleSubmit} noValidate>
@@ -317,21 +295,38 @@ export function TaskFieldsForm({
         <div
           className={[
             'task-form-duration',
-            nativeDuration ? 'task-form-duration-native' : '',
+            nativeDurationWheels ? 'task-form-duration-native' : '',
           ]
             .filter(Boolean)
             .join(' ')}
         >
-          {nativeDuration ? (
+          {nativeDurationWheels ? (
             <>
-              <input
-                type="time"
-                step={300}
-                value={nativeTimeValue}
-                onChange={(e) => handleNativeDurationChange(e.target.value)}
-                aria-label="Duration"
-              />
-              <span className="muted">duration</span>
+              <select
+                value={wheelHours}
+                onChange={(e) => setHours(Number(e.target.value))}
+                aria-label="Duration hours"
+              >
+                {HOUR_WHEEL_OPTIONS.map((h) => (
+                  <option key={h} value={h}>
+                    {h}
+                  </option>
+                ))}
+              </select>
+              <span className="muted">h</span>
+              <select
+                value={wheelMinutes}
+                onChange={(e) => setMinutes(Number(e.target.value))}
+                aria-label="Duration minutes"
+                className="task-form-duration-mins"
+              >
+                {MINUTE_WHEEL_OPTIONS.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+              <span className="muted">m</span>
             </>
           ) : (
             <>

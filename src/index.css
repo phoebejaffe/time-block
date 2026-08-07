@@ -280,10 +280,16 @@ body.is-sidebar-resizing .main-panel {
   min-width: 3.025rem;
 }
 
-.task-form-duration-native input[type='time'] {
+.task-form-duration-native select {
   width: auto;
-  min-width: 6.5rem;
-  text-align: left;
+  min-width: 2.75rem;
+  text-align: center;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.task-form-duration-native select.task-form-duration-mins {
+  min-width: 3.025rem;
 }
 
 .task-empty-toggle.is-active {
