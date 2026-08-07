@@ -392,6 +392,52 @@ body.is-sidebar-resizing .main-panel {
   box-shadow: var(--shadow);
 }
 
+.modal-dialog-commit {
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-dialog-commit .modal-header {
+  flex-shrink: 0;
+}
+
+.modal-dialog-commit .modal-body {
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.modal-form-commit {
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+.modal-form-commit .calendar-multi-select {
+  min-width: 0;
+  min-inline-size: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.modal-form-commit .calendar-multi-select legend {
+  position: sticky;
+  top: 0;
+  background: #fffcf6;
+  z-index: 1;
+}
+
+.modal-form-commit .modal-actions {
+  flex-shrink: 0;
+  padding-top: 0.15rem;
+}
+
 .modal-dialog-wide {
   width: min(34rem, 100%);
   max-height: min(88vh, 42rem);

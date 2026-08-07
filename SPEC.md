@@ -521,14 +521,13 @@ above everything else. Modals used:
 - **Name group** (opened via the group menu's "Set name" item) — one field
   (group name); Cancel / Save.
 - **Commit to calendar** ("Add to calendar" / "Update calendar", titled
-  based on whether this group+day has already been pushed) — a `<select>`
-  of the user's writable calendars (choosing one updates the persisted
-  "target calendar" preference immediately, not just for this commit); a
-  primary action button labeled "Add"/"Update" (busy label
-  "Adding…"/"Updating…") that's disabled while busy, while there are no
-  tasks and nothing to update, while no calendar is selected, or — as a
-  soft affordance — while the plan already exactly matches what's on the
-  calendar (with a tooltip explaining why).
+  based on whether this group+day has already been pushed) — a multi-select
+  checklist of the user's writable calendars (pre-checked from the last
+  push for this group+day when updating; deselected calendars have that
+  group's events deleted on commit). The dialog is capped at 80% of the
+  viewport height with the calendar list scrolling and Cancel/Add|Update
+  pinned at the bottom. The primary action is disabled while busy, while
+  there are no tasks on a fresh Add, or while no calendar is selected.
 - **Block library** (opened from the settings menu, not from a group) — a
   wider dialog listing every category, each with a name heading, a small
   "···" overflow menu (Rename — opens a nested "Rename category" modal

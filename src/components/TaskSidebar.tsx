@@ -351,8 +351,9 @@ export function TaskSidebar({
         <Modal
           title={modalIsUpdate ? 'Update calendar' : 'Add to calendar'}
           onClose={closeModal}
+          dialogClassName="modal-dialog-commit"
         >
-          <div className="modal-form">
+          <div className="modal-form modal-form-commit">
             <fieldset className="calendar-multi-select">
               <legend>Calendars you can edit</legend>
               {commitCalendars.length === 0 ? (
@@ -1557,10 +1558,12 @@ function Modal({
   title,
   onClose,
   children,
+  dialogClassName,
 }: {
   title: string
   onClose: () => void
   children: React.ReactNode
+  dialogClassName?: string
 }) {
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -1579,7 +1582,7 @@ function Modal({
       }}
     >
       <div
-        className="modal-dialog"
+        className={['modal-dialog', dialogClassName].filter(Boolean).join(' ')}
         role="dialog"
         aria-modal="true"
         aria-label={title}
