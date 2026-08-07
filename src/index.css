@@ -513,7 +513,7 @@ body.is-sidebar-resizing .main-panel {
   color: var(--ink-muted);
 }
 
-.modal-form input,
+.modal-form input:not([type='checkbox']):not([type='radio']),
 .modal-form select {
   border: 1px solid var(--line);
   background: #fffdf8;
@@ -602,6 +602,40 @@ body.is-datetime-scrubbing .task-form-duration input {
   flex-direction: row !important;
   align-items: center;
   gap: 0.5rem !important;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.checkbox-row input[type='checkbox'] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 1.1rem;
+  height: 1.1rem;
+  margin: 0;
+  padding: 0;
+  flex-shrink: 0;
+  border: 1.5px solid rgba(26, 31, 28, 0.35);
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.checkbox-row input[type='checkbox']:checked {
+  border-color: var(--accent);
+  background:
+    radial-gradient(circle at center, var(--accent) 0 38%, transparent 40%),
+    #fff;
+}
+
+.checkbox-row input[type='checkbox']:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.checkbox-row input[type='checkbox']:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: 2px;
 }
 
 .calendar-multi-select {
