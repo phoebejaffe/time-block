@@ -21,6 +21,7 @@ import { hasPushedGroupOnDay } from './lib/pushedEvents'
 import {
   anchorOnDay,
   applyTaskEditPreview,
+  isTaskDelay,
   localDateKey,
   pickViewDate,
   shiftAnchor,
@@ -147,6 +148,55 @@ export default function App() {
   function handleAddBlocks(groupId: string, inputs: Omit<Task, 'id'>[]) {
     plan.addTasks(groupId, inputs)
     clear()
+  }
+
+  function handleGotDelayed(groupId: string) {
+    const group = plan.plan.groups.find((g) => g.id === groupId)
+    if (!group) return
+    const previousTasks = group.tasks
+    const previousAnchor = group.anchor
+    if (!plan.insertGotDelayed(groupId)) {
+      show('info', 'Delay only works while you’re inside a block.')
+      return
+    }
+    show('info', 'Added a delay block.', {
+      actionLabel: 'Undo',
+      progressMs: 5_000,
+      onAction: () => {
+        plan.replaceTasks(groupId, previousTasks)
+        plan.setAnchor(groupId, previousAnchor)
+        clear()
+      },
+    })
+  }
+
+  function handleUpdateTask(groupId: string, task: Task) {
+    const group = plan.plan.groups.find((g) => g.id === groupId)
+    const previous = group?.tasks.find((t) => t.id === task.id)
+    const previousTasks = group?.tasks
+    const previousAnchor = group?.anchor
+    const delayDurationChanged =
+      Boolean(previous) &&
+      isTaskDelay(previous!) &&
+      previous!.durationMinutes !== task.durationMinutes
+
+    plan.updateTask(groupId, task)
+
+    if (
+      delayDurationChanged &&
+      previousTasks &&
+      previousAnchor
+    ) {
+      show('info', 'Delay updated.', {
+        actionLabel: 'Undo',
+        progressMs: 5_000,
+        onAction: () => {
+          plan.replaceTasks(groupId, previousTasks)
+          plan.setAnchor(groupId, previousAnchor)
+          clear()
+        },
+      })
+    }
   }
 
   function handleRemoveTask(groupId: string, taskId: string) {
@@ -519,7 +569,7 @@ export default function App() {
             writableCalendars={calendars.writableCalendars}
             onAdd={handleAddTask}
             onAddBlocks={handleAddBlocks}
-            onUpdate={plan.updateTask}
+            onUpdate={handleUpdateTask}
             onRemove={handleRemoveTask}
             onReorder={plan.reorderTasks}
             onAnchorChange={(groupId, next) => {
@@ -531,6 +581,7 @@ export default function App() {
             onMoveGroup={handleMoveGroup}
             onSaveCheckpoint={handleSaveCheckpoint}
             onRevertToCheckpoint={handleRevertToCheckpoint}
+            onGotDelayed={handleGotDelayed}
             onAddGroup={handleAddGroup}
             onSetGroupEnabled={plan.setGroupEnabled}
             onSetGroupName={plan.setGroupName}

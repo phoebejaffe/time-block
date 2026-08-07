@@ -102,6 +102,8 @@ type Task = {
   durationMinutes: number  // integer >= 1
   empty?: boolean          // true = "spacer": reserves time in the stack but
                             // is never sent to Google Calendar
+  delay?: boolean          // true = "I got delayed" spacer (implies empty);
+                            // identified by this flag, not by title
 }
 ```
 
@@ -112,6 +114,13 @@ type Task = {
   in-app calendar overlay — with desaturated/muted colors and a reduced
   style in the sidebar row — so the gap is visible, but it is always
   skipped/removed when syncing to Google Calendar (§4.8, §8.5).
+- A **delay** task (`delay: true`, always also `empty`) is created by
+  "I got delayed". Resizing or deleting a delay always preserves the
+  group's resolved **start** time — for end-anchored groups the anchor
+  `at` shifts so the end absorbs the change; start-anchored groups already
+  behave that way. Changing a delay's duration shows an "Undo" toast
+  (§7.6) that restores the prior tasks and anchor. Delays are tracked by
+  the `delay` flag, not by matching the title "Delay".
 
 ### 4.2 StackAnchor
 
@@ -182,7 +191,12 @@ that day. Default: a new group anchors "ends at 9:00am today."
 
 ```ts
 type BlockGroupCheckpoint = {
-  tasks: Array<{ title: string; durationMinutes: number; empty?: boolean }>
+  tasks: Array<{
+    title: string
+    durationMinutes: number
+    empty?: boolean
+    delay?: boolean
+  }>
   savedAt: string  // ISO
   anchor?: StackAnchor  // saved with newer checkpoints; omitted on legacy ones
 }
@@ -502,19 +516,31 @@ Top to bottom:
        same technique used by the block library picker — containing, when
        the group is enabled: "Save as default"/"Update default blocks"
        (only shown while there's no checkpoint yet or the blocks have
-       drifted from it — see §4.6) / — separator — / Set name / a "Set
-       color" swatch input / — separator — / Move up / Move down (either
-       omitted if not applicable) / Duplicate group / — separator — /
-       Delete blocks from calendar (disabled unless something's currently
-       pushed for this group+day) / Delete block group (disabled if it's
-       the only remaining group). An inline **Revert** button appears next
-       to the menu trigger whenever the group has drifted from its saved
-       checkpoint (§4.6). Finally, a primary "Add"/"Update" button (label
-       swaps to "Update" once anything has been pushed for this group on
-       the viewed day; disabled while nothing has ever been pushed and the
-       group has zero tasks; visually "soft-disabled" — clickable but
-       styled inert — when the stack already exactly matches the last
-       successful push) that opens the commit modal (§7.4).
+       drifted from it — see §4.6) / — separator — / **I got delayed**
+       (inserts an empty spacer titled "Delay" with `delay: true`
+       immediately before the block that currently contains wall-clock
+       "now", sized to the elapsed time in that block rounded to the nearest
+       5 minutes; when still within 5 minutes of that block's start, inserts
+       before the *previous* block instead and sizes the delay from that
+       previous block's start to now; disabled when now isn't inside a
+       block, when the rounded delay would be under 5 minutes, or when
+       within 5 minutes of the first block's start; for end-anchored groups,
+       also shifts the anchor later by that duration so the interrupted
+       block starts ~now; later resize/delete of that delay preserves the
+       stack start — see §4.1) / — separator — /
+       Set name / a "Set color" swatch input / — separator — / Move up /
+       Move down (either omitted if not applicable) / Duplicate group / —
+       separator — / Delete blocks from calendar (disabled unless
+       something's currently pushed for this group+day) / Delete block
+       group (disabled if it's the only remaining group). An inline
+       **Revert** button appears next to the menu trigger whenever the
+       group has drifted from its saved checkpoint (§4.6). Finally, a
+       primary "Add"/"Update" button (label swaps to "Update" once anything
+       has been pushed for this group on the viewed day; disabled while
+       nothing has ever been pushed and the group has zero tasks; visually
+       "soft-disabled" — clickable but styled inert — when the stack
+       already exactly matches the last successful push) that opens the
+       commit modal (§7.4).
 3. **"New group +"** button at the very bottom of the group list, appending
    a fresh empty group (anchored to "ends at 9:00am today" by default).
 

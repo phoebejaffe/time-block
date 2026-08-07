@@ -9,6 +9,11 @@ export type Task = {
   durationMinutes: number
   /** When true, the block consumes time but is hidden in the UI and skipped on calendar sync. */
   empty?: boolean
+  /**
+   * "I got delayed" spacer. Always empty; resizing/deleting preserves the
+   * stack's start time (end-anchored groups shift `at` instead).
+   */
+  delay?: boolean
 }
 
 /**
@@ -16,7 +21,12 @@ export type Task = {
  * can always get back to after making one-off adjustments.
  */
 export type BlockGroupCheckpoint = {
-  tasks: Array<{ title: string; durationMinutes: number; empty?: boolean }>
+  tasks: Array<{
+    title: string
+    durationMinutes: number
+    empty?: boolean
+    delay?: boolean
+  }>
   savedAt: string
   /** Anchor at save time; older checkpoints may omit this. */
   anchor?: StackAnchor
@@ -182,6 +192,45 @@ export function isTaskEmpty(task: Pick<Task, 'empty'>): boolean {
   return task.empty === true
 }
 
+export function isTaskDelay(task: Pick<Task, 'delay'>): boolean {
+  return task.delay === true
+}
+
+/**
+ * Replace a group's tasks while keeping the resolved stack start fixed.
+ * Start-anchored groups keep `at` at that start; end-anchored groups move
+ * `at` so the end absorbs the duration change.
+ */
+export function withTasksPreservingStackStart(
+  group: BlockGroup,
+  nextTasks: Task[],
+): BlockGroup {
+  const before = resolveStack(group.tasks, group.anchor)
+  const startMs = before[0]?.start.getTime()
+  if (startMs == null || Number.isNaN(startMs)) {
+    return { ...group, tasks: nextTasks }
+  }
+  const totalMinutes = nextTasks.reduce(
+    (sum, task) => sum + task.durationMinutes,
+    0,
+  )
+  if (group.anchor.kind === 'start') {
+    return {
+      ...group,
+      tasks: nextTasks,
+      anchor: { kind: 'start', at: new Date(startMs).toISOString() },
+    }
+  }
+  return {
+    ...group,
+    tasks: nextTasks,
+    anchor: {
+      kind: 'end',
+      at: new Date(startMs + totalMinutes * 60_000).toISOString(),
+    },
+  }
+}
+
 /** Format a duration in minutes as "Xh Ym" / "Xh" / "Xm" for compact display. */
 export function formatDurationMinutes(minutes: number): string {
   const total = Math.max(0, Math.round(minutes))
@@ -249,19 +298,27 @@ export function applyTaskEditPreview(
   if (!preview) return groups
   return groups.map((group) => {
     if (group.id !== preview.groupId) return group
-    return {
-      ...group,
-      tasks: group.tasks.map((task) => {
-        if (task.id !== preview.taskId) return task
-        const { empty: _removed, ...rest } = task
-        return {
-          ...rest,
-          title: preview.title,
-          durationMinutes: preview.durationMinutes,
-          ...(preview.empty ? { empty: true } : {}),
-        }
-      }),
+    const previous = group.tasks.find((task) => task.id === preview.taskId)
+    const nextTasks = group.tasks.map((task) => {
+      if (task.id !== preview.taskId) return task
+      const { empty: _e, delay: _d, ...rest } = task
+      const keepDelay = isTaskDelay(task) && preview.empty === true
+      return {
+        ...rest,
+        title: preview.title,
+        durationMinutes: preview.durationMinutes,
+        ...(preview.empty || keepDelay ? { empty: true } : {}),
+        ...(keepDelay ? { delay: true } : {}),
+      }
+    })
+    if (
+      previous &&
+      isTaskDelay(previous) &&
+      previous.durationMinutes !== preview.durationMinutes
+    ) {
+      return withTasksPreservingStackStart(group, nextTasks)
     }
+    return { ...group, tasks: nextTasks }
   })
 }
 
@@ -300,7 +357,8 @@ export function createCheckpoint(
     tasks: tasks.map((t) => ({
       title: t.title,
       durationMinutes: t.durationMinutes,
-      ...(t.empty ? { empty: true } : {}),
+      ...(t.empty || t.delay ? { empty: true } : {}),
+      ...(t.delay ? { delay: true } : {}),
     })),
     savedAt: new Date().toISOString(),
     anchor: { kind: anchor.kind, at: anchor.at },
@@ -313,14 +371,15 @@ export function tasksFromCheckpoint(checkpoint: BlockGroupCheckpoint): Task[] {
     createTask({
       title: t.title,
       durationMinutes: t.durationMinutes,
-      ...(t.empty ? { empty: true } : {}),
+      ...(t.empty || t.delay ? { empty: true } : {}),
+      ...(t.delay ? { delay: true } : {}),
     }),
   )
 }
 
 /**
  * True when the group's current blocks match its checkpoint — compares
- * title, duration, order, and empty-state only (not ids or timing).
+ * title, duration, order, empty-state, and delay flag (not ids or timing).
  */
 export function tasksMatchCheckpoint(
   tasks: Task[],
@@ -332,7 +391,8 @@ export function tasksMatchCheckpoint(
     return (
       task.title === saved.title &&
       task.durationMinutes === saved.durationMinutes &&
-      isTaskEmpty(task) === (saved.empty === true)
+      isTaskEmpty(task) === (saved.empty === true || saved.delay === true) &&
+      isTaskDelay(task) === (saved.delay === true)
     )
   })
 }
@@ -409,12 +469,16 @@ function normalizeTasks(raw: unknown): Task[] {
         typeof (t as Task).title === 'string' &&
         typeof (t as Task).durationMinutes === 'number',
     )
-    .map((t) => ({
-      id: t.id,
-      title: t.title,
-      durationMinutes: Math.max(1, Math.round(t.durationMinutes) || 1),
-      ...(t.empty === true ? { empty: true } : {}),
-    }))
+    .map((t) => {
+      const delay = t.delay === true
+      return {
+        id: t.id,
+        title: t.title,
+        durationMinutes: Math.max(1, Math.round(t.durationMinutes) || 1),
+        ...(t.empty === true || delay ? { empty: true } : {}),
+        ...(delay ? { delay: true } : {}),
+      }
+    })
 }
 
 function normalizeAnchor(raw: unknown): StackAnchor {
@@ -439,18 +503,29 @@ function normalizeCheckpoint(raw: unknown): BlockGroupCheckpoint | undefined {
   if (!Array.isArray(c.tasks)) return undefined
   const tasks = c.tasks
     .filter(
-      (t): t is { title: string; durationMinutes: number; empty?: boolean } =>
+      (
+        t,
+      ): t is {
+        title: string
+        durationMinutes: number
+        empty?: boolean
+        delay?: boolean
+      } =>
         Boolean(t) &&
         typeof t === 'object' &&
         typeof (t as { title?: unknown }).title === 'string' &&
         typeof (t as { durationMinutes?: unknown }).durationMinutes ===
           'number',
     )
-    .map((t) => ({
-      title: t.title,
-      durationMinutes: Math.max(1, Math.round(t.durationMinutes) || 1),
-      ...(t.empty === true ? { empty: true } : {}),
-    }))
+    .map((t) => {
+      const delay = t.delay === true
+      return {
+        title: t.title,
+        durationMinutes: Math.max(1, Math.round(t.durationMinutes) || 1),
+        ...(t.empty === true || delay ? { empty: true } : {}),
+        ...(delay ? { delay: true } : {}),
+      }
+    })
   const anchor =
     c.anchor &&
     typeof c.anchor === 'object' &&
@@ -590,11 +665,13 @@ export function migratePlan(raw: unknown): Plan | null {
 export function createTask(
   input: Omit<Task, 'id'> & { id?: string },
 ): Task {
+  const delay = input.delay === true
   return {
     id: input.id ?? newId(),
     title: input.title.trim() || 'Untitled',
     durationMinutes: Math.max(1, Math.round(input.durationMinutes) || 1),
-    ...(input.empty ? { empty: true } : {}),
+    ...(input.empty || delay ? { empty: true } : {}),
+    ...(delay ? { delay: true } : {}),
   }
 }
 
@@ -637,6 +714,84 @@ export function shiftAnchor(anchor: StackAnchor, deltaMs: number): StackAnchor {
   return {
     ...anchor,
     at: new Date(new Date(anchor.at).getTime() + deltaMs).toISOString(),
+  }
+}
+
+/** Round a minute count to the nearest multiple of 5 (0, 5, 10, …). */
+export function roundMinutesToNearestFive(minutes: number): number {
+  if (!Number.isFinite(minutes)) return 0
+  return Math.max(0, Math.round(minutes / 5) * 5)
+}
+
+export type GotDelayedPlan =
+  | {
+      ok: true
+      /** Index in `tasks` to insert the delay block before. */
+      index: number
+      delayMinutes: number
+      nextAnchor: StackAnchor
+    }
+  | { ok: false; reason: 'no-current-block' | 'too-small' }
+
+/**
+ * Plan an "I got delayed" insertion: find the block containing `now` (on
+ * today's clock for this group's anchor), size an empty "delay" from that
+ * block's start to now (nearest 5 minutes), and for end-anchored stacks
+ * shift the anchor later by that duration so the interrupted block starts
+ * ~now.
+ *
+ * When still within 5 minutes of the current block's start, insert two
+ * blocks back instead (before the previous block), sizing the delay from
+ * that previous block's start to now — early entry into the next block
+ * usually means the prior block ran long.
+ */
+export function planGotDelayed(
+  tasks: Task[],
+  anchor: StackAnchor,
+  now: Date = new Date(),
+): GotDelayedPlan {
+  if (tasks.length === 0) return { ok: false, reason: 'no-current-block' }
+  const resolved = resolveStack(tasks, anchorOnDay(anchor, now))
+  const t = now.getTime()
+  const currentIndex = resolved.findIndex(
+    (task) => task.start.getTime() <= t && t < task.end.getTime(),
+  )
+  if (currentIndex < 0) return { ok: false, reason: 'no-current-block' }
+  const current = resolved[currentIndex]!
+  const elapsedMinutes = (t - current.start.getTime()) / 60_000
+  // Still near the start of this block → attribute the delay to the prior one.
+  const insertIndex =
+    elapsedMinutes < 5 && currentIndex >= 1 ? currentIndex - 1 : currentIndex
+  const from = resolved[insertIndex]!
+  const delayMinutes = roundMinutesToNearestFive(
+    (t - from.start.getTime()) / 60_000,
+  )
+  if (delayMinutes < 5) return { ok: false, reason: 'too-small' }
+  const nextAnchor =
+    anchor.kind === 'end'
+      ? shiftAnchor(anchor, delayMinutes * 60_000)
+      : anchor
+  return { ok: true, index: insertIndex, delayMinutes, nextAnchor }
+}
+
+/** Insert the delay block (and adjusted end-anchor when needed). */
+export function applyGotDelayed(
+  group: BlockGroup,
+  now: Date = new Date(),
+): BlockGroup | null {
+  const planned = planGotDelayed(group.tasks, group.anchor, now)
+  if (!planned.ok) return null
+  const delay = createTask({
+    title: 'Delay',
+    durationMinutes: planned.delayMinutes,
+    delay: true,
+  })
+  const tasks = [...group.tasks]
+  tasks.splice(planned.index, 0, delay)
+  return {
+    ...group,
+    tasks,
+    anchor: planned.nextAnchor,
   }
 }
 

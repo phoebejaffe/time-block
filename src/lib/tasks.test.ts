@@ -28,7 +28,10 @@ import {
   tasksFromCheckpoint,
   tasksFromSavedBlocks,
   tasksMatchCheckpoint,
+  applyGotDelayed,
+  planGotDelayed,
   toggleAnchorPreservingStack,
+  withTasksPreservingStackStart,
   type BlockLibrary,
   type StackAnchor,
   type Task,
@@ -484,6 +487,158 @@ describe('checkpoints', () => {
         checkpoint,
       ),
     ).toBe(true)
+  })
+})
+
+describe('planGotDelayed / applyGotDelayed', () => {
+  it('inserts a rounded empty delay before the current start-anchored block', () => {
+    const anchor: StackAnchor = {
+      kind: 'start',
+      at: '2026-07-18T09:00:00.000Z',
+    }
+    // 90m stack: 09:00–10:30. At 09:17 → in first block, delay = 15.
+    const now = new Date('2026-07-18T09:17:00.000Z')
+    const planned = planGotDelayed(tasks, anchor, now)
+    expect(planned).toEqual({
+      ok: true,
+      index: 0,
+      delayMinutes: 15,
+      nextAnchor: anchor,
+    })
+    const next = applyGotDelayed(
+      { id: 'g', tasks, anchor },
+      now,
+    )!
+    expect(next.tasks).toHaveLength(4)
+    expect(next.tasks[0]).toMatchObject({
+      title: 'Delay',
+      durationMinutes: 15,
+      empty: true,
+      delay: true,
+    })
+    expect(next.tasks[1]!.id).toBe('a')
+    const resolved = resolveStack(next.tasks, anchorOnDay(next.anchor, now))
+    expect(resolved[1]!.start.toISOString()).toBe('2026-07-18T09:15:00.000Z')
+  })
+
+  it('shifts an end anchor forward so the interrupted block starts near now', () => {
+    const anchor: StackAnchor = {
+      kind: 'end',
+      at: '2026-07-18T10:30:00.000Z',
+    }
+    // Same 09:00–10:30 stack. At 09:17 in first block.
+    const now = new Date('2026-07-18T09:17:00.000Z')
+    const planned = planGotDelayed(tasks, anchor, now)
+    expect(planned.ok).toBe(true)
+    if (!planned.ok) return
+    expect(planned.index).toBe(0)
+    expect(planned.delayMinutes).toBe(15)
+    expect(planned.nextAnchor.at).toBe('2026-07-18T10:45:00.000Z')
+
+    const next = applyGotDelayed({ id: 'g', tasks, anchor }, now)!
+    const resolved = resolveStack(next.tasks, anchorOnDay(next.anchor, now))
+    expect(resolved[0]!.title).toBe('Delay')
+    expect(resolved[0]!.delay).toBe(true)
+    expect(resolved[1]!.id).toBe('a')
+    expect(resolved[1]!.start.toISOString()).toBe('2026-07-18T09:15:00.000Z')
+  })
+
+  it('rejects when now is outside the stack or too early in the first block', () => {
+    const anchor: StackAnchor = {
+      kind: 'start',
+      at: '2026-07-18T09:00:00.000Z',
+    }
+    expect(
+      planGotDelayed(tasks, anchor, new Date('2026-07-18T08:59:00.000Z')),
+    ).toEqual({ ok: false, reason: 'no-current-block' })
+    expect(
+      planGotDelayed(tasks, anchor, new Date('2026-07-18T09:01:00.000Z')),
+    ).toEqual({ ok: false, reason: 'too-small' })
+  })
+
+  it('inserts two blocks back when within 5 minutes of the current block start', () => {
+    const anchor: StackAnchor = {
+      kind: 'start',
+      at: '2026-07-18T09:00:00.000Z',
+    }
+    // B starts at 09:30; at 09:32 we're <5m in → delay before A (index 0).
+    const now = new Date('2026-07-18T09:32:00.000Z')
+    const planned = planGotDelayed(tasks, anchor, now)
+    expect(planned).toEqual({
+      ok: true,
+      index: 0,
+      delayMinutes: 30,
+      nextAnchor: anchor,
+    })
+    const next = applyGotDelayed({ id: 'g', tasks, anchor }, now)!
+    expect(next.tasks.map((t) => t.title)).toEqual([
+      'Delay',
+      'A',
+      'B',
+      'C',
+    ])
+    expect(next.tasks[0]).toMatchObject({
+      durationMinutes: 30,
+      empty: true,
+      delay: true,
+    })
+  })
+})
+
+describe('withTasksPreservingStackStart', () => {
+  it('keeps stack start fixed when resizing a delay on an end-anchored group', () => {
+    const delayTask: Task = {
+      id: 'd',
+      title: 'Delay',
+      durationMinutes: 30,
+      empty: true,
+      delay: true,
+    }
+    const groupTasks = [delayTask, ...tasks]
+    const group = {
+      id: 'g',
+      tasks: groupTasks,
+      anchor: {
+        kind: 'end' as const,
+        at: '2026-07-18T11:00:00.000Z',
+      },
+    }
+    const before = resolveStack(group.tasks, group.anchor)
+    const startBefore = before[0]!.start.toISOString()
+    const nextTasks = groupTasks.map((t) =>
+      t.id === 'd' ? { ...t, durationMinutes: 45 } : t,
+    )
+    const next = withTasksPreservingStackStart(group, nextTasks)
+    const after = resolveStack(next.tasks, next.anchor)
+    expect(after[0]!.start.toISOString()).toBe(startBefore)
+    expect(next.anchor.at).toBe('2026-07-18T11:15:00.000Z')
+  })
+
+  it('keeps stack start fixed when deleting a delay on an end-anchored group', () => {
+    const delayTask: Task = {
+      id: 'd',
+      title: 'Delay',
+      durationMinutes: 30,
+      empty: true,
+      delay: true,
+    }
+    const groupTasks = [delayTask, ...tasks]
+    const group = {
+      id: 'g',
+      tasks: groupTasks,
+      anchor: {
+        kind: 'end' as const,
+        at: '2026-07-18T11:00:00.000Z',
+      },
+    }
+    const startBefore = resolveStack(group.tasks, group.anchor)[0]!.start.toISOString()
+    const next = withTasksPreservingStackStart(
+      group,
+      groupTasks.filter((t) => t.id !== 'd'),
+    )
+    const after = resolveStack(next.tasks, next.anchor)
+    expect(after[0]!.start.toISOString()).toBe(startBefore)
+    expect(next.anchor.at).toBe('2026-07-18T10:30:00.000Z')
   })
 })
 

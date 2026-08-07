@@ -1,11 +1,14 @@
 import { useCallback, useState } from 'react'
 import {
+  applyGotDelayed,
   createBlockGroup,
   createCheckpoint,
   createTask,
   defaultPlan,
+  isTaskDelay,
   shiftAnchor,
   tasksFromCheckpoint,
+  withTasksPreservingStackStart,
   type BlockGroup,
   type BlockGroupCheckpoint,
   type Plan,
@@ -66,7 +69,8 @@ export function usePlan() {
             createTask({
               title: task.title,
               durationMinutes: task.durationMinutes,
-              ...(task.empty ? { empty: true } : {}),
+              ...(task.empty || task.delay ? { empty: true } : {}),
+              ...(task.delay ? { delay: true } : {}),
             }),
           ),
           anchor: { ...source.anchor },
@@ -128,10 +132,26 @@ export function usePlan() {
   const updateTask = useCallback(
     (groupId: string, task: Task) => {
       updatePlan((prev) => ({
-        groups: mapGroup(prev.groups, groupId, (g) => ({
-          ...g,
-          tasks: g.tasks.map((t) => (t.id === task.id ? task : t)),
-        })),
+        groups: mapGroup(prev.groups, groupId, (g) => {
+          const previous = g.tasks.find((t) => t.id === task.id)
+          let next = task
+          if (previous && isTaskDelay(previous)) {
+            // Clearing empty demotes a delay; otherwise keep the delay flag.
+            next =
+              task.empty === true
+                ? { ...task, delay: true, empty: true }
+                : (({ delay: _drop, ...rest }) => rest)(task)
+          }
+          const nextTasks = g.tasks.map((t) => (t.id === task.id ? next : t))
+          if (
+            previous &&
+            isTaskDelay(previous) &&
+            previous.durationMinutes !== next.durationMinutes
+          ) {
+            return withTasksPreservingStackStart(g, nextTasks)
+          }
+          return { ...g, tasks: nextTasks }
+        }),
       }))
     },
     [updatePlan],
@@ -140,10 +160,14 @@ export function usePlan() {
   const removeTask = useCallback(
     (groupId: string, taskId: string) => {
       updatePlan((prev) => ({
-        groups: mapGroup(prev.groups, groupId, (g) => ({
-          ...g,
-          tasks: g.tasks.filter((t) => t.id !== taskId),
-        })),
+        groups: mapGroup(prev.groups, groupId, (g) => {
+          const previous = g.tasks.find((t) => t.id === taskId)
+          const nextTasks = g.tasks.filter((t) => t.id !== taskId)
+          if (previous && isTaskDelay(previous)) {
+            return withTasksPreservingStackStart(g, nextTasks)
+          }
+          return { ...g, tasks: nextTasks }
+        }),
       }))
     },
     [updatePlan],
@@ -162,6 +186,23 @@ export function usePlan() {
       }))
     },
     [updatePlan],
+  )
+
+  /** Insert an empty "delay" before the block containing now. Returns true if applied. */
+  const insertGotDelayed = useCallback(
+    (groupId: string, now: Date = new Date()): boolean => {
+      const group = plan.groups.find((g) => g.id === groupId)
+      if (!group || !applyGotDelayed(group, now)) return false
+      updatePlan((prev) => ({
+        groups: mapGroup(
+          prev.groups,
+          groupId,
+          (g) => applyGotDelayed(g, now) ?? g,
+        ),
+      }))
+      return true
+    },
+    [plan.groups, updatePlan],
   )
 
   const reorderTasks = useCallback(
@@ -221,14 +262,21 @@ export function usePlan() {
   const setTaskDuration = useCallback(
     (groupId: string, taskId: string, durationMinutes: number) => {
       updatePlan((prev) => ({
-        groups: mapGroup(prev.groups, groupId, (g) => ({
-          ...g,
-          tasks: g.tasks.map((t) =>
-            t.id === taskId
-              ? { ...t, durationMinutes: Math.max(1, durationMinutes) }
-              : t,
-          ),
-        })),
+        groups: mapGroup(prev.groups, groupId, (g) => {
+          const previous = g.tasks.find((t) => t.id === taskId)
+          const nextMinutes = Math.max(1, durationMinutes)
+          const nextTasks = g.tasks.map((t) =>
+            t.id === taskId ? { ...t, durationMinutes: nextMinutes } : t,
+          )
+          if (
+            previous &&
+            isTaskDelay(previous) &&
+            previous.durationMinutes !== nextMinutes
+          ) {
+            return withTasksPreservingStackStart(g, nextTasks)
+          }
+          return { ...g, tasks: nextTasks }
+        }),
       }))
     },
     [updatePlan],
@@ -369,6 +417,7 @@ export function usePlan() {
     updateTask,
     removeTask,
     insertTaskAt,
+    insertGotDelayed,
     reorderTasks,
     setAnchor,
     replaceTasks,

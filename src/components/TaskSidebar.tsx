@@ -24,6 +24,7 @@ import {
   isTaskEmpty,
   localDateKey,
   groupMatchesCheckpoint,
+  planGotDelayed,
   resolveSavedBlocksFromKeys,
   resolveStack,
   toggleAnchorPreservingStack,
@@ -86,6 +87,7 @@ type TaskSidebarProps = {
   onMoveGroup: (groupId: string, direction: 'up' | 'down') => void
   onSaveCheckpoint: (groupId: string) => void
   onRevertToCheckpoint: (groupId: string) => void
+  onGotDelayed: (groupId: string) => void
   onAddGroup: () => void
   onSetGroupEnabled: (groupId: string, enabled: boolean) => void
   onSetGroupName: (groupId: string, name: string) => void
@@ -135,6 +137,7 @@ export function TaskSidebar({
   onMoveGroup,
   onSaveCheckpoint,
   onRevertToCheckpoint,
+  onGotDelayed,
   onAddGroup,
   onSetGroupEnabled,
   onSetGroupName,
@@ -346,6 +349,7 @@ export function TaskSidebar({
             onMoveGroupDown={() => onMoveGroup(group.id, 'down')}
             onSaveCheckpoint={() => onSaveCheckpoint(group.id)}
             onRevertToCheckpoint={() => onRevertToCheckpoint(group.id)}
+            onGotDelayed={() => onGotDelayed(group.id)}
             onSetGroupEnabled={(enabled) => onSetGroupEnabled(group.id, enabled)}
             onOpenCommit={() => openModal('commit', group.id)}
             onDeleteFromCalendar={() => onDeleteFromCalendar(group.id)}
@@ -491,6 +495,7 @@ type BlockGroupPanelProps = {
   onMoveGroupDown: () => void
   onSaveCheckpoint: () => void
   onRevertToCheckpoint: () => void
+  onGotDelayed: () => void
   onSetGroupEnabled: (enabled: boolean) => void
   onOpenCommit: () => void
   onDeleteFromCalendar: () => void
@@ -555,6 +560,7 @@ function BlockGroupPanel({
   onMoveGroupDown,
   onSaveCheckpoint,
   onRevertToCheckpoint,
+  onGotDelayed,
   onSetGroupEnabled,
   onOpenCommit,
   onDeleteFromCalendar,
@@ -843,6 +849,9 @@ function BlockGroupPanel({
   function renderListMenuDropdown() {
     if (!listMenuOpen) return null
 
+    const canGotDelayed =
+      enabled && planGotDelayed(tasks, anchor).ok
+
     return createPortal(
       <div
         ref={listMenuDropdownRef}
@@ -863,6 +872,28 @@ function BlockGroupPanel({
               }}
             >
               {group.checkpoint ? 'Update default blocks' : 'Save as default'}
+            </button>
+            <div className="calendar-menu-sep" role="separator" />
+          </>
+        )}
+        {enabled && (
+          <>
+            <button
+              type="button"
+              role="menuitem"
+              className="calendar-menu-item"
+              disabled={busy || !canGotDelayed}
+              title={
+                canGotDelayed
+                  ? 'Insert an empty delay so the current block starts around now'
+                  : 'Available while you’re inside a block'
+              }
+              onClick={() => {
+                setListMenuOpen(false)
+                onGotDelayed()
+              }}
+            >
+              I got delayed
             </button>
             <div className="calendar-menu-sep" role="separator" />
           </>

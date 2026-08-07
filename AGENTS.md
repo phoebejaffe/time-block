@@ -105,7 +105,10 @@ testing.
   a drag-desync bug.
 - **`empty`/"spacer" tasks reserve time and render in-app (muted), but are
   never pushed to Google Calendar.** Don't let them leak into
-  `syncTasksToCalendar`'s Google-side writes.
+  `syncTasksToCalendar`'s Google-side writes. **`delay: true`** marks an
+  "I got delayed" spacer (also empty); resize/delete of delays must keep the
+  stack's start time fixed via `withTasksPreservingStackStart` — don't key
+  off the title string.
 - **Checkpoints are per-group, inline, single-slot.** `BlockGroup.checkpoint`
   holds at most one saved snapshot (tasks + anchor); "drift" is computed by
   comparing title/duration/empty in order plus anchor kind/clock time (ids
