@@ -583,14 +583,14 @@ above everything else. Modals used:
   rather than being kept as "Untitled"). Deleting an already-saved block
   shows an "Undo" toast (§7.6), the same mechanism used for deleting a task
   from the plan.
-- **How this works** (help) — a static, scrollable explainer covering the
-  same interaction model documented in this spec's UI sections; opened from
-  the settings menu.
+- **How Timeblock Works** (help) — opens with why Timeblock exists (visualizing
+  time for ADHD / time blindness), then a short narrative of planning and
+  execution flows; opened from the settings menu.
 
 ### 7.5 Settings menu (sidebar header)
 
 An icon-button dropdown containing, top to bottom: "Block library" (opens
-that modal), "How this works" (opens the help modal), "Reload App" (clears
+that modal), "How Timeblock Works" (opens the help modal), "Reload App" (clears
 Cache Storage / service workers if any, then navigates to the same URL with
 a cache-busting query so `index.html` and its hashed JS/CSS are fetched
 fresh — plain `location.reload()` is not enough on GitHub Pages / Safari),

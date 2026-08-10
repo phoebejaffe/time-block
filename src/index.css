@@ -519,6 +519,8 @@ body.is-sidebar-resizing .main-panel {
   font-size: 0.88rem;
   line-height: 1.5;
   color: var(--ink);
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 .help-modal-body h3 {
