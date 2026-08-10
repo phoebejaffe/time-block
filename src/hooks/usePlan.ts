@@ -71,6 +71,7 @@ export function usePlan() {
               durationMinutes: task.durationMinutes,
               ...(task.empty || task.delay ? { empty: true } : {}),
               ...(task.delay ? { delay: true } : {}),
+              ...(task.disabled ? { disabled: true } : {}),
             }),
           ),
           anchor: { ...source.anchor },

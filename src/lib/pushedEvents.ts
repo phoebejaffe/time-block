@@ -243,13 +243,14 @@ export function stackPushFingerprint(
     start: Date
     end: Date
     empty?: boolean
+    disabled?: boolean
   }[],
 ): string {
   return JSON.stringify({
     kind: anchor.kind,
     at: anchor.at,
     items: resolved
-      .filter((t) => t.empty !== true)
+      .filter((t) => t.empty !== true && t.disabled !== true)
       .map((t) => [
       t.id,
       t.title,

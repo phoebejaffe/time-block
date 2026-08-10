@@ -206,6 +206,40 @@ describe('syncTasksToCalendar — per-day isolation', () => {
     expect(second.pushedEvents.filter((e) => e.taskId === 't1')).toHaveLength(0)
     expect(second.pushedEvents.find((e) => e.taskId === 't2')).toBeTruthy()
   })
+
+  it('skips disabled blocks and removes previously pushed events when a block is disabled', async () => {
+    const anchor = {
+      kind: 'start' as const,
+      at: new Date('2026-07-23T15:00:00.000Z').toISOString(),
+    }
+
+    const normalTasks: Task[] = [{ id: 't1', title: 'Focus', durationMinutes: 60 }]
+    const first = await syncTasksToCalendar(
+      'cal-1',
+      'group-1',
+      normalTasks,
+      anchor,
+      [],
+    )
+    expect(first.created).toBe(1)
+
+    const withDisabled: Task[] = [
+      { id: 't1', title: 'Focus', durationMinutes: 60, disabled: true },
+      { id: 't2', title: 'Next', durationMinutes: 30 },
+    ]
+    const second = await syncTasksToCalendar(
+      'cal-1',
+      'group-1',
+      withDisabled,
+      anchor,
+      first.pushedEvents,
+    )
+
+    expect(second.removed).toBe(1)
+    expect(second.created).toBe(1)
+    expect(second.pushedEvents.filter((e) => e.taskId === 't1')).toHaveLength(0)
+    expect(second.pushedEvents.find((e) => e.taskId === 't2')).toBeTruthy()
+  })
 })
 
 describe('syncGroupToCalendars — multi-calendar', () => {

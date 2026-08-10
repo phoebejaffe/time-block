@@ -7,7 +7,7 @@ import {
   type PushedEvent,
 } from './pushedEvents'
 import type { Task } from './tasks'
-import { localDateKey, isTaskEmpty, resolveStack, type StackAnchor } from './tasks'
+import { localDateKey, isTaskDisabled, isTaskEmpty, resolveStack, type StackAnchor } from './tasks'
 
 export type GoogleCalendar = {
   id: string
@@ -306,7 +306,7 @@ export async function syncTasksToCalendar(
   }
 
   for (const task of resolved) {
-    if (isTaskEmpty(task)) {
+    if (isTaskEmpty(task) || isTaskDisabled(task)) {
       const matches = tracked.filter(
         (e) =>
           e.calendarId === calendarId &&
@@ -471,7 +471,7 @@ export async function syncTasksToCalendar(
       dayKey,
       fingerprint: stackPushFingerprint(
         anchor,
-        resolved.filter((task) => !isTaskEmpty(task)),
+        resolved.filter((task) => !isTaskEmpty(task) && !isTaskDisabled(task)),
       ),
       savedAt: new Date().toISOString(),
     }

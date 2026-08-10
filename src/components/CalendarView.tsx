@@ -16,6 +16,7 @@ import {
   canNavigateCalendarRange,
   isTodayOrTomorrow,
   isGroupEnabled,
+  isTaskDisabled,
   isTaskEmpty,
   groupEventColors,
   desaturateEventColors,
@@ -81,14 +82,16 @@ function buildResolvedTaskEvents(groups: BlockGroup[]): ResolvedTaskEvent[] {
   return groups
     .filter((group) => isGroupEnabled(group))
     .flatMap((group) =>
-      resolveStack(group.tasks, group.anchor).map((task) => ({
-        taskId: task.id,
-        groupId: group.id,
-        title: task.title,
-        start: task.start,
-        end: task.end,
-        ...(isTaskEmpty(task) ? { empty: true } : {}),
-      })),
+      resolveStack(group.tasks, group.anchor)
+        .filter((task) => !isTaskDisabled(task))
+        .map((task) => ({
+          taskId: task.id,
+          groupId: group.id,
+          title: task.title,
+          start: task.start,
+          end: task.end,
+          ...(isTaskEmpty(task) ? { empty: true } : {}),
+        })),
     )
 }
 
@@ -373,7 +376,6 @@ export function CalendarView({
   const { zoom, pinchingRef } = useCalendarZoom({
     bodyRef: calendarBodyRef,
     onZoomChange: () => {
-      syncCalendarHeight()
       calendarRef.current?.getApi().updateSize()
     },
     onPinchStart: () => {

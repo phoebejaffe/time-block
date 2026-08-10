@@ -104,6 +104,9 @@ type Task = {
                             // is never sent to Google Calendar
   delay?: boolean          // true = "I got delayed" spacer (implies empty);
                             // identified by this flag, not by title
+  disabled?: boolean       // true = omitted from stack layout / calendar /
+                            // push (as if not in the group); crossed out in
+                            // the sidebar; included in checkpoints
   done?: boolean           // finished during execution; not in checkpoints;
                             // cleared when execution ends
 }
@@ -122,6 +125,11 @@ type Task = {
   Changing a delay's duration may show an "Undo" toast (§7.6) that restores
   the prior tasks. Delays are tracked by the `delay` flag, not by matching
   the title "Delay".
+- A **disabled** task (`disabled: true`) stays in the group's ordered list
+  (and in checkpoints) but consumes no stack time — later blocks close the
+  gap. It is crossed out in the sidebar, omitted from the in-app calendar
+  overlay, and skipped/removed on Google Calendar sync like an empty
+  spacer. Toggle via the disable icon between Edit and Delete (§7.3).
 - **`done`** marks a block finished during execution (§7.9). It starts unset
   (pending). It is not part of checkpoints and does not affect calendar push.
   Ending execution clears `done` on that group's tasks.
@@ -177,6 +185,9 @@ start/end `Date`s for every task ("resolve the stack"):
 - If `anchor.kind === 'end'`: the *last* task ends at `anchor.at`; walk
   backward so each task ends exactly when the next one begins — a
   backward pass.
+- **Disabled** tasks keep their slot in the resolved array but contribute
+  zero duration (`start === end` at the current cursor), so neighboring
+  active tasks abut as if the disabled block were absent.
 
 This resolution is pure and recomputed on every render from `tasks` +
 `anchor`; concrete times are never stored per-task.
@@ -202,6 +213,7 @@ type BlockGroupCheckpoint = {
     durationMinutes: number
     empty?: boolean
     delay?: boolean
+    disabled?: boolean
   }>
   savedAt: string  // ISO
   anchor?: StackAnchor  // saved with newer checkpoints; omitted on legacy ones
@@ -215,23 +227,25 @@ making one-off adjustments (e.g. a daily routine that gets tweaked day to
 day but should be easy to reset).
 
 - **Save as default / Update default blocks** snapshots the group's current
-  tasks (title, duration, `empty` flag, and order — no ids) and its current
-  anchor (kind + datetime) as the checkpoint, overwriting any previous one.
+  tasks (title, duration, `empty`/`delay`/`disabled` flags, and order — no
+  ids) and its current anchor (kind + datetime) as the checkpoint,
+  overwriting any previous one.
   The overflow menu labels this action "Save as default" if the group has no
   checkpoint yet, or "Update default blocks" if it does; updating an existing
   checkpoint asks for confirmation via a native dialog first. Only offered
   while the group is enabled, and only when there either is no checkpoint yet
   or the current group has "drifted" from it.
 - **Drift** is computed by comparing the group's current tasks against the
-  checkpoint's tasks, in order, by title/duration/empty-state (ids ignored;
-  differing lengths always count as drifted), **and** — when the checkpoint
-  includes an `anchor` — by comparing anchor `kind` and local clock time
-  (`HH:mm`). Changing Starts/Ends or the anchor time therefore shows Revert.
-  Legacy checkpoints without `anchor` only compare tasks. While drifted, an
-  inline **Revert** button (with its own icon) appears next to the group's
-  overflow-menu trigger — a one-click shortcut that replaces the group's
-  tasks wholesale with fresh copies (new ids) rebuilt from the checkpoint
-  and restores the saved anchor when present, without opening the menu.
+  checkpoint's tasks, in order, by title/duration/empty-state/delay/disabled
+  (ids ignored; differing lengths always count as drifted), **and** — when
+  the checkpoint includes an `anchor` — by comparing anchor `kind` and local
+  clock time (`HH:mm`). Changing Starts/Ends or the anchor time therefore
+  shows Revert. Legacy checkpoints without `anchor` only compare tasks.
+  While drifted, an inline **Revert** button (with its own icon) appears next
+  to the group's overflow-menu trigger — a one-click shortcut that replaces
+  the group's tasks wholesale with fresh copies (new ids) rebuilt from the
+  checkpoint and restores the saved anchor when present, without opening the
+  menu.
 - Both saving and reverting show an "Undo" toast (§7.6) that restores the
   exact previous state (the prior checkpoint, or the prior task list and
   anchor, respectively) if clicked.
@@ -499,11 +513,14 @@ Top to bottom:
        pushed, or a "calendar" glyph if it's out of sync since the last
        push; then the task's title, truncated with an ellipsis if it
        doesn't fit rather than pushing anything else out of the row; then
-       its duration ("· N min"); then edit and delete icon-buttons (always
-       reserved space so long titles can't crowd them out). Tasks with
-       `empty: true` render in a visually muted/reduced style when not
-       being edited. Clicking anywhere on a row's main area (other than
-       the trailing icon buttons) opens that task for inline editing.
+       its duration ("· N min"); then edit, disable, and delete
+       icon-buttons (always reserved space so long titles can't crowd them
+       out). The disable control (bell-with-X) toggles `disabled` —
+       strikethrough title, omitted from stack layout/calendar/push (§4.1).
+       Tasks with `empty: true` render in a visually muted/reduced style
+       when not being edited. Clicking anywhere on a row's main area
+       (other than the trailing icon buttons) opens that task for inline
+       editing.
      - **Inline task editor** (replaces a row, or appears as a fresh row at
        the bottom when adding): a text input for the title, separate hours
        and minutes duration fields, a toggle button for the "empty/spacer"
@@ -537,10 +554,11 @@ Top to bottom:
        nothing has ever been pushed and the group has zero tasks; visually
        "soft-disabled" — clickable but styled inert — when the stack
        already exactly matches the last successful push) that opens the
-       commit modal (§7.4). When wall-clock now is inside any block of the
-       group on today, or within one hour before the stack starts — and no
-       other group is already executing — an **"Execute this plan"** button
-       appears at the bottom of that group's block list (§7.9).
+       commit modal (§7.4). When wall-clock now is within one hour of the
+       group's stack on today (from an hour before start through an hour
+       after end) — and no other group is already executing — an
+       **"Execute this plan"** button appears at the bottom of that group's
+       block list (§7.9).
 3. **"New group +"** button at the very bottom of the group list, appending
    a fresh empty group (anchored to "ends at 9:00am today" by default).
 
@@ -660,11 +678,11 @@ Planning mode is for drafting multiple block groups. **Execution mode** is
 for running one group against the clock:
 
 1. **"Execute this plan"** (planning sidebar, at the bottom of the group's
-   block list) appears on an enabled group when wall-clock now is inside any
-   of its blocks on today, or within one hour before the stack starts, and no
-   other group is already executing. While **this** group is executing, the
-   same button stays available (labeled **Executing this plan**) to reopen
-   the execution modal.
+   block list) appears on an enabled group when wall-clock now is within one
+   hour of that group's stack on today (from an hour before start through an
+   hour after end), and no other group is already executing. While **this**
+   group is executing, the same button stays available (labeled **Executing
+   this plan**) to reopen the execution modal.
 2. Entering execution: persist `executingGroupId` on the user sync document;
    flip the group to `anchor.kind: 'start'` via `toggleAnchorPreservingStack`
    if needed; set `intendedEndAt` from the resolved stack end if not already
@@ -689,8 +707,11 @@ for running one group against the clock:
    5 minutes of the first block's start.
 4. **Finished toggle**: beside each non-delay block, a clickable pending icon
    (circle with three dots) or green check when `done`. Starts pending; click
-   toggles `done`. Delay spacers omit the control but keep matching empty
-   space so rows align. Cleared with `intendedEndAt` when execution ends.
+   the icon **or the row title/main area** toggles `done` (title click does
+   not open the inline editor in execution — use the edit icon for that).
+   Delay spacers omit the control but keep matching empty space so rows
+   align; clicking a delay row's title does nothing. Cleared with
+   `intendedEndAt` when execution ends.
 5. **End time**: above the status block, show scrubbable **Start** and
    **Intended End** time inputs. The status block shows green **Ending on
    time at …**, green **✨ Ending early at … (Xm early)**, or red
@@ -764,7 +785,8 @@ whenever the calendar's visible date range changes.
 - **In-app block events** (one FullCalendar event per task, across all
   *enabled* groups, positioned via §4.4's stack resolution against the day
   currently in view — including `empty`/spacer tasks, which render with
-  desaturated/muted colors instead of being omitted): each carries the
+  desaturated/muted colors instead of being omitted, and excluding
+  `disabled` tasks entirely): each carries the
   group's color (or its muted variant for spacers), is move-only
   (`startEditable: true`, `durationEditable: false` — duration is owned by
   the plan, resizing is explicitly reverted), and tracks its source
@@ -808,8 +830,11 @@ whenever the calendar's visible date range changes.
   editing in the sidebar (scrolling it into view if needed).
 - **Zoom**: pinch gesture (touch) or Ctrl/Cmd + mouse-wheel scroll changes a
   vertical zoom factor (clamped, e.g. 0.7×–2.5×) applied to the calendar's
-  row heights via a CSS custom property; starting a pinch while a block
-  drag is in progress cancels the drag/discards its pending move.
+  row heights via a CSS custom property. Zoom is anchored to the pointer
+  (wheel) or the midpoint between the two touches (pinch), adjusting the
+  time-grid scroller so content under that point stays put instead of
+  stretching from the top. Starting a pinch while a block drag is in
+  progress cancels the drag/discards its pending move.
 - **View controls**: Day / 3-Day / Week view switch (Week hidden on narrow
   viewports); Previous/Next/Today navigation; a "not today or tomorrow"
   warning icon appears next to Today when the visible range is neither
@@ -886,22 +911,23 @@ Given a group id and a target calendar id (from the commit modal):
 
 #### 8.5.1 Sync algorithm (per group, per day, per target calendar)
 
-Goal: make Google Calendar match the group's current resolved, non-empty
-tasks for that day on the target calendar, reusing previously-created
-events where possible (so editing a title/time updates the same event
-rather than creating a duplicate), tolerating events that were deleted by
-hand on the Google side, and cleaning up if the user changed which calendar
-this group pushes to.
+Goal: make Google Calendar match the group's current resolved, non-empty,
+non-disabled tasks for that day on the target calendar, reusing
+previously-created events where possible (so editing a title/time updates
+the same event rather than creating a duplicate), tolerating events that
+were deleted by hand on the Google side, and cleaning up if the user
+changed which calendar this group pushes to.
 
 1. **Calendar changed**: for any event previously tracked for this
    group+day but on a *different* calendar than the current target, delete
    it from that old calendar (if it still exists there) and stop tracking
    it.
 2. **Per resolved task, in order**:
-   - If the task is `empty` (a spacer): if it was previously pushed (i.e. a
-     tracked event exists for this exact task id/group/day/calendar),
-     delete that event (if it still exists) and stop tracking it — spacers
-     are never represented on the calendar.
+   - If the task is `empty` (a spacer) or `disabled`: if it was previously
+     pushed (i.e. a tracked event exists for this exact task
+     id/group/day/calendar), delete that event (if it still exists) and
+     stop tracking it — spacers and disabled blocks are never represented
+     on Google Calendar.
    - Otherwise: look for a not-yet-reused tracked event from this exact
      group+day+calendar to reuse — prefer one that was tracking this same
      task id; otherwise take any other not-yet-reused one from that pool
@@ -996,5 +1022,6 @@ fresh load starts on today.
 8. Calendar push/update/delete sync algorithm and its push-tracking data
    model, plus the sidebar's synced/out-of-sync indicators.
 9. Notices/toasts, error-formatting, help modal, settings menu, polish
-   (empty/spacer blocks, group colors, group enable/disable, group
-   duplicate/reorder, contrast-aware calendar event labels).
+   (empty/spacer blocks, per-block disable, group colors, group
+   enable/disable, group duplicate/reorder, contrast-aware calendar
+   event labels).

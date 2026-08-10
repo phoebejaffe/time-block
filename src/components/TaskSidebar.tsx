@@ -24,12 +24,14 @@ import {
   isGroupEnabled,
   isGroupExecutableNow,
   isTaskDelay,
+  isTaskDisabled,
   isTaskEmpty,
   localDateKey,
   groupMatchesCheckpoint,
   planGotDelayed,
   resolveSavedBlocksFromKeys,
   resolveStack,
+  stackDurationMinutes,
   toggleAnchorPreservingStack,
   toLocalTimeValue,
 } from '../lib/tasks'
@@ -44,7 +46,16 @@ import {
 } from '../lib/pushedEvents'
 import { SettingsMenu } from './SettingsMenu'
 import { TaskFieldsForm } from './TaskFieldsForm'
-import { BlockIcon, DelayedIcon, EditIcon, FinishedCheckIcon, LibraryIcon, PendingIcon, TrashIcon } from './icons'
+import {
+  BlockIcon,
+  DelayedIcon,
+  DisableBlockIcon,
+  EditIcon,
+  FinishedCheckIcon,
+  LibraryIcon,
+  PendingIcon,
+  TrashIcon,
+} from './icons'
 import type { NoticeOptions } from '../lib/notice'
 import type { SessionDiagnostics } from '../lib/google'
 
@@ -816,10 +827,14 @@ function BlockGroupPanel({
     () => resolveStack(tasks, anchor),
     [tasks, anchor],
   )
+  const activeResolved = useMemo(
+    () => resolved.filter((task) => !isTaskDisabled(task)),
+    [resolved],
+  )
   const stackSummary =
-    resolved.length === 0
+    activeResolved.length === 0
       ? null
-      : `${timeFmt.format(resolved[0]!.start)} – ${timeFmt.format(resolved[resolved.length - 1]!.end)}`
+      : `${timeFmt.format(activeResolved[0]!.start)} – ${timeFmt.format(activeResolved[activeResolved.length - 1]!.end)}`
   const dayKey = localDateKey(anchor.at)
   const onCalendar = hasPushedGroupOnDay(pushedEvents, group.id, dayKey)
   const isUpdate = onCalendar
@@ -834,10 +849,7 @@ function BlockGroupPanel({
   const groupStyle = {
     ['--group-accent' as string]: groupSidebarAccentColor(group.color),
   }
-  const totalDurationMinutes = tasks.reduce(
-    (sum, task) => sum + task.durationMinutes,
-    0,
-  )
+  const totalDurationMinutes = stackDurationMinutes(tasks)
   const hasCheckpointDrift = Boolean(
     group.checkpoint &&
       !groupMatchesCheckpoint(
@@ -1455,7 +1467,10 @@ function BlockGroupPanel({
               <span className="execution-ending-copy">
                 Ending at{' '}
                 <strong>
-                  {timeFmt.format(resolved[resolved.length - 1]!.end)}
+                  {timeFmt.format(
+                    (activeResolved[activeResolved.length - 1] ??
+                      resolved[resolved.length - 1])!.end,
+                  )}
                 </strong>
               </span>
             )}
@@ -1485,6 +1500,7 @@ function BlockGroupPanel({
           const resolvedTask = resolved.find((r) => r.id === task.id)
           const pushed =
             !isTaskEmpty(task) &&
+            !isTaskDisabled(task) &&
             hasPushedTaskOnDay(pushedEvents, task.id, dayKey)
           const synced =
             pushed &&
@@ -1502,6 +1518,16 @@ function BlockGroupPanel({
             dropLineIndex !== dragIndex &&
             dropLineIndex !== dragIndex + 1
 
+          function toggleTaskDone() {
+            if (suppressClickRef.current || isTaskDelay(task)) return
+            if (task.done) {
+              const { done: _d, ...rest } = task
+              onUpdate(rest)
+            } else {
+              onUpdate({ ...task, done: true })
+            }
+          }
+
           return (
             <li
               key={task.id}
@@ -1513,6 +1539,7 @@ function BlockGroupPanel({
                 showLineBefore ? 'drop-line-before' : '',
                 editing ? 'is-editing' : '',
                 isTaskEmpty(task) && !editing ? 'task-card-empty' : '',
+                isTaskDisabled(task) && !editing ? 'task-card-disabled' : '',
               ]
                 .filter(Boolean)
                 .join(' ')}
@@ -1561,15 +1588,7 @@ function BlockGroupPanel({
                       }
                       aria-pressed={task.done === true}
                       title={task.done ? 'Finished' : 'Pending'}
-                      onClick={() => {
-                        if (suppressClickRef.current) return
-                        if (task.done) {
-                          const { done: _d, ...rest } = task
-                          onUpdate(rest)
-                        } else {
-                          onUpdate({ ...task, done: true })
-                        }
-                      }}
+                      onClick={toggleTaskDone}
                     >
                       {task.done ? <FinishedCheckIcon /> : <PendingIcon />}
                     </button>
@@ -1579,6 +1598,10 @@ function BlockGroupPanel({
                     onPointerDown={(e) => beginTaskDrag(e, index)}
                     onClick={() => {
                       if (suppressClickRef.current) return
+                      if (mode === 'execution') {
+                        toggleTaskDone()
+                        return
+                      }
                       onEditingIdChange(task.id)
                     }}
                   >
@@ -1607,6 +1630,28 @@ function BlockGroupPanel({
                       }}
                     >
                       <EditIcon />
+                    </button>
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      aria-label={
+                        isTaskDisabled(task)
+                          ? `Enable ${task.title}`
+                          : `Disable ${task.title}`
+                      }
+                      aria-pressed={isTaskDisabled(task)}
+                      title={isTaskDisabled(task) ? 'Enable' : 'Disable'}
+                      onClick={() => {
+                        if (suppressClickRef.current) return
+                        if (isTaskDisabled(task)) {
+                          const { disabled: _d, ...rest } = task
+                          onUpdate(rest)
+                        } else {
+                          onUpdate({ ...task, disabled: true })
+                        }
+                      }}
+                    >
+                      <DisableBlockIcon crossedOut={isTaskDisabled(task)} />
                     </button>
                     <button
                       type="button"

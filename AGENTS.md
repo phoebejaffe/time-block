@@ -108,7 +108,9 @@ testing.
   `syncTasksToCalendar`'s Google-side writes. **`delay: true`** marks an
   "I got delayed" spacer (also empty); delays are created in **execution
   mode** (Starts-locked), not from the planning overflow menu — don't key
-  off the title string.
+  off the title string. **`disabled: true`** crosses the block out in the
+  sidebar and omits it from stack layout, the in-app calendar, and Google
+  push (as if it weren't in the group); the flag is part of checkpoints.
 - **Execution mode** is a single-group modal + top banner (`executingGroupId`
   + `BlockGroup.intendedEndAt` synced via Firestore). Calendar stack-drag is
   off while executing; planning Starts/Ends remains available after ending
@@ -116,9 +118,9 @@ testing.
   execution sidebar and clear when execution ends.
 - **Checkpoints are per-group, inline, single-slot.** `BlockGroup.checkpoint`
   holds at most one saved snapshot (tasks + anchor); "drift" is computed by
-  comparing title/duration/empty in order plus anchor kind/clock time (ids
-  don't count). Toggling Starts/Ends shifts `anchor.at` by the stack duration
-  so blocks keep their calendar position.
+  comparing title/duration/empty/delay/disabled in order plus anchor
+  kind/clock time (ids don't count). Toggling Starts/Ends shifts `anchor.at`
+  by the stack duration so blocks keep their calendar position.
 - **Push tracking (`PushedEvent`/`PushSnapshot`) is what makes "Add" vs.
   "Update" and the synced/out-of-sync icons work** — it's how the app knows
   what it already wrote to Google without re-fetching. Any change to the

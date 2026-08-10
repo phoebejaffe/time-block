@@ -288,6 +288,9 @@ body.is-sidebar-resizing .main-panel {
 
 .task-sidebar-execution .block-group .task-card {
   background: #ffffff;
+  /* Planning cards use +4px; tighten a few px now that the done control is present. */
+  padding-top: calc(0.35rem + 1px);
+  padding-bottom: calc(0.35rem + 1px);
 }
 
 .task-sidebar-execution .block-group .stack-anchor input,
@@ -881,7 +884,7 @@ body.is-datetime-scrubbing .task-form-duration input {
   border: 0;
   border-bottom: 1px solid var(--line);
   border-radius: 0;
-  padding: calc(0.35rem + 4px) 2.4rem calc(0.35rem + 4px) 0.5rem;
+  padding: calc(0.35rem + 4px) 3.6rem calc(0.35rem + 4px) 0.5rem;
   background: transparent;
   display: flex;
   flex-direction: row;
@@ -1530,6 +1533,20 @@ body.is-task-reordering .task-sidebar {
 
 .task-card-empty .task-card-main {
   opacity: 0.45;
+}
+
+.task-card-disabled .task-title-text,
+.task-card-disabled .task-duration {
+  text-decoration: line-through;
+}
+
+.task-card-disabled .task-card-main {
+  opacity: 0.55;
+}
+
+.task-card-disabled .task-done-btn,
+.task-card-disabled .task-card-icons .icon-btn {
+  opacity: 0.4;
 }
 
 .task-card.drop-line-before::before,

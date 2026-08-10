@@ -115,6 +115,35 @@ describe('resolveStack', () => {
     expect(resolved[1]!.end.toISOString()).toBe('2026-07-18T09:45:00.000Z')
     expect(resolved[2]!.start.toISOString()).toBe('2026-07-18T09:45:00.000Z')
   })
+
+  it('disabled blocks consume no time so neighbors abut', () => {
+    const withDisabled: Task[] = [
+      { id: 'a', title: 'A', durationMinutes: 30 },
+      { id: 'skip', title: 'Skip', durationMinutes: 45, disabled: true },
+      { id: 'b', title: 'B', durationMinutes: 15 },
+    ]
+    const startAnchor: StackAnchor = {
+      kind: 'start',
+      at: '2026-07-18T09:00:00.000Z',
+    }
+    const forward = resolveStack(withDisabled, startAnchor)
+    expect(forward[1]!.disabled).toBe(true)
+    expect(forward[1]!.start.toISOString()).toBe(forward[1]!.end.toISOString())
+    expect(forward[1]!.start.toISOString()).toBe('2026-07-18T09:30:00.000Z')
+    expect(forward[2]!.start.toISOString()).toBe('2026-07-18T09:30:00.000Z')
+    expect(forward[2]!.end.toISOString()).toBe('2026-07-18T09:45:00.000Z')
+
+    const endAnchor: StackAnchor = {
+      kind: 'end',
+      at: '2026-07-18T09:45:00.000Z',
+    }
+    const backward = resolveStack(withDisabled, endAnchor)
+    expect(backward[0]!.start.toISOString()).toBe('2026-07-18T09:00:00.000Z')
+    expect(backward[2]!.end.toISOString()).toBe('2026-07-18T09:45:00.000Z')
+    expect(backward[1]!.start.toISOString()).toBe(
+      backward[1]!.end.toISOString(),
+    )
+  })
 })
 
 describe('anchorOnDay', () => {
@@ -197,6 +226,26 @@ describe('migratePlan', () => {
       title: 'Gap',
       durationMinutes: 10,
       empty: true,
+    })
+  })
+
+  it('preserves disabled blocks when loading a plan', () => {
+    const plan = migratePlan({
+      groups: [
+        {
+          id: 'g1',
+          tasks: [
+            { id: '1', title: 'Skip', durationMinutes: 10, disabled: true },
+          ],
+          anchor: { kind: 'start', at: '2026-07-18T08:00:00.000Z' },
+        },
+      ],
+    })
+    expect(plan!.groups[0]!.tasks[0]).toEqual({
+      id: '1',
+      title: 'Skip',
+      durationMinutes: 10,
+      disabled: true,
     })
   })
 
@@ -463,6 +512,27 @@ describe('checkpoints', () => {
     expect(tasksMatchCheckpoint(withEmpty, checkpoint)).toBe(true)
   })
 
+  it('preserves disabled blocks through save and restore', () => {
+    const withDisabled: Task[] = [
+      { id: 'a', title: 'A', durationMinutes: 30 },
+      { id: 'skip', title: 'Skip', durationMinutes: 20, disabled: true },
+    ]
+    const checkpoint = createCheckpoint(withDisabled, anchor)
+    expect(checkpoint.tasks[1]!.disabled).toBe(true)
+    const rebuilt = tasksFromCheckpoint(checkpoint)
+    expect(rebuilt[1]!.disabled).toBe(true)
+    expect(tasksMatchCheckpoint(withDisabled, checkpoint)).toBe(true)
+    expect(
+      tasksMatchCheckpoint(
+        [
+          withDisabled[0]!,
+          { id: 'skip', title: 'Skip', durationMinutes: 20 },
+        ],
+        checkpoint,
+      ),
+    ).toBe(false)
+  })
+
   it('stores the anchor and treats kind/time changes as drift', () => {
     const checkpoint = createCheckpoint(tasks, anchor)
     expect(checkpoint.anchor).toEqual(anchor)
@@ -629,8 +699,9 @@ describe('execution helpers', () => {
     at: '2026-07-18T09:00:00.000Z',
   }
 
-  it('isGroupExecutableNow is true inside the stack or within an hour before start', () => {
+  it('isGroupExecutableNow is true within an hour of the stack', () => {
     const group = { tasks, anchor: startAnchor }
+    // Stack is 09:00–10:30 UTC in these fixtures.
     expect(
       isGroupExecutableNow(group, new Date('2026-07-18T08:00:00.000Z')),
     ).toBe(true)
@@ -642,6 +713,12 @@ describe('execution helpers', () => {
     ).toBe(true)
     expect(
       isGroupExecutableNow(group, new Date('2026-07-18T10:30:00.000Z')),
+    ).toBe(true)
+    expect(
+      isGroupExecutableNow(group, new Date('2026-07-18T11:30:00.000Z')),
+    ).toBe(true)
+    expect(
+      isGroupExecutableNow(group, new Date('2026-07-18T11:30:01.000Z')),
     ).toBe(false)
     expect(
       isGroupExecutableNow(

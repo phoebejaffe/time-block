@@ -11,6 +11,12 @@ export type Task = {
   empty?: boolean
   /** "I got delayed" spacer. Always empty; never pushed to Google Calendar. */
   delay?: boolean
+  /**
+   * When true, the block is crossed out in the sidebar and omitted from
+   * stack layout / calendar / push — as if it weren't in the group.
+   * Included in checkpoints.
+   */
+  disabled?: boolean
   /** Finished during execution. Not part of checkpoints; cleared when execution ends. */
   done?: boolean
 }
@@ -25,6 +31,7 @@ export type BlockGroupCheckpoint = {
     durationMinutes: number
     empty?: boolean
     delay?: boolean
+    disabled?: boolean
   }>
   savedAt: string
   /** Anchor at save time; older checkpoints may omit this. */
@@ -200,6 +207,19 @@ export function isTaskDelay(task: Pick<Task, 'delay'>): boolean {
   return task.delay === true
 }
 
+export function isTaskDisabled(task: Pick<Task, 'disabled'>): boolean {
+  return task.disabled === true
+}
+
+/** Sum of durations for blocks that still participate in the stack layout. */
+export function stackDurationMinutes(tasks: Task[]): number {
+  return tasks.reduce(
+    (sum, task) =>
+      isTaskDisabled(task) ? sum : sum + task.durationMinutes,
+    0,
+  )
+}
+
 /** Format a duration in minutes as "Xh Ym" / "Xh" / "Xm" for compact display. */
 export function formatDurationMinutes(minutes: number): string {
   const total = Math.max(0, Math.round(minutes))
@@ -320,6 +340,7 @@ export function createCheckpoint(
       durationMinutes: t.durationMinutes,
       ...(t.empty || t.delay ? { empty: true } : {}),
       ...(t.delay ? { delay: true } : {}),
+      ...(t.disabled ? { disabled: true } : {}),
     })),
     savedAt: new Date().toISOString(),
     anchor: { kind: anchor.kind, at: anchor.at },
@@ -334,13 +355,14 @@ export function tasksFromCheckpoint(checkpoint: BlockGroupCheckpoint): Task[] {
       durationMinutes: t.durationMinutes,
       ...(t.empty || t.delay ? { empty: true } : {}),
       ...(t.delay ? { delay: true } : {}),
+      ...(t.disabled ? { disabled: true } : {}),
     }),
   )
 }
 
 /**
  * True when the group's current blocks match its checkpoint — compares
- * title, duration, order, empty-state, and delay flag (not ids or timing).
+ * title, duration, order, empty-state, delay, and disabled (not ids or timing).
  */
 export function tasksMatchCheckpoint(
   tasks: Task[],
@@ -353,7 +375,8 @@ export function tasksMatchCheckpoint(
       task.title === saved.title &&
       task.durationMinutes === saved.durationMinutes &&
       isTaskEmpty(task) === (saved.empty === true || saved.delay === true) &&
-      isTaskDelay(task) === (saved.delay === true)
+      isTaskDelay(task) === (saved.delay === true) &&
+      isTaskDisabled(task) === (saved.disabled === true)
     )
   })
 }
@@ -438,6 +461,7 @@ function normalizeTasks(raw: unknown): Task[] {
         durationMinutes: Math.max(1, Math.round(t.durationMinutes) || 1),
         ...(t.empty === true || delay ? { empty: true } : {}),
         ...(delay ? { delay: true } : {}),
+        ...(t.disabled === true ? { disabled: true } : {}),
         ...(t.done === true ? { done: true } : {}),
       }
     })
@@ -472,6 +496,7 @@ function normalizeCheckpoint(raw: unknown): BlockGroupCheckpoint | undefined {
         durationMinutes: number
         empty?: boolean
         delay?: boolean
+        disabled?: boolean
       } =>
         Boolean(t) &&
         typeof t === 'object' &&
@@ -486,6 +511,7 @@ function normalizeCheckpoint(raw: unknown): BlockGroupCheckpoint | undefined {
         durationMinutes: Math.max(1, Math.round(t.durationMinutes) || 1),
         ...(t.empty === true || delay ? { empty: true } : {}),
         ...(delay ? { delay: true } : {}),
+        ...(t.disabled === true ? { disabled: true } : {}),
       }
     })
   const anchor =
@@ -639,6 +665,7 @@ export function createTask(
     durationMinutes: Math.max(1, Math.round(input.durationMinutes) || 1),
     ...(input.empty || delay ? { empty: true } : {}),
     ...(delay ? { delay: true } : {}),
+    ...(input.disabled === true ? { disabled: true } : {}),
     ...(input.done === true ? { done: true } : {}),
   }
 }
@@ -647,6 +674,8 @@ export function createTask(
  * Lay out the ordered task list from a shared start or end anchor.
  * - start: first task begins at `at`, subsequent tasks follow
  * - end: last task finishes at `at`, previous tasks stack backward
+ * - disabled tasks keep their place in the array but consume no time
+ *   (start === end at the current cursor)
  */
 export function resolveStack(
   tasks: Task[],
@@ -659,6 +688,10 @@ export function resolveStack(
   if (anchor.kind === 'start') {
     let cursor = at.getTime()
     return tasks.map((task) => {
+      if (isTaskDisabled(task)) {
+        const instant = new Date(cursor)
+        return { ...task, start: instant, end: instant }
+      }
       const start = new Date(cursor)
       const end = new Date(cursor + task.durationMinutes * 60_000)
       cursor = end.getTime()
@@ -670,6 +703,11 @@ export function resolveStack(
   const resolved: ResolvedTask[] = new Array(tasks.length)
   for (let i = tasks.length - 1; i >= 0; i -= 1) {
     const task = tasks[i]!
+    if (isTaskDisabled(task)) {
+      const instant = new Date(cursor)
+      resolved[i] = { ...task, start: instant, end: instant }
+      continue
+    }
     const end = new Date(cursor)
     const start = new Date(cursor - task.durationMinutes * 60_000)
     cursor = start.getTime()
@@ -758,22 +796,24 @@ export function applyGotDelayed(
 }
 
 /**
- * True when wall-clock `now` is inside this group's stack on today's day, or
- * within one hour before the stack starts — eligibility for "Execute this plan".
+ * True when wall-clock `now` is within one hour of this group's stack on
+ * today's day (from an hour before start through an hour after end) —
+ * eligibility for "Execute this plan".
  */
 export function isGroupExecutableNow(
   group: Pick<BlockGroup, 'tasks' | 'anchor' | 'enabled'>,
   now: Date = new Date(),
 ): boolean {
   if (group.enabled === false || group.tasks.length === 0) return false
-  const resolved = resolveStack(group.tasks, anchorOnDay(group.anchor, now))
+  const resolved = resolveStack(group.tasks, anchorOnDay(group.anchor, now)).filter(
+    (task) => !isTaskDisabled(task),
+  )
   if (resolved.length === 0) return false
   const t = now.getTime()
   const stackStart = resolved[0]!.start.getTime()
-  if (t >= stackStart - 60 * 60_000 && t < stackStart) return true
-  return resolved.some(
-    (task) => task.start.getTime() <= t && t < task.end.getTime(),
-  )
+  const stackEnd = resolved[resolved.length - 1]!.end.getTime()
+  const hourMs = 60 * 60_000
+  return t >= stackStart - hourMs && t <= stackEnd + hourMs
 }
 
 /**
@@ -859,10 +899,7 @@ export function prepareGroupForExecution(
   group: BlockGroup,
   now: Date = new Date(),
 ): BlockGroup {
-  const totalMinutes = group.tasks.reduce(
-    (sum, task) => sum + task.durationMinutes,
-    0,
-  )
+  const totalMinutes = stackDurationMinutes(group.tasks)
   const anchor =
     group.anchor.kind === 'start'
       ? group.anchor
@@ -870,7 +907,9 @@ export function prepareGroupForExecution(
   if (group.intendedEndAt) {
     return group.anchor.kind === 'start' ? group : { ...group, anchor }
   }
-  const resolved = resolveStack(group.tasks, anchorOnDay(anchor, now))
+  const resolved = resolveStack(group.tasks, anchorOnDay(anchor, now)).filter(
+    (task) => !isTaskDisabled(task),
+  )
   const end = resolved[resolved.length - 1]?.end
   return {
     ...group,
@@ -896,7 +935,9 @@ export function startOfLocalDay(date: Date = new Date()): Date {
 export function stackOccupiedLocalDays(
   group: Pick<BlockGroup, 'tasks' | 'anchor'>,
 ): { first: Date; last: Date } | null {
-  const resolved = resolveStack(group.tasks, group.anchor)
+  const resolved = resolveStack(group.tasks, group.anchor).filter(
+    (task) => !isTaskDisabled(task),
+  )
   if (resolved.length === 0) return null
   const first = startOfLocalDay(resolved[0]!.start)
   // Exactly-midnight ends belong to the previous day.
