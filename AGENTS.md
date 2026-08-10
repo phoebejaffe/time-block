@@ -64,7 +64,7 @@ that's relevant to it.
 | `useGoogleSession` | `src/hooks/useGoogleSession.ts` | Google OAuth session (sign in/out, token refresh, ready/busy/error) |
 | `useCalendarEvents` | `src/hooks/useCalendarEvents.ts` | Google Calendar list + events for the visible date range, visible-calendar toggles |
 | `usePlan` | `src/hooks/usePlan.ts` | In-memory CRUD for the Plan (groups/tasks) — the local editing buffer |
-| `useUserData` | `src/hooks/useUserData.ts` | Everything synced via Firestore: plan (via a callback into `usePlan`), block library, target calendar id, push history |
+| `useUserData` | `src/hooks/useUserData.ts` | Everything synced via Firestore: plan (via a callback into `usePlan`), block library, target calendar id, push history, executing group id |
 | `useNotice` | `src/hooks/useNotice.ts` | Bottom-of-screen toast state |
 | `useSidebarWidth` / `useMobileSplit` | `src/hooks/*` | Persisted desktop sidebar width / mobile split percentage |
 | `useCalendarZoom` / `useTaskStackDrag` | `src/hooks/*` | Calendar-only interaction helpers (pinch/scroll zoom; drag-a-whole-stack visuals) |
@@ -106,9 +106,14 @@ testing.
 - **`empty`/"spacer" tasks reserve time and render in-app (muted), but are
   never pushed to Google Calendar.** Don't let them leak into
   `syncTasksToCalendar`'s Google-side writes. **`delay: true`** marks an
-  "I got delayed" spacer (also empty); resize/delete of delays must keep the
-  stack's start time fixed via `withTasksPreservingStackStart` — don't key
+  "I got delayed" spacer (also empty); delays are created in **execution
+  mode** (Starts-locked), not from the planning overflow menu — don't key
   off the title string.
+- **Execution mode** is a single-group modal + top banner (`executingGroupId`
+  + `BlockGroup.intendedEndAt` synced via Firestore). Calendar stack-drag is
+  off while executing; planning Starts/Ends remains available after ending
+  execution. Per-block `done` toggles (pending ↔ finished) live only in the
+  execution sidebar and clear when execution ends.
 - **Checkpoints are per-group, inline, single-slot.** `BlockGroup.checkpoint`
   holds at most one saved snapshot (tasks + anchor); "drift" is computed by
   comparing title/duration/empty in order plus anchor kind/clock time (ids

@@ -20,6 +20,8 @@ type CalendarToolbarProps = {
   calendarsMenuRef: RefObject<HTMLDivElement | null>
   onPrev: () => void
   onNext: () => void
+  prevDisabled?: boolean
+  nextDisabled?: boolean
   onToday: () => void
   onToggleMenu: () => void
   onToggleCalendars: () => void
@@ -44,6 +46,8 @@ export function CalendarToolbar({
   calendarsMenuRef,
   onPrev,
   onNext,
+  prevDisabled = false,
+  nextDisabled = false,
   onToday,
   onToggleMenu,
   onToggleCalendars,
@@ -59,6 +63,7 @@ export function CalendarToolbar({
             type="button"
             className="btn btn-ghost btn-icon calendar-nav-btn"
             aria-label="Previous"
+            disabled={prevDisabled}
             onClick={onPrev}
           >
             <ChevronIcon direction="left" />
@@ -67,6 +72,7 @@ export function CalendarToolbar({
             type="button"
             className="btn btn-ghost btn-icon calendar-nav-btn"
             aria-label="Next"
+            disabled={nextDisabled}
             onClick={onNext}
           >
             <ChevronIcon direction="right" />

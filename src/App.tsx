@@ -1,7 +1,8 @@
-import { useLayoutEffect, useMemo, useRef, useState, useCallback } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState, useCallback, useEffect } from 'react'
 import { AuthButton } from './components/AuthButton'
 import { AuthSessionDiagnostics } from './components/AuthSessionDiagnostics'
 import { CalendarView } from './components/CalendarView'
+import { ExecutionModal } from './components/ExecutionModal'
 import { MobileSplitHandle } from './components/MobileSplitHandle'
 import { NoticeToast } from './components/NoticeToast'
 import { SidebarResizeHandle } from './components/SidebarResizeHandle'
@@ -44,10 +45,12 @@ export default function App() {
     plan: plan.plan,
     onRemotePlan: plan.replacePlan,
   })
+  const { setExecutingGroupId } = userData
 
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
   const [commitBusy, setCommitBusy] = useState(false)
   const [viewDate, setViewDate] = useState(() => startOfLocalDay())
+  const [executionModalOpen, setExecutionModalOpen] = useState(false)
   const [stackDragPreview, setStackDragPreview] = useState<{
     groupId: string
     deltaMs: number
@@ -93,6 +96,37 @@ export default function App() {
     () => applyTaskEditPreview(viewDayGroups, taskEditPreview),
     [viewDayGroups, taskEditPreview],
   )
+
+  const executingGroupId = userData.executingGroupId
+  const executingGroup = useMemo(
+    () =>
+      executingGroupId
+        ? plan.plan.groups.find((g) => g.id === executingGroupId)
+        : undefined,
+    [plan.plan.groups, executingGroupId],
+  )
+  const executingPreviewGroup = useMemo(
+    () =>
+      executingGroupId
+        ? previewGroups.find((g) => g.id === executingGroupId)
+        : undefined,
+    [previewGroups, executingGroupId],
+  )
+  const executingCalendarGroups = useMemo(
+    () =>
+      executingGroupId
+        ? calendarGroups.filter((g) => g.id === executingGroupId)
+        : [],
+    [calendarGroups, executingGroupId],
+  )
+
+  // Drop stale execution if the group was deleted remotely / locally.
+  useEffect(() => {
+    if (executingGroupId && !executingGroup) {
+      setExecutingGroupId(null)
+      setExecutionModalOpen(false)
+    }
+  }, [executingGroupId, executingGroup, setExecutingGroupId])
 
   const handleTaskEditPreview = useCallback((preview: TaskEditPreview | null) => {
     setTaskEditPreview((prev) => {
@@ -154,7 +188,6 @@ export default function App() {
     const group = plan.plan.groups.find((g) => g.id === groupId)
     if (!group) return
     const previousTasks = group.tasks
-    const previousAnchor = group.anchor
     if (!plan.insertGotDelayed(groupId)) {
       show('info', 'Delay only works while you’re inside a block.')
       return
@@ -164,7 +197,6 @@ export default function App() {
       progressMs: 5_000,
       onAction: () => {
         plan.replaceTasks(groupId, previousTasks)
-        plan.setAnchor(groupId, previousAnchor)
         clear()
       },
     })
@@ -174,7 +206,6 @@ export default function App() {
     const group = plan.plan.groups.find((g) => g.id === groupId)
     const previous = group?.tasks.find((t) => t.id === task.id)
     const previousTasks = group?.tasks
-    const previousAnchor = group?.anchor
     const delayDurationChanged =
       Boolean(previous) &&
       isTaskDelay(previous!) &&
@@ -182,21 +213,37 @@ export default function App() {
 
     plan.updateTask(groupId, task)
 
-    if (
-      delayDurationChanged &&
-      previousTasks &&
-      previousAnchor
-    ) {
+    if (delayDurationChanged && previousTasks) {
       show('info', 'Delay updated.', {
         actionLabel: 'Undo',
         progressMs: 5_000,
         onAction: () => {
           plan.replaceTasks(groupId, previousTasks)
-          plan.setAnchor(groupId, previousAnchor)
           clear()
         },
       })
     }
+  }
+
+  function handleBeginExecution(groupId: string) {
+    if (executingGroupId === groupId) {
+      setExecutionModalOpen(true)
+      clear()
+      return
+    }
+    plan.beginExecution(groupId)
+    setExecutingGroupId(groupId)
+    setExecutionModalOpen(true)
+    clear()
+  }
+
+  function handleEndExecution() {
+    if (executingGroupId) {
+      plan.clearIntendedEndAt(executingGroupId)
+    }
+    setExecutingGroupId(null)
+    setExecutionModalOpen(false)
+    clear()
   }
 
   function handleRemoveTask(groupId: string, taskId: string) {
@@ -224,6 +271,10 @@ export default function App() {
       return
     }
     if (!window.confirm('Delete this block group?')) return
+    if (executingGroupId === groupId) {
+      setExecutingGroupId(null)
+      setExecutionModalOpen(false)
+    }
     plan.removeGroup(groupId)
     handleEditingIdChange(null)
     clear()
@@ -503,6 +554,27 @@ export default function App() {
         </div>
       )}
 
+      {executingGroup && !executionModalOpen && (
+        <div className="banner banner-execution" role="status">
+          <span className="execution-banner-spacer" aria-hidden />
+          <button
+            type="button"
+            className="execution-banner-open"
+            onClick={() => setExecutionModalOpen(true)}
+          >
+            Executing {executingGroup.name?.trim() || 'Untitled plan'}
+          </button>
+          <button
+            type="button"
+            className="execution-banner-dismiss"
+            aria-label="End execution"
+            onClick={handleEndExecution}
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       {!session.ready || (session.signedIn && userData.loading) ? (
         <div className="app-gate">
           <div className="empty-state">
@@ -582,6 +654,8 @@ export default function App() {
             onSaveCheckpoint={handleSaveCheckpoint}
             onRevertToCheckpoint={handleRevertToCheckpoint}
             onGotDelayed={handleGotDelayed}
+            onExecutePlan={handleBeginExecution}
+            executingGroupId={executingGroupId}
             onAddGroup={handleAddGroup}
             onSetGroupEnabled={plan.setGroupEnabled}
             onSetGroupName={plan.setGroupName}
@@ -641,6 +715,59 @@ export default function App() {
           </main>
         </div>
       )}
+
+      {executionModalOpen &&
+        executingPreviewGroup &&
+        executingGroup && (
+          <ExecutionModal
+            group={executingGroup}
+            groupsForSidebar={[executingPreviewGroup]}
+            calendarGroups={executingCalendarGroups}
+            googleEvents={calendars.googleEvents}
+            calendars={calendars.calendars}
+            visibleCalendarIds={calendars.visibleIds}
+            onToggleCalendar={calendars.toggleCalendar}
+            writableCalendars={calendars.writableCalendars}
+            onAdd={handleAddTask}
+            onAddBlocks={handleAddBlocks}
+            onUpdate={handleUpdateTask}
+            onRemove={handleRemoveTask}
+            onReorder={plan.reorderTasks}
+            onAnchorChange={(groupId, next) => {
+              setStackDragPreview(null)
+              plan.setAnchor(groupId, next)
+            }}
+            onGotDelayed={handleGotDelayed}
+            onIntendedEndChange={(groupId, intendedEndAt) => {
+              plan.setIntendedEndAt(groupId, intendedEndAt)
+            }}
+            onSaveCheckpoint={handleSaveCheckpoint}
+            onRevertToCheckpoint={handleRevertToCheckpoint}
+            onSetGroupName={plan.setGroupName}
+            onSetGroupColor={plan.setGroupColor}
+            onSetGroupEnabled={plan.setGroupEnabled}
+            onCommit={handleCommit}
+            onDeleteFromCalendar={handleDeleteFromCalendar}
+            onTaskEditPreview={handleTaskEditPreview}
+            editingId={editingTaskId}
+            onEditingIdChange={handleEditingIdChange}
+            onDatesSet={handleDatesSet}
+            onTaskClick={setEditingTaskId}
+            busy={busy}
+            targetCalendarId={userData.targetCalendarId}
+            onTargetCalendarChange={userData.setTargetCalendarId}
+            pushedEvents={userData.pushedEvents}
+            pushSnapshots={userData.pushSnapshots}
+            blockLibrary={userData.blockLibrary}
+            onReplaceBlockLibrary={userData.replaceBlockLibrary}
+            onShowNotice={(text, options) => show('info', text, options)}
+            onClearNotice={clear}
+            onClose={() => setExecutionModalOpen(false)}
+            onEndExecution={handleEndExecution}
+            splitStyle={splitStyle}
+            onSplitChange={setSplitPercent}
+          />
+        )}
 
       {notice && <NoticeToast notice={notice} />}
     </div>

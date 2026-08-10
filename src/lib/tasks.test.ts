@@ -31,7 +31,12 @@ import {
   applyGotDelayed,
   planGotDelayed,
   toggleAnchorPreservingStack,
-  withTasksPreservingStackStart,
+  isGroupExecutableNow,
+  getStackDelayOverrun,
+  getStackEndStatus,
+  prepareGroupForExecution,
+  stackOccupiedLocalDays,
+  canNavigateCalendarRange,
   type BlockLibrary,
   type StackAnchor,
   type Task,
@@ -503,7 +508,6 @@ describe('planGotDelayed / applyGotDelayed', () => {
       ok: true,
       index: 0,
       delayMinutes: 15,
-      nextAnchor: anchor,
     })
     const next = applyGotDelayed(
       { id: 'g', tasks, anchor },
@@ -521,7 +525,7 @@ describe('planGotDelayed / applyGotDelayed', () => {
     expect(resolved[1]!.start.toISOString()).toBe('2026-07-18T09:15:00.000Z')
   })
 
-  it('shifts an end anchor forward so the interrupted block starts near now', () => {
+  it('keeps the end anchor unchanged when inserting a delay', () => {
     const anchor: StackAnchor = {
       kind: 'end',
       at: '2026-07-18T10:30:00.000Z',
@@ -529,18 +533,21 @@ describe('planGotDelayed / applyGotDelayed', () => {
     // Same 09:00–10:30 stack. At 09:17 in first block.
     const now = new Date('2026-07-18T09:17:00.000Z')
     const planned = planGotDelayed(tasks, anchor, now)
-    expect(planned.ok).toBe(true)
-    if (!planned.ok) return
-    expect(planned.index).toBe(0)
-    expect(planned.delayMinutes).toBe(15)
-    expect(planned.nextAnchor.at).toBe('2026-07-18T10:45:00.000Z')
+    expect(planned).toEqual({
+      ok: true,
+      index: 0,
+      delayMinutes: 15,
+    })
 
     const next = applyGotDelayed({ id: 'g', tasks, anchor }, now)!
+    expect(next.anchor).toEqual(anchor)
     const resolved = resolveStack(next.tasks, anchorOnDay(next.anchor, now))
     expect(resolved[0]!.title).toBe('Delay')
     expect(resolved[0]!.delay).toBe(true)
-    expect(resolved[1]!.id).toBe('a')
-    expect(resolved[1]!.start.toISOString()).toBe('2026-07-18T09:15:00.000Z')
+    // End-anchored: delay inserts before A and walks backward from fixed end.
+    expect(resolved[resolved.length - 1]!.end.toISOString()).toBe(
+      '2026-07-18T10:30:00.000Z',
+    )
   })
 
   it('rejects when now is outside the stack or too early in the first block', () => {
@@ -568,7 +575,6 @@ describe('planGotDelayed / applyGotDelayed', () => {
       ok: true,
       index: 0,
       delayMinutes: 30,
-      nextAnchor: anchor,
     })
     const next = applyGotDelayed({ id: 'g', tasks, anchor }, now)!
     expect(next.tasks.map((t) => t.title)).toEqual([
@@ -582,63 +588,6 @@ describe('planGotDelayed / applyGotDelayed', () => {
       empty: true,
       delay: true,
     })
-  })
-})
-
-describe('withTasksPreservingStackStart', () => {
-  it('keeps stack start fixed when resizing a delay on an end-anchored group', () => {
-    const delayTask: Task = {
-      id: 'd',
-      title: 'Delay',
-      durationMinutes: 30,
-      empty: true,
-      delay: true,
-    }
-    const groupTasks = [delayTask, ...tasks]
-    const group = {
-      id: 'g',
-      tasks: groupTasks,
-      anchor: {
-        kind: 'end' as const,
-        at: '2026-07-18T11:00:00.000Z',
-      },
-    }
-    const before = resolveStack(group.tasks, group.anchor)
-    const startBefore = before[0]!.start.toISOString()
-    const nextTasks = groupTasks.map((t) =>
-      t.id === 'd' ? { ...t, durationMinutes: 45 } : t,
-    )
-    const next = withTasksPreservingStackStart(group, nextTasks)
-    const after = resolveStack(next.tasks, next.anchor)
-    expect(after[0]!.start.toISOString()).toBe(startBefore)
-    expect(next.anchor.at).toBe('2026-07-18T11:15:00.000Z')
-  })
-
-  it('keeps stack start fixed when deleting a delay on an end-anchored group', () => {
-    const delayTask: Task = {
-      id: 'd',
-      title: 'Delay',
-      durationMinutes: 30,
-      empty: true,
-      delay: true,
-    }
-    const groupTasks = [delayTask, ...tasks]
-    const group = {
-      id: 'g',
-      tasks: groupTasks,
-      anchor: {
-        kind: 'end' as const,
-        at: '2026-07-18T11:00:00.000Z',
-      },
-    }
-    const startBefore = resolveStack(group.tasks, group.anchor)[0]!.start.toISOString()
-    const next = withTasksPreservingStackStart(
-      group,
-      groupTasks.filter((t) => t.id !== 'd'),
-    )
-    const after = resolveStack(next.tasks, next.anchor)
-    expect(after[0]!.start.toISOString()).toBe(startBefore)
-    expect(next.anchor.at).toBe('2026-07-18T10:30:00.000Z')
   })
 })
 
@@ -671,6 +620,138 @@ describe('toggleAnchorPreservingStack', () => {
       kind: 'start',
       at: anchor.at,
     })
+  })
+})
+
+describe('execution helpers', () => {
+  const startAnchor: StackAnchor = {
+    kind: 'start',
+    at: '2026-07-18T09:00:00.000Z',
+  }
+
+  it('isGroupExecutableNow is true inside the stack or within an hour before start', () => {
+    const group = { tasks, anchor: startAnchor }
+    expect(
+      isGroupExecutableNow(group, new Date('2026-07-18T08:00:00.000Z')),
+    ).toBe(true)
+    expect(
+      isGroupExecutableNow(group, new Date('2026-07-18T07:59:00.000Z')),
+    ).toBe(false)
+    expect(
+      isGroupExecutableNow(group, new Date('2026-07-18T09:15:00.000Z')),
+    ).toBe(true)
+    expect(
+      isGroupExecutableNow(group, new Date('2026-07-18T10:30:00.000Z')),
+    ).toBe(false)
+    expect(
+      isGroupExecutableNow(
+        { ...group, enabled: false },
+        new Date('2026-07-18T09:15:00.000Z'),
+      ),
+    ).toBe(false)
+  })
+
+  it('prepareGroupForExecution flips to Starts and captures intended end', () => {
+    const endAnchor: StackAnchor = {
+      kind: 'end',
+      at: '2026-07-18T10:30:00.000Z',
+    }
+    const now = new Date('2026-07-18T09:00:00.000Z')
+    const next = prepareGroupForExecution(
+      { id: 'g', tasks, anchor: endAnchor },
+      now,
+    )
+    expect(next.anchor).toEqual(startAnchor)
+    expect(next.intendedEndAt).toBe('2026-07-18T10:30:00.000Z')
+  })
+
+  it('prepareGroupForExecution keeps an existing intendedEndAt', () => {
+    const next = prepareGroupForExecution(
+      {
+        id: 'g',
+        tasks,
+        anchor: startAnchor,
+        intendedEndAt: '2026-07-18T11:00:00.000Z',
+      },
+      new Date('2026-07-18T09:00:00.000Z'),
+    )
+    expect(next.intendedEndAt).toBe('2026-07-18T11:00:00.000Z')
+  })
+
+  it('getStackEndStatus reports late, early, and on-time', () => {
+    const delayed = applyGotDelayed(
+      { id: 'g', tasks, anchor: startAnchor },
+      new Date('2026-07-18T09:17:00.000Z'),
+    )!
+    const withIntent = {
+      ...delayed,
+      intendedEndAt: '2026-07-18T10:30:00.000Z',
+    }
+    const late = getStackEndStatus(
+      withIntent,
+      new Date('2026-07-18T12:00:00.000Z'),
+    )
+    expect(late).toMatchObject({ kind: 'late', delayedMinutes: 15 })
+
+    expect(
+      getStackEndStatus(
+        { tasks, anchor: startAnchor, intendedEndAt: '2026-07-18T10:30:00.000Z' },
+        new Date('2026-07-18T12:00:00.000Z'),
+      ),
+    ).toMatchObject({ kind: 'on-time' })
+
+    expect(
+      getStackEndStatus(
+        {
+          tasks,
+          anchor: startAnchor,
+          intendedEndAt: '2026-07-18T11:00:00.000Z',
+        },
+        new Date('2026-07-18T12:00:00.000Z'),
+      ),
+    ).toMatchObject({ kind: 'early', earlyMinutes: 30 })
+
+    expect(
+      getStackDelayOverrun(
+        { tasks, anchor: startAnchor, intendedEndAt: '2026-07-18T10:30:00.000Z' },
+        new Date('2026-07-18T12:00:00.000Z'),
+      ),
+    ).toBeNull()
+  })
+
+  it('stackOccupiedLocalDays covers every local day the stack touches', () => {
+    const start = new Date(2026, 6, 18, 22, 0, 0)
+    const days = stackOccupiedLocalDays({
+      tasks: [{ id: 'a', title: 'Late', durationMinutes: 180 }],
+      anchor: { kind: 'start', at: start.toISOString() },
+    })
+    expect(days).not.toBeNull()
+    expect(days!.first.getTime()).toBe(
+      startOfLocalDay(new Date(2026, 6, 18)).getTime(),
+    )
+    expect(days!.last.getTime()).toBe(
+      startOfLocalDay(new Date(2026, 6, 19)).getTime(),
+    )
+  })
+
+  it('canNavigateCalendarRange disables steps that leave the stack days', () => {
+    const first = startOfLocalDay(new Date(2026, 6, 18))
+    const last = startOfLocalDay(new Date(2026, 6, 19))
+    const day0 = first
+    const day1 = startOfLocalDay(new Date(2026, 6, 19))
+    const day2 = startOfLocalDay(new Date(2026, 6, 20))
+    expect(
+      canNavigateCalendarRange(day0, day1, { first, last }, 'prev'),
+    ).toBe(false)
+    expect(
+      canNavigateCalendarRange(day0, day1, { first, last }, 'next'),
+    ).toBe(true)
+    expect(
+      canNavigateCalendarRange(day1, day2, { first, last }, 'prev'),
+    ).toBe(true)
+    expect(
+      canNavigateCalendarRange(day1, day2, { first, last }, 'next'),
+    ).toBe(false)
   })
 })
 

@@ -6,9 +6,9 @@ import {
   createTask,
   defaultPlan,
   isTaskDelay,
+  prepareGroupForExecution,
   shiftAnchor,
   tasksFromCheckpoint,
-  withTasksPreservingStackStart,
   type BlockGroup,
   type BlockGroupCheckpoint,
   type Plan,
@@ -142,15 +142,10 @@ export function usePlan() {
                 ? { ...task, delay: true, empty: true }
                 : (({ delay: _drop, ...rest }) => rest)(task)
           }
-          const nextTasks = g.tasks.map((t) => (t.id === task.id ? next : t))
-          if (
-            previous &&
-            isTaskDelay(previous) &&
-            previous.durationMinutes !== next.durationMinutes
-          ) {
-            return withTasksPreservingStackStart(g, nextTasks)
+          return {
+            ...g,
+            tasks: g.tasks.map((t) => (t.id === task.id ? next : t)),
           }
-          return { ...g, tasks: nextTasks }
         }),
       }))
     },
@@ -160,14 +155,10 @@ export function usePlan() {
   const removeTask = useCallback(
     (groupId: string, taskId: string) => {
       updatePlan((prev) => ({
-        groups: mapGroup(prev.groups, groupId, (g) => {
-          const previous = g.tasks.find((t) => t.id === taskId)
-          const nextTasks = g.tasks.filter((t) => t.id !== taskId)
-          if (previous && isTaskDelay(previous)) {
-            return withTasksPreservingStackStart(g, nextTasks)
-          }
-          return { ...g, tasks: nextTasks }
-        }),
+        groups: mapGroup(prev.groups, groupId, (g) => ({
+          ...g,
+          tasks: g.tasks.filter((t) => t.id !== taskId),
+        })),
       }))
     },
     [updatePlan],
@@ -262,21 +253,14 @@ export function usePlan() {
   const setTaskDuration = useCallback(
     (groupId: string, taskId: string, durationMinutes: number) => {
       updatePlan((prev) => ({
-        groups: mapGroup(prev.groups, groupId, (g) => {
-          const previous = g.tasks.find((t) => t.id === taskId)
-          const nextMinutes = Math.max(1, durationMinutes)
-          const nextTasks = g.tasks.map((t) =>
-            t.id === taskId ? { ...t, durationMinutes: nextMinutes } : t,
-          )
-          if (
-            previous &&
-            isTaskDelay(previous) &&
-            previous.durationMinutes !== nextMinutes
-          ) {
-            return withTasksPreservingStackStart(g, nextTasks)
-          }
-          return { ...g, tasks: nextTasks }
-        }),
+        groups: mapGroup(prev.groups, groupId, (g) => ({
+          ...g,
+          tasks: g.tasks.map((t) =>
+            t.id === taskId
+              ? { ...t, durationMinutes: Math.max(1, durationMinutes) }
+              : t,
+          ),
+        })),
       }))
     },
     [updatePlan],
@@ -304,6 +288,8 @@ export function usePlan() {
             anchor: g.anchor,
             ...(g.name ? { name: g.name } : {}),
             ...(g.color ? { color: g.color } : {}),
+            ...(g.checkpoint ? { checkpoint: g.checkpoint } : {}),
+            ...(g.intendedEndAt ? { intendedEndAt: g.intendedEndAt } : {}),
             ...(enabled ? {} : { enabled: false }),
           }
           return next
@@ -390,6 +376,55 @@ export function usePlan() {
     [updatePlan],
   )
 
+  /** Flip to Starts and capture intended end for execution mode. */
+  const beginExecution = useCallback(
+    (groupId: string, now: Date = new Date()) => {
+      updatePlan((prev) => ({
+        groups: mapGroup(prev.groups, groupId, (g) =>
+          prepareGroupForExecution(g, now),
+        ),
+      }))
+    },
+    [updatePlan],
+  )
+
+  const setIntendedEndAt = useCallback(
+    (groupId: string, intendedEndAt: string | undefined) => {
+      updatePlan((prev) => ({
+        groups: mapGroup(prev.groups, groupId, (g) => {
+          if (intendedEndAt) return { ...g, intendedEndAt }
+          const next = { ...g }
+          delete next.intendedEndAt
+          return next
+        }),
+      }))
+    },
+    [updatePlan],
+  )
+
+  const clearIntendedEndAt = useCallback(
+    (groupId: string) => {
+      updatePlan((prev) => ({
+        groups: mapGroup(prev.groups, groupId, (g) => {
+          const hadIntended = Boolean(g.intendedEndAt)
+          const hadDone = g.tasks.some((t) => t.done === true)
+          if (!hadIntended && !hadDone) return g
+          const next = { ...g }
+          delete next.intendedEndAt
+          if (hadDone) {
+            next.tasks = g.tasks.map((t) => {
+              if (!t.done) return t
+              const { done: _d, ...rest } = t
+              return rest
+            })
+          }
+          return next
+        }),
+      }))
+    },
+    [updatePlan],
+  )
+
   /** Reset to a blank plan (e.g. on sign-out, before the next account's data loads). */
   const clear = useCallback(() => {
     setPlan(defaultPlan())
@@ -430,6 +465,9 @@ export function usePlan() {
     saveCheckpoint,
     revertToCheckpoint,
     setCheckpoint,
+    beginExecution,
+    setIntendedEndAt,
+    clearIntendedEndAt,
     clear,
     replacePlan,
     findGroupForTask,

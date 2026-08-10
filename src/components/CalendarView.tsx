@@ -13,6 +13,7 @@ import interactionPlugin from '@fullcalendar/interaction'
 import type { CalendarEvent, GoogleCalendar } from '../lib/calendarApi'
 import type { BlockGroup, StackAnchor } from '../lib/tasks'
 import {
+  canNavigateCalendarRange,
   isTodayOrTomorrow,
   isGroupEnabled,
   isTaskEmpty,
@@ -57,6 +58,13 @@ type CalendarViewProps = {
   ) => void
   onTaskClick: (taskId: string) => void
   busy?: boolean
+  /** When false, task stack drag on the calendar is disabled (execution mode). */
+  stackDragEnabled?: boolean
+  /**
+   * When set (execution mode), ‹ › are disabled if the next step would leave
+   * these inclusive local days occupied by the executing stack.
+   */
+  navDayBounds?: { first: Date; last: Date } | null
 }
 
 type ResolvedTaskEvent = {
@@ -261,6 +269,8 @@ export function CalendarView({
   onStackShiftPreview,
   onTaskClick,
   busy,
+  stackDragEnabled = true,
+  navDayBounds = null,
 }: CalendarViewProps) {
   const calendarRef = useRef<FullCalendar>(null)
   const shellRef = useRef<HTMLDivElement>(null)
@@ -333,6 +343,22 @@ export function CalendarView({
   const [calendarsOpen, setCalendarsOpen] = useState(false)
   const [isOnToday, setIsOnToday] = useState(true)
   const [farFromTodayOrTomorrow, setFarFromTodayOrTomorrow] = useState(false)
+  const [prevDisabled, setPrevDisabled] = useState(false)
+  const [nextDisabled, setNextDisabled] = useState(false)
+
+  function syncNavDisabled(rangeStart: Date, rangeEnd: Date) {
+    if (!navDayBounds) {
+      setPrevDisabled(false)
+      setNextDisabled(false)
+      return
+    }
+    setPrevDisabled(
+      !canNavigateCalendarRange(rangeStart, rangeEnd, navDayBounds, 'prev'),
+    )
+    setNextDisabled(
+      !canNavigateCalendarRange(rangeStart, rangeEnd, navDayBounds, 'next'),
+    )
+  }
 
   const { handleEventDragStart, handleEventDragStop, cancelStackDrag, syncStackDragTransforms } =
     useTaskStackDrag({
@@ -482,6 +508,7 @@ export function CalendarView({
   }
 
   function handleEventAllow(span: DateSpanApi, movingEvent: EventApi | null) {
+    if (!stackDragEnabled) return false
     if (pinchingRef.current || discardDragRef.current) return false
     if (movingEvent?.extendedProps.source !== 'task') return true
     const originMs = dragOriginStartRef.current
@@ -664,7 +691,8 @@ export function CalendarView({
         backgroundColor: colors.backgroundColor,
         borderColor: colors.borderColor,
         // Move only — `editable: true` would re-enable duration resize.
-        startEditable: true,
+        // Per-event startEditable overrides calendar eventStartEditable.
+        startEditable: stackDragEnabled,
         durationEditable: false,
         order: 0,
         classNames: [
@@ -681,7 +709,7 @@ export function CalendarView({
     })
 
     return [...google, ...local]
-  }, [googleEvents, groupColors, resolvedTaskEvents, showAllDay])
+  }, [googleEvents, groupColors, resolvedTaskEvents, showAllDay, stackDragEnabled])
 
   function handleDatesSet(arg: DatesSetArg) {
     const type = arg.view.type
@@ -701,9 +729,27 @@ export function CalendarView({
     setFarFromTodayOrTomorrow(
       !isTodayOrTomorrow(pickViewDate(arg.start, arg.end, now)),
     )
+    syncNavDisabled(arg.start, arg.end)
     onDatesSet(arg.start, arg.end)
     scheduleCalendarHeightSync()
   }
+
+  // Recompute ‹ › when the executing stack's day span changes.
+  useEffect(() => {
+    const range = viewRangeRef.current
+    if (!range) return
+    if (!navDayBounds) {
+      setPrevDisabled(false)
+      setNextDisabled(false)
+      return
+    }
+    setPrevDisabled(
+      !canNavigateCalendarRange(range.start, range.end, navDayBounds, 'prev'),
+    )
+    setNextDisabled(
+      !canNavigateCalendarRange(range.start, range.end, navDayBounds, 'next'),
+    )
+  }, [navDayBounds])
 
   function changeView(next: CalendarViewType) {
     calendarRef.current?.getApi().changeView(next)
@@ -770,6 +816,8 @@ export function CalendarView({
         calendarsMenuRef={calendarsMenuRef}
         onPrev={() => calendarRef.current?.getApi().prev()}
         onNext={() => calendarRef.current?.getApi().next()}
+        prevDisabled={prevDisabled}
+        nextDisabled={nextDisabled}
         onToday={() => calendarRef.current?.getApi().today()}
         onToggleMenu={() => {
           setCalendarsOpen(false)
@@ -807,17 +855,17 @@ export function CalendarView({
           height={calendarHeight > 0 ? calendarHeight : '100%'}
           windowResize={syncCalendarHeight}
           nowIndicator
-          editable
+          editable={stackDragEnabled}
           selectable={false}
-          eventStartEditable
+          eventStartEditable={stackDragEnabled}
           eventDurationEditable={false}
           eventLongPressDelay={TASK_EVENT_LONG_PRESS_MS}
           events={events}
           datesSet={handleDatesSet}
           eventAllow={handleEventAllow}
-          eventDragStart={handleDragStart}
-          eventDragStop={handleDragStop}
-          eventDrop={handleDrop}
+          eventDragStart={stackDragEnabled ? handleDragStart : undefined}
+          eventDragStop={stackDragEnabled ? handleDragStop : undefined}
+          eventDrop={stackDragEnabled ? handleDrop : undefined}
           eventResize={handleEventResize}
           eventClick={handleEventClick}
           eventContent={handleEventContent}

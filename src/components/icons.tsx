@@ -76,3 +76,60 @@ export function BlockIcon() {
     </svg>
   )
 }
+
+/** Circle with three dots — block not finished yet (Carbon / SVG Repo pending). */
+export function PendingIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 32 32"
+      fill="currentColor"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden
+    >
+      <circle cx="9" cy="16" r="2" />
+      <circle cx="23" cy="16" r="2" />
+      <circle cx="16" cy="16" r="2" />
+      <path d="M16,30A14,14,0,1,1,30,16,14.0158,14.0158,0,0,1,16,30ZM16,4A12,12,0,1,0,28,16,12.0137,12.0137,0,0,0,16,4Z" />
+    </svg>
+  )
+}
+
+/** Check mark for a finished block. */
+export function FinishedCheckIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M20 6 9 17l-5-5" />
+    </svg>
+  )
+}
+
+/** Clock with progress rays — “I’m delayed”. */
+export function DelayedIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 16 16"
+      xmlns="http://www.w3.org/2000/svg"
+      fill="none"
+      aria-hidden
+    >
+      <g fill="currentColor">
+        <path d="M1.5 8a6.5 6.5 0 016.744-6.496.75.75 0 10.055-1.499 8 8 0 107.036 11.193.75.75 0 00-1.375-.6 6.722 6.722 0 01-.22.453A6.5 6.5 0 011.5 8zM10.726 1.238a.75.75 0 011.013-.312c.177.094.35.194.518.3a.75.75 0 01-.799 1.27 6.512 6.512 0 00-.42-.244.75.75 0 01-.312-1.014zM13.74 3.508a.75.75 0 011.034.235c.106.168.206.34.3.518a.75.75 0 11-1.326.702 6.452 6.452 0 00-.243-.421.75.75 0 01.235-1.034zM15.217 6.979a.75.75 0 01.777.722 8.034 8.034 0 01.002.552.75.75 0 01-1.5-.047 6.713 6.713 0 000-.45.75.75 0 01.721-.777z" />
+        <path d="M7.75 3a.75.75 0 01.75.75v3.786l2.085 1.043a.75.75 0 11-.67 1.342l-2.5-1.25A.75.75 0 017 8V3.75A.75.75 0 017.75 3z" />
+      </g>
+    </svg>
+  )
+}

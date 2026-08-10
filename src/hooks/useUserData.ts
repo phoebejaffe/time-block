@@ -51,6 +51,9 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
   const [targetCalendarId, setTargetCalendarIdState] = useState('')
   const [pushedEvents, setPushedEvents] = useState<PushedEvent[]>([])
   const [pushSnapshots, setPushSnapshots] = useState<PushSnapshot[]>([])
+  const [executingGroupId, setExecutingGroupIdState] = useState<string | null>(
+    null,
+  )
   const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState<SyncStatus>('idle')
   const [syncError, setSyncError] = useState<string | null>(null)
@@ -68,6 +71,7 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
     targetCalendarId,
     pushedEvents,
     pushSnapshots,
+    executingGroupId,
   })
   stateRef.current = {
     plan,
@@ -75,6 +79,7 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
     targetCalendarId,
     pushedEvents,
     pushSnapshots,
+    executingGroupId,
   }
 
   const onRemotePlanRef = useRef(onRemotePlan)
@@ -96,6 +101,7 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
       targetCalendarId: unknown
       pushedEvents: unknown
       pushSnapshots: unknown
+      executingGroupId?: unknown
     }) => {
       skipNextPushRef.current = true
       const migrated = migratePlan(remote.plan)
@@ -118,6 +124,16 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
       setPushSnapshots(
         remoteSnapshots.length > 0 ? remoteSnapshots : legacySnapshots,
       )
+      const remoteExecuting =
+        typeof remote.executingGroupId === 'string' && remote.executingGroupId
+          ? remote.executingGroupId
+          : null
+      const planGroups = migrated?.groups ?? []
+      setExecutingGroupIdState(
+        remoteExecuting && planGroups.some((g) => g.id === remoteExecuting)
+          ? remoteExecuting
+          : null,
+      )
       if (legacyEvents.length > 0 || legacySnapshots.length > 0) {
         skipNextPushRef.current = false
       }
@@ -133,6 +149,7 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
       targetCalendarId: tc,
       pushedEvents: pe,
       pushSnapshots: ps,
+      executingGroupId: eg,
     } = stateRef.current
     const updatedAt = new Date().toISOString()
     await saveUserState(uid, {
@@ -142,6 +159,7 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
       targetCalendarId: tc,
       pushedEvents: pe,
       pushSnapshots: ps,
+      executingGroupId: eg,
     })
     lastSyncedAtRef.current = updatedAt
   }, [])
@@ -236,7 +254,7 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
     return () => {
       if (pushTimerRef.current) clearTimeout(pushTimerRef.current)
     }
-  }, [plan, blockLibrary, targetCalendarId, pushedEvents, pushSnapshots, signedIn, firebaseUser, loading, pushNow])
+  }, [plan, blockLibrary, targetCalendarId, pushedEvents, pushSnapshots, executingGroupId, signedIn, firebaseUser, loading, pushNow])
 
   const replaceBlockLibrary = useCallback((next: BlockLibrary) => {
     setBlockLibrary(next)
@@ -244,6 +262,10 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
 
   const setTargetCalendarId = useCallback((id: string) => {
     setTargetCalendarIdState(id)
+  }, [])
+
+  const setExecutingGroupId = useCallback((id: string | null) => {
+    setExecutingGroupIdState(id)
   }, [])
 
   const applyCalendarSync = useCallback(
@@ -301,6 +323,7 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
     setTargetCalendarIdState('')
     setPushedEvents([])
     setPushSnapshots([])
+    setExecutingGroupIdState(null)
     setStatus('idle')
     setSyncError(null)
     setLoading(false)
@@ -312,11 +335,13 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
     targetCalendarId,
     pushedEvents,
     pushSnapshots,
+    executingGroupId,
     loading: loading || (signedIn && !firebaseUser && isFirebaseConfigured()),
     status,
     syncError,
     replaceBlockLibrary,
     setTargetCalendarId,
+    setExecutingGroupId,
     applyCalendarSync,
     applyCalendarDelete,
     reset,

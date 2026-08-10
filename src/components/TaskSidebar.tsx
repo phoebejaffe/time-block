@@ -19,8 +19,11 @@ import {
   DEFAULT_GROUP_COLOR,
   formatDurationMinutes,
   fromLocalTimeValue,
+  getStackEndStatus,
   groupSidebarAccentColor,
   isGroupEnabled,
+  isGroupExecutableNow,
+  isTaskDelay,
   isTaskEmpty,
   localDateKey,
   groupMatchesCheckpoint,
@@ -31,6 +34,7 @@ import {
   toLocalTimeValue,
 } from '../lib/tasks'
 import {
+  calendarCommitLabel,
   hasPushedGroupOnDay,
   hasPushedTaskOnDay,
   isTaskPushUnchanged,
@@ -40,7 +44,7 @@ import {
 } from '../lib/pushedEvents'
 import { SettingsMenu } from './SettingsMenu'
 import { TaskFieldsForm } from './TaskFieldsForm'
-import { BlockIcon, EditIcon, LibraryIcon, TrashIcon } from './icons'
+import { BlockIcon, DelayedIcon, EditIcon, FinishedCheckIcon, LibraryIcon, PendingIcon, TrashIcon } from './icons'
 import type { NoticeOptions } from '../lib/notice'
 import type { SessionDiagnostics } from '../lib/google'
 
@@ -88,6 +92,12 @@ type TaskSidebarProps = {
   onSaveCheckpoint: (groupId: string) => void
   onRevertToCheckpoint: (groupId: string) => void
   onGotDelayed: (groupId: string) => void
+  onExecutePlan?: (groupId: string) => void
+  onIntendedEndChange?: (groupId: string, intendedEndAt: string) => void
+  /** When set, another group is already executing (hides Execute on others). */
+  executingGroupId?: string | null
+  /** Planning sidebar vs single-group execution panel. */
+  mode?: 'planning' | 'execution'
   onAddGroup: () => void
   onSetGroupEnabled: (groupId: string, enabled: boolean) => void
   onSetGroupName: (groupId: string, name: string) => void
@@ -97,8 +107,8 @@ type TaskSidebarProps = {
   onTaskEditPreview: (preview: {
     groupId: string
     taskId: string
-    title: string
     durationMinutes: number
+    title: string
     empty?: boolean
   } | null) => void
   editingId: string | null
@@ -138,6 +148,10 @@ export function TaskSidebar({
   onSaveCheckpoint,
   onRevertToCheckpoint,
   onGotDelayed,
+  onExecutePlan,
+  onIntendedEndChange,
+  executingGroupId = null,
+  mode = 'planning',
   onAddGroup,
   onSetGroupEnabled,
   onSetGroupName,
@@ -272,6 +286,10 @@ export function TaskSidebar({
   const modalIsUpdate =
     Boolean(modalGroupId) &&
     hasPushedGroupOnDay(pushedEvents, modalGroupId || '', modalDayKey)
+  const modalPushedCalendarCount = modalGroupId
+    ? pushedCalendarIdsForGroupDay(pushedEvents, modalGroupId, modalDayKey)
+        .length
+    : 0
   const commitCalendars = useMemo(() => {
     const byId = new Map(writableCalendars.map((c) => [c.id, c]))
     const ordered = commitCalendarOrder
@@ -287,29 +305,33 @@ export function TaskSidebar({
   }, [writableCalendars, commitCalendarOrder])
 
   return (
-    <aside className="task-sidebar">
-      <div className="task-list-header">
-        <div className="task-list-brand">
-          <span className="brand-mark brand-mark-sm" aria-hidden />
-          <h3>Timeblock</h3>
+    <aside
+      className={`task-sidebar${mode === 'execution' ? ' task-sidebar-execution' : ''}`}
+    >
+      {mode === 'planning' && (
+        <div className="task-list-header">
+          <div className="task-list-brand">
+            <span className="brand-mark brand-mark-sm" aria-hidden />
+            <h3>Timeblock</h3>
+          </div>
+          <div className="task-list-meta">
+            <SettingsMenu
+              busy={busy}
+              signedIn={signedIn}
+              onSignIn={onSignIn}
+              onSignOut={onSignOut}
+              authDiagnostics={authDiagnostics}
+              authSignedIn={authSignedIn}
+              authTestRefreshBusy={authTestRefreshBusy}
+              onAuthTestRefresh={onAuthTestRefresh}
+              blockLibrary={blockLibrary}
+              onReplaceBlockLibrary={onReplaceBlockLibrary}
+              onShowNotice={onShowNotice}
+              onClearNotice={onClearNotice}
+            />
+          </div>
         </div>
-        <div className="task-list-meta">
-          <SettingsMenu
-            busy={busy}
-            signedIn={signedIn}
-            onSignIn={onSignIn}
-            onSignOut={onSignOut}
-            authDiagnostics={authDiagnostics}
-            authSignedIn={authSignedIn}
-            authTestRefreshBusy={authTestRefreshBusy}
-            onAuthTestRefresh={onAuthTestRefresh}
-            blockLibrary={blockLibrary}
-            onReplaceBlockLibrary={onReplaceBlockLibrary}
-            onShowNotice={onShowNotice}
-            onClearNotice={onClearNotice}
-          />
-        </div>
-      </div>
+      )}
 
       <div className="block-groups">
         {groups.map((group, index) => (
@@ -321,6 +343,7 @@ export function TaskSidebar({
             canMoveGroupUp={index > 0}
             canMoveGroupDown={index < groups.length - 1}
             busy={busy}
+            mode={mode}
             pushedEvents={pushedEvents}
             pushSnapshots={pushSnapshots}
             editingId={editingId}
@@ -350,6 +373,20 @@ export function TaskSidebar({
             onSaveCheckpoint={() => onSaveCheckpoint(group.id)}
             onRevertToCheckpoint={() => onRevertToCheckpoint(group.id)}
             onGotDelayed={() => onGotDelayed(group.id)}
+            onExecutePlan={
+              onExecutePlan ? () => onExecutePlan(group.id) : undefined
+            }
+            canExecutePlan={
+              mode === 'planning' &&
+              (executingGroupId === group.id ||
+                (!executingGroupId && isGroupExecutableNow(group)))
+            }
+            isExecutingPlan={executingGroupId === group.id}
+            onIntendedEndChange={
+              onIntendedEndChange
+                ? (iso) => onIntendedEndChange(group.id, iso)
+                : undefined
+            }
             onSetGroupEnabled={(enabled) => onSetGroupEnabled(group.id, enabled)}
             onOpenCommit={() => openModal('commit', group.id)}
             onDeleteFromCalendar={() => onDeleteFromCalendar(group.id)}
@@ -360,19 +397,21 @@ export function TaskSidebar({
             onAddFromLibrary={(inputs) => onAddBlocks(group.id, inputs)}
           />
         ))}
-        <button
-          type="button"
-          className="task-new-group"
-          onClick={onAddGroup}
-          disabled={busy}
-        >
-          New group +
-        </button>
+        {mode === 'planning' && (
+          <button
+            type="button"
+            className="task-new-group"
+            onClick={onAddGroup}
+            disabled={busy}
+          >
+            New group +
+          </button>
+        )}
       </div>
 
       {modal === 'commit' && modalGroup && (
         <Modal
-          title={modalIsUpdate ? 'Update calendar' : 'Add to calendar'}
+          title={calendarCommitLabel(modalIsUpdate, modalPushedCalendarCount)}
           onClose={closeModal}
           dialogClassName="modal-dialog-commit"
         >
@@ -428,9 +467,12 @@ export function TaskSidebar({
                   ? modalIsUpdate
                     ? 'Updating…'
                     : 'Adding…'
-                  : modalIsUpdate
-                    ? 'Update'
-                    : 'Add'}
+                  : calendarCommitLabel(
+                      modalIsUpdate,
+                      selectedCommitIds.length > 1
+                        ? selectedCommitIds.length
+                        : modalPushedCalendarCount,
+                    )}
                 {!busy && <CalendarIcon />}
               </button>
             </div>
@@ -477,6 +519,7 @@ type BlockGroupPanelProps = {
   canMoveGroupUp: boolean
   canMoveGroupDown: boolean
   busy?: boolean
+  mode?: 'planning' | 'execution'
   pushedEvents: PushedEvent[]
   pushSnapshots: PushSnapshot[]
   editingId: string | null
@@ -496,6 +539,10 @@ type BlockGroupPanelProps = {
   onSaveCheckpoint: () => void
   onRevertToCheckpoint: () => void
   onGotDelayed: () => void
+  onExecutePlan?: () => void
+  canExecutePlan?: boolean
+  isExecutingPlan?: boolean
+  onIntendedEndChange?: (intendedEndAt: string) => void
   onSetGroupEnabled: (enabled: boolean) => void
   onOpenCommit: () => void
   onDeleteFromCalendar: () => void
@@ -542,6 +589,7 @@ function BlockGroupPanel({
   canMoveGroupUp,
   canMoveGroupDown,
   busy,
+  mode = 'planning',
   pushedEvents,
   pushSnapshots,
   editingId,
@@ -561,6 +609,10 @@ function BlockGroupPanel({
   onSaveCheckpoint,
   onRevertToCheckpoint,
   onGotDelayed,
+  onExecutePlan,
+  canExecutePlan = false,
+  isExecutingPlan = false,
+  onIntendedEndChange,
   onSetGroupEnabled,
   onOpenCommit,
   onDeleteFromCalendar,
@@ -592,6 +644,8 @@ function BlockGroupPanel({
   const tasksLengthRef = useRef(tasks.length)
   const anchorRef = useRef(anchor)
   anchorRef.current = anchor
+  const intendedEndAtRef = useRef(group.intendedEndAt)
+  intendedEndAtRef.current = group.intendedEndAt
   const [listMenuDropdownStyle, setListMenuDropdownStyle] =
     useState<CSSProperties>({})
 
@@ -769,6 +823,14 @@ function BlockGroupPanel({
   const dayKey = localDateKey(anchor.at)
   const onCalendar = hasPushedGroupOnDay(pushedEvents, group.id, dayKey)
   const isUpdate = onCalendar
+  const commitLabel = calendarCommitLabel(
+    isUpdate,
+    pushedCalendarIdsForGroupDay(pushedEvents, group.id, dayKey).length,
+  )
+  const endStatus =
+    mode === 'execution' ? getStackEndStatus(group) : null
+  const canGotDelayed =
+    mode === 'execution' && enabled && planGotDelayed(tasks, anchor).ok
   const groupStyle = {
     ['--group-accent' as string]: groupSidebarAccentColor(group.color),
   }
@@ -849,9 +911,6 @@ function BlockGroupPanel({
   function renderListMenuDropdown() {
     if (!listMenuOpen) return null
 
-    const canGotDelayed =
-      enabled && planGotDelayed(tasks, anchor).ok
-
     return createPortal(
       <div
         ref={listMenuDropdownRef}
@@ -872,28 +931,6 @@ function BlockGroupPanel({
               }}
             >
               {group.checkpoint ? 'Update default blocks' : 'Save as default'}
-            </button>
-            <div className="calendar-menu-sep" role="separator" />
-          </>
-        )}
-        {enabled && (
-          <>
-            <button
-              type="button"
-              role="menuitem"
-              className="calendar-menu-item"
-              disabled={busy || !canGotDelayed}
-              title={
-                canGotDelayed
-                  ? 'Insert an empty delay so the current block starts around now'
-                  : 'Available while you’re inside a block'
-              }
-              onClick={() => {
-                setListMenuOpen(false)
-                onGotDelayed()
-              }}
-            >
-              I got delayed
             </button>
             <div className="calendar-menu-sep" role="separator" />
           </>
@@ -977,24 +1014,30 @@ function BlockGroupPanel({
             Delete blocks from calendar
           </button>
         )}
-        <button
-          type="button"
-          role="menuitem"
-          className="calendar-menu-item"
-          disabled={busy || !canDeleteGroup}
-          onClick={() => {
-            setListMenuOpen(false)
-            onDeleteGroup()
-          }}
-        >
-          Delete block group
-        </button>
+        {mode !== 'execution' && (
+          <button
+            type="button"
+            role="menuitem"
+            className="calendar-menu-item"
+            disabled={busy || !canDeleteGroup}
+            onClick={() => {
+              setListMenuOpen(false)
+              onDeleteGroup()
+            }}
+          >
+            Delete block group
+          </button>
+        )}
       </div>,
       document.body,
     )
   }
 
-  function beginAnchorScrub(e: React.PointerEvent<HTMLInputElement>) {
+  function beginTimeScrub(
+    e: React.PointerEvent<HTMLInputElement>,
+    getBaseIso: () => string,
+    onIsoChange: (iso: string) => void,
+  ) {
     if (e.button !== 0) return
     const input = e.currentTarget
     const startY = e.clientY
@@ -1005,11 +1048,12 @@ function BlockGroupPanel({
     let field: AnchorField = 'minute'
 
     function currentIso(): string {
+      const base = getBaseIso()
       if (input.value) {
-        const parsed = fromLocalTimeValue(input.value, anchorRef.current.at)
+        const parsed = fromLocalTimeValue(input.value, base)
         if (!Number.isNaN(new Date(parsed).getTime())) return parsed
       }
-      return anchorRef.current.at
+      return base
     }
 
     let originIso = ''
@@ -1056,7 +1100,7 @@ function BlockGroupPanel({
       const tick = Math.trunc(-dy / ANCHOR_SCRUB_PX)
       if (tick === lastTick) return
       lastTick = tick
-      onAnchorChange({ ...anchorRef.current, at: isoForTick(tick) })
+      onIsoChange(isoForTick(tick))
     }
 
     function cleanup() {
@@ -1081,6 +1125,23 @@ function BlockGroupPanel({
     document.addEventListener('pointermove', onMove, { passive: false })
     document.addEventListener('pointerup', onUp)
     document.addEventListener('pointercancel', onUp)
+  }
+
+  function beginAnchorScrub(e: React.PointerEvent<HTMLInputElement>) {
+    beginTimeScrub(
+      e,
+      () => anchorRef.current.at,
+      (iso) => onAnchorChange({ ...anchorRef.current, at: iso }),
+    )
+  }
+
+  function beginIntendedEndScrub(e: React.PointerEvent<HTMLInputElement>) {
+    if (!onIntendedEndChange) return
+    beginTimeScrub(
+      e,
+      () => intendedEndAtRef.current || anchorRef.current.at,
+      (iso) => onIntendedEndChange(iso),
+    )
   }
 
   function handleDropAt(insertAt: number, from: number) {
@@ -1246,64 +1307,176 @@ function BlockGroupPanel({
   return (
     <section className="block-group" style={groupStyle}>
       <div className="stack-anchor">
-        <button
-          type="button"
-          className="block-group-header stack-anchor-name-row"
-          onClick={() => handlePowerChange(false)}
-          disabled={busy}
-          aria-expanded={true}
-          aria-label="Turn off and collapse group"
-          title="Turn off and collapse group"
-        >
-          <PowerIndicator enabled={enabled} />
-          <span className="stack-anchor-name">{collapsedLabel}</span>
-        </button>
+        {mode !== 'execution' && (
+          <button
+            type="button"
+            className="block-group-header stack-anchor-name-row"
+            onClick={() => handlePowerChange(false)}
+            disabled={busy}
+            aria-expanded={true}
+            aria-label="Turn off and collapse group"
+            title="Turn off and collapse group"
+          >
+            <PowerIndicator enabled={enabled} />
+            <span className="stack-anchor-name">{collapsedLabel}</span>
+          </button>
+        )}
         <div className="stack-anchor-row">
-          <div className="segmented segmented-sm segmented-single">
-            <button
-              type="button"
-              className="active"
-              disabled={busy}
-              aria-pressed={anchor.kind === 'end'}
-              aria-label={
-                anchor.kind === 'end'
-                  ? 'Ends at selected time; tap to anchor from start'
-                  : 'Starts at selected time; tap to anchor from end'
-              }
-              onClick={() =>
-                onAnchorChange(
-                  toggleAnchorPreservingStack(anchor, totalDurationMinutes),
-                )
-              }
-            >
-              {anchor.kind === 'start' ? 'Starts' : 'Ends'}
-            </button>
-          </div>
-          <span className="muted stack-anchor-at" aria-hidden="true">
-            at
-          </span>
-          <label className="stack-anchor-time">
-            <span className="sr-only">
-              {anchor.kind === 'end' ? 'List ends at' : 'List starts at'}
-            </span>
-            <input
-              type="time"
-              step={300}
-              value={toLocalTimeValue(anchor.at)}
-              onChange={(e) => {
-                if (!e.target.value) return
-                onAnchorChange({
-                  ...anchor,
-                  at: fromLocalTimeValue(e.target.value, anchor.at),
-                })
-              }}
-              onPointerDown={beginAnchorScrub}
-            />
-          </label>
-          {stackSummary && (
-            <span className="task-range muted">{stackSummary}</span>
+          {mode === 'execution' ? (
+            <>
+              <span className="execution-started-label">Start</span>
+              <label className="stack-anchor-time">
+                <span className="sr-only">List starts at</span>
+                <input
+                  type="time"
+                  step={300}
+                  value={toLocalTimeValue(anchor.at)}
+                  onChange={(e) => {
+                    if (!e.target.value) return
+                    onAnchorChange({
+                      ...anchor,
+                      at: fromLocalTimeValue(e.target.value, anchor.at),
+                    })
+                  }}
+                  onPointerDown={beginAnchorScrub}
+                />
+              </label>
+              {group.intendedEndAt && onIntendedEndChange && (
+                <>
+                  <span className="execution-times-gap" aria-hidden="true" />
+                  <span className="execution-started-label">Intended End</span>
+                  <label className="stack-anchor-time execution-delay-intended">
+                    <span className="sr-only">Intended end time</span>
+                    <input
+                      type="time"
+                      step={300}
+                      value={toLocalTimeValue(group.intendedEndAt)}
+                      disabled={busy}
+                      onChange={(e) => {
+                        if (!e.target.value || !group.intendedEndAt) return
+                        onIntendedEndChange(
+                          fromLocalTimeValue(
+                            e.target.value,
+                            group.intendedEndAt,
+                          ),
+                        )
+                      }}
+                      onPointerDown={beginIntendedEndScrub}
+                    />
+                  </label>
+                </>
+              )}
+            </>
+          ) : (
+            <>
+              <div className="segmented segmented-sm segmented-single">
+                <button
+                  type="button"
+                  className="active"
+                  disabled={busy}
+                  aria-pressed={anchor.kind === 'end'}
+                  aria-label={
+                    anchor.kind === 'end'
+                      ? 'Ends at selected time; tap to anchor from start'
+                      : 'Starts at selected time; tap to anchor from end'
+                  }
+                  onClick={() =>
+                    onAnchorChange(
+                      toggleAnchorPreservingStack(anchor, totalDurationMinutes),
+                    )
+                  }
+                >
+                  {anchor.kind === 'start' ? 'Starts' : 'Ends'}
+                </button>
+              </div>
+              <span className="muted stack-anchor-at" aria-hidden="true">
+                at
+              </span>
+              <label className="stack-anchor-time">
+                <span className="sr-only">
+                  {anchor.kind === 'start' ? 'List starts at' : 'List ends at'}
+                </span>
+                <input
+                  type="time"
+                  step={300}
+                  value={toLocalTimeValue(anchor.at)}
+                  onChange={(e) => {
+                    if (!e.target.value) return
+                    onAnchorChange({
+                      ...anchor,
+                      at: fromLocalTimeValue(e.target.value, anchor.at),
+                    })
+                  }}
+                  onPointerDown={beginAnchorScrub}
+                />
+              </label>
+              {stackSummary && (
+                <span className="task-range muted">{stackSummary}</span>
+              )}
+            </>
           )}
         </div>
+        {mode === 'execution' && resolved.length > 0 && (
+          <div
+            className={[
+              'stack-anchor-row',
+              'execution-end-row',
+              endStatus?.kind === 'late'
+                ? 'execution-end-row-late'
+                : endStatus
+                  ? 'execution-end-row-ok'
+                  : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
+            role={endStatus ? 'status' : undefined}
+          >
+            {endStatus?.kind === 'late' ? (
+              <span className="execution-ending-copy">
+                Ending late at{' '}
+                <strong>{timeFmt.format(endStatus.actualEnd)}</strong>{' '}
+                ({formatDurationMinutes(endStatus.delayedMinutes)} late)
+              </span>
+            ) : endStatus?.kind === 'early' ? (
+              <span className="execution-ending-copy">
+                <span className="execution-early-stars" aria-hidden="true">
+                  ✨
+                </span>{' '}
+                Ending early at{' '}
+                <strong>{timeFmt.format(endStatus.actualEnd)}</strong>{' '}
+                ({formatDurationMinutes(endStatus.earlyMinutes)} early)
+              </span>
+            ) : endStatus?.kind === 'on-time' ? (
+              <span className="execution-ending-copy">
+                Ending on time at{' '}
+                <strong>{timeFmt.format(endStatus.actualEnd)}</strong>
+              </span>
+            ) : (
+              <span className="execution-ending-copy">
+                Ending at{' '}
+                <strong>
+                  {timeFmt.format(resolved[resolved.length - 1]!.end)}
+                </strong>
+              </span>
+            )}
+          </div>
+        )}
+        {mode === 'execution' && (
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm execution-delayed-btn"
+            disabled={busy || !canGotDelayed}
+            title={
+              canGotDelayed
+                ? 'Insert an empty delay so the current block starts around now'
+                : 'Available while you’re inside a block'
+            }
+            onClick={onGotDelayed}
+          >
+            I’m delayed
+            <DelayedIcon />
+          </button>
+        )}
       </div>
 
       <ul className="task-list" ref={listRef}>
@@ -1369,6 +1542,38 @@ function BlockGroupPanel({
                 />
               ) : (
                 <>
+                  {mode === 'execution' &&
+                    (isTaskDelay(task) ? (
+                      <span className="task-done-btn-spacer" aria-hidden />
+                    ) : (
+                    <button
+                      type="button"
+                      className={[
+                        'task-done-btn',
+                        task.done ? 'is-done' : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                      aria-label={
+                        task.done
+                          ? `Mark ${task.title} not finished`
+                          : `Mark ${task.title} finished`
+                      }
+                      aria-pressed={task.done === true}
+                      title={task.done ? 'Finished' : 'Pending'}
+                      onClick={() => {
+                        if (suppressClickRef.current) return
+                        if (task.done) {
+                          const { done: _d, ...rest } = task
+                          onUpdate(rest)
+                        } else {
+                          onUpdate({ ...task, done: true })
+                        }
+                      }}
+                    >
+                      {task.done ? <FinishedCheckIcon /> : <PendingIcon />}
+                    </button>
+                    ))}
                   <div
                     className="task-card-main task-card-drag"
                     onPointerDown={(e) => beginTaskDrag(e, index)}
@@ -1598,7 +1803,7 @@ function BlockGroupPanel({
                   onClick={onOpenCommit}
                   disabled={busy || (!isUpdate && tasks.length === 0)}
                 >
-                  {isUpdate ? 'Update' : 'Add'}
+                  {commitLabel}
                   <CalendarIcon />
                 </button>
               </div>
@@ -1606,6 +1811,16 @@ function BlockGroupPanel({
           )}
         </li>
       </ul>
+      {canExecutePlan && onExecutePlan && (
+        <button
+          type="button"
+          className="btn btn-primary btn-sm execution-start-btn"
+          disabled={busy}
+          onClick={onExecutePlan}
+        >
+          {isExecutingPlan ? 'Executing this plan' : 'Execute this plan'}
+        </button>
+      )}
     </section>
   )
 }

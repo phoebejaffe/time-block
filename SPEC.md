@@ -104,6 +104,8 @@ type Task = {
                             // is never sent to Google Calendar
   delay?: boolean          // true = "I got delayed" spacer (implies empty);
                             // identified by this flag, not by title
+  done?: boolean           // finished during execution; not in checkpoints;
+                            // cleared when execution ends
 }
 ```
 
@@ -115,12 +117,14 @@ type Task = {
   style in the sidebar row — so the gap is visible, but it is always
   skipped/removed when syncing to Google Calendar (§4.8, §8.5).
 - A **delay** task (`delay: true`, always also `empty`) is created by
-  "I got delayed". Resizing or deleting a delay always preserves the
-  group's resolved **start** time — for end-anchored groups the anchor
-  `at` shifts so the end absorbs the change; start-anchored groups already
-  behave that way. Changing a delay's duration shows an "Undo" toast
-  (§7.6) that restores the prior tasks and anchor. Delays are tracked by
-  the `delay` flag, not by matching the title "Delay".
+  **I got delayed** in execution mode (§7.9). On a start-anchored stack
+  (execution locks Starts), inserting empty time pushes later blocks later.
+  Changing a delay's duration may show an "Undo" toast (§7.6) that restores
+  the prior tasks. Delays are tracked by the `delay` flag, not by matching
+  the title "Delay".
+- **`done`** marks a block finished during execution (§7.9). It starts unset
+  (pending). It is not part of checkpoints and does not affect calendar push.
+  Ending execution clears `done` on that group's tasks.
 
 ### 4.2 StackAnchor
 
@@ -149,6 +153,8 @@ type BlockGroup = {
                             // deleted, and existing Google Calendar events
                             // pushed for it are untouched)
   checkpoint?: BlockGroupCheckpoint  // saved "default" blocks; see §4.6
+  intendedEndAt?: string   // ISO; intended stack end while executing (§7.9);
+                            // cleared when execution ends; not in checkpoints
 }
 ```
 
@@ -516,18 +522,7 @@ Top to bottom:
        same technique used by the block library picker — containing, when
        the group is enabled: "Save as default"/"Update default blocks"
        (only shown while there's no checkpoint yet or the blocks have
-       drifted from it — see §4.6) / — separator — / **I got delayed**
-       (inserts an empty spacer titled "Delay" with `delay: true`
-       immediately before the block that currently contains wall-clock
-       "now", sized to the elapsed time in that block rounded to the nearest
-       5 minutes; when still within 5 minutes of that block's start, inserts
-       before the *previous* block instead and sizes the delay from that
-       previous block's start to now; disabled when now isn't inside a
-       block, when the rounded delay would be under 5 minutes, or when
-       within 5 minutes of the first block's start; for end-anchored groups,
-       also shifts the anchor later by that duration so the interrupted
-       block starts ~now; later resize/delete of that delay preserves the
-       stack start — see §4.1) / — separator — /
+       drifted from it — see §4.6) / — separator — /
        Set name / a "Set color" swatch input / — separator — / Move up /
        Move down (either omitted if not applicable) / Duplicate group / —
        separator — / Delete blocks from calendar (disabled unless
@@ -535,12 +530,17 @@ Top to bottom:
        group (disabled if it's the only remaining group). An inline
        **Revert** button appears next to the menu trigger whenever the
        group has drifted from its saved checkpoint (§4.6). Finally, a
-       primary "Add"/"Update" button (label swaps to "Update" once anything
-       has been pushed for this group on the viewed day; disabled while
+       primary **"Add to calendar"** / **"Update calendar"** /
+       **"Update calendars"** button (label swaps to Update once anything
+       has been pushed for this group on the viewed day; plural when that
+       group+day was pushed to more than one calendar; disabled while
        nothing has ever been pushed and the group has zero tasks; visually
        "soft-disabled" — clickable but styled inert — when the stack
        already exactly matches the last successful push) that opens the
-       commit modal (§7.4).
+       commit modal (§7.4). When wall-clock now is inside any block of the
+       group on today, or within one hour before the stack starts — and no
+       other group is already executing — an **"Execute this plan"** button
+       appears at the bottom of that group's block list (§7.9).
 3. **"New group +"** button at the very bottom of the group list, appending
    a fresh empty group (anchored to "ends at 9:00am today" by default).
 
@@ -553,15 +553,17 @@ above everything else. Modals used:
 
 - **Name group** (opened via the group menu's "Set name" item) — one field
   (group name); Cancel / Save.
-- **Commit to calendar** ("Add to calendar" / "Update calendar", titled
-  based on whether this group+day has already been pushed) — a multi-select
+- **Commit to calendar** ("Add to calendar" / "Update calendar" /
+  "Update calendars", titled based on whether this group+day has already
+  been pushed and to how many calendars) — a multi-select
   checklist of the user's writable calendars (pre-checked from the last
   push for this group+day when updating; deselected calendars have that
   group's events deleted on commit). On open, already-selected calendars
   are bubbled to the top of the list; that order stays fixed while the
   modal is open (toggling a checkbox does not reshuffle). The dialog is
   capped at 80% of the viewport height with the calendar list scrolling
-  and Cancel/Add|Update pinned at the bottom. The primary action is
+  and Cancel + the matching commit label pinned at the bottom. The primary
+  action is
   disabled while busy, while there are no tasks on a fresh Add, or while
   no calendar is selected.
 - **Block library** (opened from the settings menu, not from a group) — a
@@ -651,6 +653,54 @@ duration, not the trailing icon buttons) reorders it within its list:
 - Releasing commits the reorder (a no-op if dropped back at/adjacent to its
   original position) and suppresses the row's own click handler for that
   same release (so it doesn't also re-open the editor).
+
+### 7.9 Execution mode
+
+Planning mode is for drafting multiple block groups. **Execution mode** is
+for running one group against the clock:
+
+1. **"Execute this plan"** (planning sidebar, at the bottom of the group's
+   block list) appears on an enabled group when wall-clock now is inside any
+   of its blocks on today, or within one hour before the stack starts, and no
+   other group is already executing. While **this** group is executing, the
+   same button stays available (labeled **Executing this plan**) to reopen
+   the execution modal.
+2. Entering execution: persist `executingGroupId` on the user sync document;
+   flip the group to `anchor.kind: 'start'` via `toggleAnchorPreservingStack`
+   if needed; set `intendedEndAt` from the resolved stack end if not already
+   set for this run; open a full-screen **execution modal**.
+3. **Execution modal** shows only that group's sidebar panel + the calendar
+   filtered to that group. Starts is locked (no kind toggle). Stack-drag on
+   the calendar is disabled; event click/select still works. Block
+   durations, order, add/delete, empty spacers, checkpoints, library add,
+   and calendar commit still work. The group power/title row is hidden (no
+   collapsing), and **Delete block group** is omitted from the menu.
+   Start / Intended End / the end-status strip stay pinned at the top of the
+   pane while the block list scrolls beneath. Calendar ‹ › are disabled when
+   the next step would leave the local days occupied by the executing stack
+   (a stack may span midnight).
+   **"I’m delayed"** (with a clock icon) inserts an empty spacer titled
+   "Delay" with `delay: true` immediately before the block that currently
+   contains wall-clock now, sized to the elapsed time in that block rounded
+   to the nearest 5 minutes; when still within 5 minutes of that block's
+   start, inserts before the *previous* block instead and sizes the delay
+   from that previous block's start to now; disabled when now isn't inside
+   a block, when the rounded delay would be under 5 minutes, or when within
+   5 minutes of the first block's start.
+4. **Finished toggle**: beside each non-delay block, a clickable pending icon
+   (circle with three dots) or green check when `done`. Starts pending; click
+   toggles `done`. Delay spacers omit the control but keep matching empty
+   space so rows align. Cleared with `intendedEndAt` when execution ends.
+5. **End time**: above the status block, show scrubbable **Start** and
+   **Intended End** time inputs. The status block shows green **Ending on
+   time at …**, green **✨ Ending early at … (Xm early)**, or red
+   **Ending late at … (Xm late)**.
+6. Closing the modal (× / Escape) leaves `executingGroupId` set and shows a
+   **top banner** ("Executing …") to reopen the modal; the banner's ×
+   (or "End execution" in the modal) clears `executingGroupId` and that
+   group's `intendedEndAt` and any task `done` flags. After ending execution,
+   the user may flip the group back to Ends in planning if they want. Only
+   one group may execute at a time.
 
 ## 8. Core interaction flows
 
@@ -778,7 +828,8 @@ whenever the calendar's visible date range changes.
 
 - One document per user at `users/{uid}` containing: `updatedAt` (ISO),
   `plan` (each group's checkpoint travels inline with it), `blockLibrary`,
-  `targetCalendarId`, `pushedEvents`, `pushSnapshots`.
+  `targetCalendarId`, `pushedEvents`, `pushSnapshots`, `executingGroupId`
+  (string or null — which group is in execution mode, if any).
 - **On sign-in**, subscribe to that document in real time:
   - If it exists and its `updatedAt` is newer than the last value this tab
     itself wrote, replace all local state with the remote values
@@ -790,8 +841,9 @@ whenever the calendar's visible date range changes.
     subscription's own initial write as one to *ignore* when it echoes
     back (to avoid re-processing your own write as if it were a remote
     change).
-- **On local edits** (to plan, block library, target calendar, or push
-  history), debounce ~2 seconds of inactivity, then overwrite the
+- **On local edits** (to plan, block library, target calendar, push
+  history, or executing group id), debounce ~2 seconds of inactivity, then
+  overwrite the
   whole document with a fresh `updatedAt` — last-write-wins at the
   document level; no field-level merge/CRDT logic.
 - **Loading state**: while signed in but the Firestore user isn't
@@ -908,9 +960,10 @@ in-app plan/tasks at all — it only removes calendar-side events.
 
 | Data | Storage | Synced across devices? |
 | --- | --- | --- |
-| Plan (groups/tasks/anchors/checkpoints) | Firestore `users/{uid}.plan` | Yes |
+| Plan (groups/tasks/anchors/checkpoints/intendedEndAt) | Firestore `users/{uid}.plan` | Yes |
 | Block library | Firestore `users/{uid}.blockLibrary` | Yes |
 | Target calendar id | Firestore `users/{uid}.targetCalendarId` | Yes |
+| Executing group id | Firestore `users/{uid}.executingGroupId` | Yes |
 | Calendar push history (events + snapshots) | Firestore `users/{uid}.pushedEvents` / `.pushSnapshots` | Yes |
 | Google OAuth session (access/refresh token, granted scopes) | `localStorage` (device) | No |
 | Sidebar width (desktop) | `localStorage` (device) | No |

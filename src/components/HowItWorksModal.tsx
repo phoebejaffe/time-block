@@ -108,12 +108,20 @@ export function HowItWorksModal({ onClose }: HowItWorksModalProps) {
             Delete blocks from calendar, or Delete block group.
           </p>
           <p>
-            <strong>Add to calendar</strong> — the Add / Update button sends the
-            whole stack to your Google Calendar. Your plan stays in Timeblock, and
-            you can make changes and update them on Google Calendar by clicking{' '}
-            <strong>Update</strong>. Blocks on the calendar for that day show a
-            green check when they match; a grey calendar icon means something
-            changed since the last sync.
+            <strong>Add to calendar</strong> — the Add to calendar / Update
+            calendar button sends the whole stack to your Google Calendar. Your
+            plan stays in Timeblock, and you can make changes and update them on
+            Google Calendar by clicking <strong>Update calendar</strong>. Blocks
+            on the calendar for that day show a green check when they match; a
+            grey calendar icon means something changed since the last sync.
+          </p>
+
+          <p>
+            <strong>Execute this plan</strong> — when now is inside a block list
+            (or within an hour of its start), open execution mode for that list.
+            Starts is locked, calendar stack-drag is off, and{' '}
+            <strong>I got delayed</strong> inserts a delay spacer so you can
+            shorten later blocks and get back on track.
           </p>
 
           <h3>Calendar</h3>

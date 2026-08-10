@@ -25,6 +25,8 @@ export type SyncPayload = {
   targetCalendarId: string
   pushedEvents: PushedEvent[]
   pushSnapshots: PushSnapshot[]
+  /** Group currently being executed, if any. */
+  executingGroupId: string | null
 }
 
 class UserDataSyncError extends Error {
@@ -67,6 +69,10 @@ export function subscribeUserState(
           typeof data.targetCalendarId === 'string' ? data.targetCalendarId : '',
         pushedEvents: normalizePushedEvents(data.pushedEvents),
         pushSnapshots: normalizePushSnapshots(data.pushSnapshots),
+        executingGroupId:
+          typeof data.executingGroupId === 'string' && data.executingGroupId
+            ? data.executingGroupId
+            : null,
       })
     },
     (err) => onError(err instanceof Error ? err : new Error(String(err))),

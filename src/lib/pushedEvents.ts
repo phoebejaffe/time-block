@@ -185,6 +185,15 @@ export function pushedCalendarIdsForGroupDay(
   ]
 }
 
+/** Sidebar / commit CTA: Add to calendar / Update calendar(s). */
+export function calendarCommitLabel(
+  isUpdate: boolean,
+  calendarCount: number,
+): string {
+  if (!isUpdate) return 'Add to calendar'
+  return calendarCount > 1 ? 'Update calendars' : 'Update calendar'
+}
+
 /** True when this block matches what was last pushed for its group/day on every calendar. */
 export function isTaskPushUnchanged(
   events: PushedEvent[],

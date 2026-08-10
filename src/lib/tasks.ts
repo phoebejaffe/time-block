@@ -9,11 +9,10 @@ export type Task = {
   durationMinutes: number
   /** When true, the block consumes time but is hidden in the UI and skipped on calendar sync. */
   empty?: boolean
-  /**
-   * "I got delayed" spacer. Always empty; resizing/deleting preserves the
-   * stack's start time (end-anchored groups shift `at` instead).
-   */
+  /** "I got delayed" spacer. Always empty; never pushed to Google Calendar. */
   delay?: boolean
+  /** Finished during execution. Not part of checkpoints; cleared when execution ends. */
+  done?: boolean
 }
 
 /**
@@ -45,6 +44,11 @@ export type BlockGroup = {
   enabled?: boolean
   /** Saved "default" block list this group can be reverted to. */
   checkpoint?: BlockGroupCheckpoint
+  /**
+   * Intended stack end while this group is being executed. Set on enter
+   * execution; cleared when execution ends. Not part of checkpoints.
+   */
+  intendedEndAt?: string
 }
 
 export const DEFAULT_GROUP_COLOR = '#0f6e56'
@@ -196,41 +200,6 @@ export function isTaskDelay(task: Pick<Task, 'delay'>): boolean {
   return task.delay === true
 }
 
-/**
- * Replace a group's tasks while keeping the resolved stack start fixed.
- * Start-anchored groups keep `at` at that start; end-anchored groups move
- * `at` so the end absorbs the duration change.
- */
-export function withTasksPreservingStackStart(
-  group: BlockGroup,
-  nextTasks: Task[],
-): BlockGroup {
-  const before = resolveStack(group.tasks, group.anchor)
-  const startMs = before[0]?.start.getTime()
-  if (startMs == null || Number.isNaN(startMs)) {
-    return { ...group, tasks: nextTasks }
-  }
-  const totalMinutes = nextTasks.reduce(
-    (sum, task) => sum + task.durationMinutes,
-    0,
-  )
-  if (group.anchor.kind === 'start') {
-    return {
-      ...group,
-      tasks: nextTasks,
-      anchor: { kind: 'start', at: new Date(startMs).toISOString() },
-    }
-  }
-  return {
-    ...group,
-    tasks: nextTasks,
-    anchor: {
-      kind: 'end',
-      at: new Date(startMs + totalMinutes * 60_000).toISOString(),
-    },
-  }
-}
-
 /** Format a duration in minutes as "Xh Ym" / "Xh" / "Xm" for compact display. */
 export function formatDurationMinutes(minutes: number): string {
   const total = Math.max(0, Math.round(minutes))
@@ -298,7 +267,6 @@ export function applyTaskEditPreview(
   if (!preview) return groups
   return groups.map((group) => {
     if (group.id !== preview.groupId) return group
-    const previous = group.tasks.find((task) => task.id === preview.taskId)
     const nextTasks = group.tasks.map((task) => {
       if (task.id !== preview.taskId) return task
       const { empty: _e, delay: _d, ...rest } = task
@@ -311,13 +279,6 @@ export function applyTaskEditPreview(
         ...(keepDelay ? { delay: true } : {}),
       }
     })
-    if (
-      previous &&
-      isTaskDelay(previous) &&
-      previous.durationMinutes !== preview.durationMinutes
-    ) {
-      return withTasksPreservingStackStart(group, nextTasks)
-    }
     return { ...group, tasks: nextTasks }
   })
 }
@@ -477,6 +438,7 @@ function normalizeTasks(raw: unknown): Task[] {
         durationMinutes: Math.max(1, Math.round(t.durationMinutes) || 1),
         ...(t.empty === true || delay ? { empty: true } : {}),
         ...(delay ? { delay: true } : {}),
+        ...(t.done === true ? { done: true } : {}),
       }
     })
 }
@@ -559,6 +521,10 @@ function normalizeGroup(raw: unknown): BlockGroup | null {
       ? false
       : undefined
   const checkpoint = normalizeCheckpoint(g.checkpoint)
+  const intendedEndAt =
+    typeof g.intendedEndAt === 'string' && g.intendedEndAt
+      ? g.intendedEndAt
+      : undefined
   return {
     id: g.id,
     tasks: normalizeTasks(g.tasks),
@@ -567,6 +533,7 @@ function normalizeGroup(raw: unknown): BlockGroup | null {
     ...(color ? { color } : {}),
     ...(enabled === false ? { enabled: false } : {}),
     ...(checkpoint ? { checkpoint } : {}),
+    ...(intendedEndAt ? { intendedEndAt } : {}),
   }
 }
 
@@ -672,6 +639,7 @@ export function createTask(
     durationMinutes: Math.max(1, Math.round(input.durationMinutes) || 1),
     ...(input.empty || delay ? { empty: true } : {}),
     ...(delay ? { delay: true } : {}),
+    ...(input.done === true ? { done: true } : {}),
   }
 }
 
@@ -729,16 +697,15 @@ export type GotDelayedPlan =
       /** Index in `tasks` to insert the delay block before. */
       index: number
       delayMinutes: number
-      nextAnchor: StackAnchor
     }
   | { ok: false; reason: 'no-current-block' | 'too-small' }
 
 /**
  * Plan an "I got delayed" insertion: find the block containing `now` (on
  * today's clock for this group's anchor), size an empty "delay" from that
- * block's start to now (nearest 5 minutes), and for end-anchored stacks
- * shift the anchor later by that duration so the interrupted block starts
- * ~now.
+ * block's start to now (nearest 5 minutes). Used in execution mode where
+ * the stack is start-anchored, so inserting empty time pushes later blocks
+ * later without moving the start.
  *
  * When still within 5 minutes of the current block's start, insert two
  * blocks back instead (before the previous block), sizing the delay from
@@ -767,14 +734,10 @@ export function planGotDelayed(
     (t - from.start.getTime()) / 60_000,
   )
   if (delayMinutes < 5) return { ok: false, reason: 'too-small' }
-  const nextAnchor =
-    anchor.kind === 'end'
-      ? shiftAnchor(anchor, delayMinutes * 60_000)
-      : anchor
-  return { ok: true, index: insertIndex, delayMinutes, nextAnchor }
+  return { ok: true, index: insertIndex, delayMinutes }
 }
 
-/** Insert the delay block (and adjusted end-anchor when needed). */
+/** Insert the delay block before the interrupted block. */
 export function applyGotDelayed(
   group: BlockGroup,
   now: Date = new Date(),
@@ -791,7 +754,130 @@ export function applyGotDelayed(
   return {
     ...group,
     tasks,
-    anchor: planned.nextAnchor,
+  }
+}
+
+/**
+ * True when wall-clock `now` is inside this group's stack on today's day, or
+ * within one hour before the stack starts — eligibility for "Execute this plan".
+ */
+export function isGroupExecutableNow(
+  group: Pick<BlockGroup, 'tasks' | 'anchor' | 'enabled'>,
+  now: Date = new Date(),
+): boolean {
+  if (group.enabled === false || group.tasks.length === 0) return false
+  const resolved = resolveStack(group.tasks, anchorOnDay(group.anchor, now))
+  if (resolved.length === 0) return false
+  const t = now.getTime()
+  const stackStart = resolved[0]!.start.getTime()
+  if (t >= stackStart - 60 * 60_000 && t < stackStart) return true
+  return resolved.some(
+    (task) => task.start.getTime() <= t && t < task.end.getTime(),
+  )
+}
+
+/**
+ * Compare resolved stack end to `intendedEndAt`: late, early, or on time.
+ * Uses the group's anchor remapped onto `day` (typically today during execution).
+ */
+export type StackEndStatus =
+  | {
+      kind: 'late'
+      delayedMinutes: number
+      actualEnd: Date
+      intendedEnd: Date
+    }
+  | {
+      kind: 'early'
+      earlyMinutes: number
+      actualEnd: Date
+      intendedEnd: Date
+    }
+  | {
+      kind: 'on-time'
+      actualEnd: Date
+      intendedEnd: Date
+    }
+
+export function getStackEndStatus(
+  group: Pick<BlockGroup, 'tasks' | 'anchor' | 'intendedEndAt'>,
+  day: Date = new Date(),
+): StackEndStatus | null {
+  if (!group.intendedEndAt) return null
+  const intendedEnd = new Date(group.intendedEndAt)
+  if (Number.isNaN(intendedEnd.getTime())) return null
+  const resolved = resolveStack(group.tasks, anchorOnDay(group.anchor, day))
+  const actualEnd = resolved[resolved.length - 1]?.end
+  if (!actualEnd) return null
+  const deltaMinutes = Math.round(
+    (actualEnd.getTime() - intendedEnd.getTime()) / 60_000,
+  )
+  if (deltaMinutes > 0) {
+    return {
+      kind: 'late',
+      delayedMinutes: deltaMinutes,
+      actualEnd,
+      intendedEnd,
+    }
+  }
+  if (deltaMinutes < 0) {
+    return {
+      kind: 'early',
+      earlyMinutes: -deltaMinutes,
+      actualEnd,
+      intendedEnd,
+    }
+  }
+  return { kind: 'on-time', actualEnd, intendedEnd }
+}
+
+/**
+ * When the resolved stack end is after `intendedEndAt`, return how late we are.
+ */
+export function getStackDelayOverrun(
+  group: Pick<BlockGroup, 'tasks' | 'anchor' | 'intendedEndAt'>,
+  day: Date = new Date(),
+): {
+  delayedMinutes: number
+  actualEnd: Date
+  intendedEnd: Date
+} | null {
+  const status = getStackEndStatus(group, day)
+  if (!status || status.kind !== 'late') return null
+  return {
+    delayedMinutes: status.delayedMinutes,
+    actualEnd: status.actualEnd,
+    intendedEnd: status.intendedEnd,
+  }
+}
+
+/**
+ * Flip a group to start-anchored (preserving stack position) and capture
+ * `intendedEndAt` from the resolved end when not already set.
+ */
+export function prepareGroupForExecution(
+  group: BlockGroup,
+  now: Date = new Date(),
+): BlockGroup {
+  const totalMinutes = group.tasks.reduce(
+    (sum, task) => sum + task.durationMinutes,
+    0,
+  )
+  const anchor =
+    group.anchor.kind === 'start'
+      ? group.anchor
+      : toggleAnchorPreservingStack(group.anchor, totalMinutes)
+  if (group.intendedEndAt) {
+    return group.anchor.kind === 'start' ? group : { ...group, anchor }
+  }
+  const resolved = resolveStack(group.tasks, anchorOnDay(anchor, now))
+  const end = resolved[resolved.length - 1]?.end
+  return {
+    ...group,
+    anchor,
+    ...(end && !Number.isNaN(end.getTime())
+      ? { intendedEndAt: end.toISOString() }
+      : {}),
   }
 }
 
@@ -800,6 +886,46 @@ export function startOfLocalDay(date: Date = new Date()): Date {
   const d = new Date(date)
   d.setHours(0, 0, 0, 0)
   return d
+}
+
+/**
+ * Inclusive first/last local calendar days occupied by a group's resolved
+ * stack (using the stored anchor, not remapped onto a view day). Empty when
+ * there are no tasks or the stack cannot be resolved.
+ */
+export function stackOccupiedLocalDays(
+  group: Pick<BlockGroup, 'tasks' | 'anchor'>,
+): { first: Date; last: Date } | null {
+  const resolved = resolveStack(group.tasks, group.anchor)
+  if (resolved.length === 0) return null
+  const first = startOfLocalDay(resolved[0]!.start)
+  // Exactly-midnight ends belong to the previous day.
+  const last = startOfLocalDay(
+    new Date(resolved[resolved.length - 1]!.end.getTime() - 1),
+  )
+  if (last.getTime() < first.getTime()) return { first, last: first }
+  return { first, last }
+}
+
+/**
+ * Whether shifting a FullCalendar visible range `[start, end)` backward or
+ * forward by its own duration would still overlap `bounds` (inclusive local
+ * days). Used to disable ‹ › when the next step would leave the stack's days.
+ */
+export function canNavigateCalendarRange(
+  rangeStart: Date,
+  rangeEndExclusive: Date,
+  bounds: { first: Date; last: Date },
+  direction: 'prev' | 'next',
+): boolean {
+  const durationMs = rangeEndExclusive.getTime() - rangeStart.getTime()
+  if (durationMs <= 0) return false
+  const delta = direction === 'prev' ? -durationMs : durationMs
+  const nextStart = new Date(rangeStart.getTime() + delta)
+  const nextEnd = new Date(rangeEndExclusive.getTime() + delta)
+  const boundsEnd = startOfLocalDay(bounds.last)
+  boundsEnd.setDate(boundsEnd.getDate() + 1)
+  return nextStart < boundsEnd && nextEnd > bounds.first
 }
 
 /**
