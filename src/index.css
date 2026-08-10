@@ -293,6 +293,11 @@ body.is-sidebar-resizing .main-panel {
   padding-bottom: calc(0.35rem + 1px);
 }
 
+.task-sidebar-execution .block-group .task-card.task-card-current {
+  border-left: 2px solid #d32f2f;
+  padding-left: calc(0.5rem - 2px);
+}
+
 .task-sidebar-execution .block-group .stack-anchor input,
 .task-sidebar-execution .block-group .task-form input,
 .task-sidebar-execution .block-group .task-form select {

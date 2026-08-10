@@ -658,6 +658,14 @@ function BlockGroupPanel({
   intendedEndAtRef.current = group.intendedEndAt
   const [listMenuDropdownStyle, setListMenuDropdownStyle] =
     useState<CSSProperties>({})
+  const [nowMs, setNowMs] = useState(() => Date.now())
+
+  useEffect(() => {
+    if (mode !== 'execution') return
+    setNowMs(Date.now())
+    const id = window.setInterval(() => setNowMs(Date.now()), 15_000)
+    return () => window.clearInterval(id)
+  }, [mode])
 
   useEffect(() => {
     dropLineIndexRef.current = dropLineIndex
@@ -826,6 +834,15 @@ function BlockGroupPanel({
     () => resolveStack(tasks, anchor),
     [tasks, anchor],
   )
+  const currentTaskId =
+    mode === 'execution'
+      ? (resolved.find(
+          (task) =>
+            !isTaskDisabled(task) &&
+            task.start.getTime() <= nowMs &&
+            nowMs < task.end.getTime(),
+        )?.id ?? null)
+      : null
   const activeResolved = useMemo(
     () => resolved.filter((task) => !isTaskDisabled(task)),
     [resolved],
@@ -1533,6 +1550,7 @@ function BlockGroupPanel({
                 editing ? 'is-editing' : '',
                 isTaskEmpty(task) && !editing ? 'task-card-empty' : '',
                 isTaskDisabled(task) && !editing ? 'task-card-disabled' : '',
+                currentTaskId === task.id ? 'task-card-current' : '',
               ]
                 .filter(Boolean)
                 .join(' ')}

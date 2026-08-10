@@ -709,18 +709,22 @@ for running one group against the clock:
    (minimum 5). When now is outside the stack, append at the end — after the
    stack ends, size from stack end to now (minimum 5); otherwise use 5
    minutes. Always available in the execution view (not disabled by time).
-4. **Finished toggle**: beside each non-delay block, a clickable pending icon
+4. **Current block**: while wall-clock now falls inside a non-disabled
+   block's resolved range (`start ≤ now < end`), that row shows a 2px red
+   left border (padding reduced by the same amount so content does not
+   indent).
+5. **Finished toggle**: beside each non-delay block, a clickable pending icon
    (circle with three dots) or green check when `done`. Starts pending; click
    the icon **or the row title/main area** toggles `done` (title click does
    not open the inline editor in execution — use the edit icon for that).
    Delay spacers omit the control but keep matching empty space so rows
    align; clicking a delay row's title does nothing. Cleared with
    `intendedEndAt` when execution ends.
-5. **End time**: above the status block, show scrubbable **Start** and
+6. **End time**: above the status block, show scrubbable **Start** and
    **Intended End** time inputs. The status block shows green **Ending on
    time at …**, green **✨ Ending early at … (Xm early)**, or red
    **Ending late at … (Xm late)**.
-6. Closing the modal (× / Escape) leaves `executingGroupId` set and shows a
+7. Closing the modal (× / Escape) leaves `executingGroupId` set and shows a
    **top banner** ("Executing …") to reopen the modal; the banner's ×
    (or "End execution" in the modal) clears `executingGroupId` and that
    group's `intendedEndAt` and any task `done` flags. After ending execution,
