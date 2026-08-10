@@ -648,9 +648,11 @@ of their normal click-to-type behavior, tuned for both mouse and touch:
   - Duration **minutes** field: 5-minute increments off the nearest
     multiple of 5 (total duration minimum 1 minute).
   - Duration **hours** field: 1-hour increments (minutes preserved).
-  - Anchor time: 5-minute increments for minutes, or whole-hour increments
-    if the drag started with the cursor/caret over the hour portion of the
-    `HH:mm` text.
+  - Anchor / intended-end time: 5-minute increments for minutes (rolling the
+    hour when crossing `:00` / `:55`, so 10:00 down becomes 9:55 — never a
+    same-hour wrap to 10:55), or whole-hour increments if the drag started
+    with the cursor/caret over the hour portion of the `HH:mm` text. Arrow
+    keys use the same stepping (native minute-segment wrap is overridden).
   - Duration minutes can also be nudged by 5 minutes (hours by 1 hour) via
     the Up/Down arrow keys while the field is focused.
 - Releasing simply stops the drag; if scrubbing never activated (i.e. the
@@ -723,10 +725,11 @@ for running one group against the clock:
 6. **End time**: above the status block, show scrubbable **Start** and
    **Intended End** time inputs. The status block shows green **Ending on
    time at …**, green **✨ Ending early at … (Xm early)**, or red
-   **Ending late at … (Xm late)**.
+   **Ending late at … (Xm late)** — switching **Ending** → **Ended** once
+   wall-clock now is at or past the stack's actual end.
 7. Closing the modal (× / Escape) leaves `executingGroupId` set and shows a
    **top banner** ("Executing …") to reopen the modal; the banner's ×
-   (or "End execution" in the modal) clears `executingGroupId` and that
+   (or "Stop executing" in the modal) clears `executingGroupId` and that
    group's `intendedEndAt` and any task `done` flags. After ending execution,
    the user may flip the group back to Ends in planning if they want. Only
    one group may execute at a time.

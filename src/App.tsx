@@ -565,7 +565,7 @@ export default function App() {
           <button
             type="button"
             className="execution-banner-dismiss"
-            aria-label="End execution"
+            aria-label="Stop executing"
             onClick={handleEndExecution}
           >
             ×

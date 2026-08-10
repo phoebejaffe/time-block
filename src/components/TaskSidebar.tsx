@@ -31,6 +31,7 @@ import {
   resolveSavedBlocksFromKeys,
   resolveStack,
   stackDurationMinutes,
+  stepLocalTime,
   toggleAnchorPreservingStack,
   toLocalTimeValue,
 } from '../lib/tasks'
@@ -651,6 +652,7 @@ function BlockGroupPanel({
   const libraryDropdownRef = useRef<HTMLDivElement>(null)
   const dropLineIndexRef = useRef<number | null>(null)
   const suppressClickRef = useRef(false)
+  const timePointerActiveRef = useRef(false)
   const tasksLengthRef = useRef(tasks.length)
   const anchorRef = useRef(anchor)
   anchorRef.current = anchor
@@ -860,9 +862,22 @@ function BlockGroupPanel({
   )
   const endStatus =
     mode === 'execution' ? getStackEndStatus(group) : null
+  const stackEndMs =
+    mode === 'execution'
+      ? (activeResolved.at(-1) ?? resolved.at(-1))?.end.getTime() ?? null
+      : null
+  const hasEnded = stackEndMs != null && nowMs >= stackEndMs
+  const endingVerb = hasEnded ? 'Ended' : 'Ending'
   const groupStyle = {
     ['--group-accent' as string]: groupSidebarAccentColor(group.color),
   }
+
+  useEffect(() => {
+    if (mode !== 'execution' || stackEndMs == null || hasEnded) return
+    const delay = Math.max(0, stackEndMs - Date.now()) + 25
+    const id = window.setTimeout(() => setNowMs(Date.now()), delay)
+    return () => window.clearTimeout(id)
+  }, [mode, stackEndMs, hasEnded])
   const totalDurationMinutes = stackDurationMinutes(tasks)
   const hasCheckpointDrift = Boolean(
     group.checkpoint &&
@@ -1072,33 +1087,13 @@ function BlockGroupPanel({
     let active = false
     let lastTick = 0
     let field: AnchorField = 'minute'
-
-    function currentIso(): string {
-      const base = getBaseIso()
-      if (input.value) {
-        const parsed = fromLocalTimeValue(input.value, base)
-        if (!Number.isNaN(new Date(parsed).getTime())) return parsed
-      }
-      return base
-    }
-
-    let originIso = ''
+    // Prefer React state over input.value — native minute-segment UI can
+    // wrap :00→:55 in the DOM before our scrub activates.
+    const originIso = getBaseIso()
+    timePointerActiveRef.current = true
 
     function isoForTick(tick: number): string {
-      if (tick === 0 || !originIso) return originIso || currentIso()
-      const d = new Date(originIso)
-      if (Number.isNaN(d.getTime())) return originIso
-      if (field === 'hour') {
-        d.setHours(d.getHours() + tick)
-      } else {
-        const m = d.getMinutes()
-        const next =
-          tick > 0
-            ? Math.floor(m / 5) * 5 + tick * 5
-            : Math.ceil(m / 5) * 5 + tick * 5
-        d.setMinutes(next)
-      }
-      return d.toISOString()
+      return stepLocalTime(originIso, field, tick)
     }
 
     function onMove(ev: PointerEvent) {
@@ -1113,7 +1108,6 @@ function BlockGroupPanel({
         }
         active = true
         field = anchorFieldFromSelection(readSelectionStart(input))
-        originIso = currentIso()
         document.body.classList.add('is-datetime-scrubbing')
         input.blur()
         try {
@@ -1130,6 +1124,7 @@ function BlockGroupPanel({
     }
 
     function cleanup() {
+      timePointerActiveRef.current = false
       document.removeEventListener('pointermove', onMove)
       document.removeEventListener('pointerup', onUp)
       document.removeEventListener('pointercancel', onUp)
@@ -1151,6 +1146,33 @@ function BlockGroupPanel({
     document.addEventListener('pointermove', onMove, { passive: false })
     document.addEventListener('pointerup', onUp)
     document.addEventListener('pointercancel', onUp)
+  }
+
+  function applyTimeInputChange(
+    value: string,
+    baseIso: string,
+    onIsoChange: (iso: string) => void,
+  ) {
+    if (!value) return
+    if (
+      timePointerActiveRef.current ||
+      document.body.classList.contains('is-datetime-scrubbing')
+    ) {
+      return
+    }
+    onIsoChange(fromLocalTimeValue(value, baseIso))
+  }
+
+  function handleTimeKeyDown(
+    e: React.KeyboardEvent<HTMLInputElement>,
+    baseIso: string,
+    onIsoChange: (iso: string) => void,
+  ) {
+    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return
+    e.preventDefault()
+    const field = anchorFieldFromSelection(readSelectionStart(e.currentTarget))
+    const steps = e.key === 'ArrowUp' ? 1 : -1
+    onIsoChange(stepLocalTime(baseIso, field, steps))
   }
 
   function beginAnchorScrub(e: React.PointerEvent<HTMLInputElement>) {
@@ -1358,12 +1380,15 @@ function BlockGroupPanel({
                   step={300}
                   value={toLocalTimeValue(anchor.at)}
                   onChange={(e) => {
-                    if (!e.target.value) return
-                    onAnchorChange({
-                      ...anchor,
-                      at: fromLocalTimeValue(e.target.value, anchor.at),
-                    })
+                    applyTimeInputChange(e.target.value, anchor.at, (iso) =>
+                      onAnchorChange({ ...anchor, at: iso }),
+                    )
                   }}
+                  onKeyDown={(e) =>
+                    handleTimeKeyDown(e, anchor.at, (iso) =>
+                      onAnchorChange({ ...anchor, at: iso }),
+                    )
+                  }
                   onPointerDown={beginAnchorScrub}
                 />
               </label>
@@ -1379,12 +1404,19 @@ function BlockGroupPanel({
                       value={toLocalTimeValue(group.intendedEndAt)}
                       disabled={busy}
                       onChange={(e) => {
-                        if (!e.target.value || !group.intendedEndAt) return
-                        onIntendedEndChange(
-                          fromLocalTimeValue(
-                            e.target.value,
-                            group.intendedEndAt,
-                          ),
+                        if (!group.intendedEndAt) return
+                        applyTimeInputChange(
+                          e.target.value,
+                          group.intendedEndAt,
+                          onIntendedEndChange,
+                        )
+                      }}
+                      onKeyDown={(e) => {
+                        if (!group.intendedEndAt) return
+                        handleTimeKeyDown(
+                          e,
+                          group.intendedEndAt,
+                          onIntendedEndChange,
                         )
                       }}
                       onPointerDown={beginIntendedEndScrub}
@@ -1427,12 +1459,15 @@ function BlockGroupPanel({
                   step={300}
                   value={toLocalTimeValue(anchor.at)}
                   onChange={(e) => {
-                    if (!e.target.value) return
-                    onAnchorChange({
-                      ...anchor,
-                      at: fromLocalTimeValue(e.target.value, anchor.at),
-                    })
+                    applyTimeInputChange(e.target.value, anchor.at, (iso) =>
+                      onAnchorChange({ ...anchor, at: iso }),
+                    )
                   }}
+                  onKeyDown={(e) =>
+                    handleTimeKeyDown(e, anchor.at, (iso) =>
+                      onAnchorChange({ ...anchor, at: iso }),
+                    )
+                  }
                   onPointerDown={beginAnchorScrub}
                 />
               </label>
@@ -1459,7 +1494,7 @@ function BlockGroupPanel({
           >
             {endStatus?.kind === 'late' ? (
               <span className="execution-ending-copy">
-                Ending late at{' '}
+                {endingVerb} late at{' '}
                 <strong>{timeFmt.format(endStatus.actualEnd)}</strong>{' '}
                 ({formatDurationMinutes(endStatus.delayedMinutes)} late)
               </span>
@@ -1468,18 +1503,18 @@ function BlockGroupPanel({
                 <span className="execution-early-stars" aria-hidden="true">
                   ✨
                 </span>{' '}
-                Ending early at{' '}
+                {endingVerb} early at{' '}
                 <strong>{timeFmt.format(endStatus.actualEnd)}</strong>{' '}
                 ({formatDurationMinutes(endStatus.earlyMinutes)} early)
               </span>
             ) : endStatus?.kind === 'on-time' ? (
               <span className="execution-ending-copy">
-                Ending on time at{' '}
+                {endingVerb} on time at{' '}
                 <strong>{timeFmt.format(endStatus.actualEnd)}</strong>
               </span>
             ) : (
               <span className="execution-ending-copy">
-                Ending at{' '}
+                {endingVerb} at{' '}
                 <strong>
                   {timeFmt.format(
                     (activeResolved[activeResolved.length - 1] ??

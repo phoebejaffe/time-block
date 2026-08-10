@@ -112,7 +112,7 @@ export function HowItWorksModal({ onClose }: HowItWorksModalProps) {
           </p>
           <p>
             Close the view anytime; a banner keeps the run alive so you can jump
-            back in. <strong>End execution</strong> when you&apos;re done. If
+            back in. <strong>Stop executing</strong> when you&apos;re done. If
             you&apos;re signed in on another device, you can pick up the same run
             there.
           </p>

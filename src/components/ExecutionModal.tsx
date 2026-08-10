@@ -139,7 +139,7 @@ export function ExecutionModal({
             className="btn btn-ghost btn-sm"
             onClick={onEndExecution}
           >
-            End execution
+            Stop executing
           </button>
           <button
             type="button"

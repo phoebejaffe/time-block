@@ -11,6 +11,7 @@ import {
   formatDurationMinutes,
   splitDurationMinutes,
   stepDurationMinutes,
+  stepLocalTime,
   groupEventColors,
   groupMatchesCheckpoint,
   groupSidebarAccentColor,
@@ -362,6 +363,39 @@ describe('stepDurationMinutes', () => {
   it('steps down to the previous 5-minute mark', () => {
     expect(stepDurationMinutes(35, 'down')).toBe(30)
     expect(stepDurationMinutes(32, 'down')).toBe(30)
+  })
+})
+
+describe('stepLocalTime', () => {
+  it('rolls the hour when minutes step down through :00', () => {
+    const at = new Date(2026, 7, 10, 10, 0).toISOString()
+    const next = new Date(stepLocalTime(at, 'minute', -1))
+    expect(next.getHours()).toBe(9)
+    expect(next.getMinutes()).toBe(55)
+  })
+
+  it('rolls the hour when minutes step up through :55', () => {
+    const at = new Date(2026, 7, 10, 10, 55).toISOString()
+    const next = new Date(stepLocalTime(at, 'minute', 1))
+    expect(next.getHours()).toBe(11)
+    expect(next.getMinutes()).toBe(0)
+  })
+
+  it('snaps off-grid minutes toward the step direction', () => {
+    const at = new Date(2026, 7, 10, 10, 3).toISOString()
+    const down = new Date(stepLocalTime(at, 'minute', -1))
+    expect(down.getHours()).toBe(10)
+    expect(down.getMinutes()).toBe(0)
+    const up = new Date(stepLocalTime(at, 'minute', 1))
+    expect(up.getHours()).toBe(10)
+    expect(up.getMinutes()).toBe(5)
+  })
+
+  it('steps hours without changing minutes', () => {
+    const at = new Date(2026, 7, 10, 10, 30).toISOString()
+    const next = new Date(stepLocalTime(at, 'hour', -1))
+    expect(next.getHours()).toBe(9)
+    expect(next.getMinutes()).toBe(30)
   })
 })
 

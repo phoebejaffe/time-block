@@ -602,6 +602,34 @@ export function fromLocalTimeValue(value: string, baseIso: string): string {
   return base.toISOString()
 }
 
+export type ClockTimeField = 'hour' | 'minute'
+
+/**
+ * Step a local wall-clock time by whole hours or 5-minute ticks.
+ * Minute steps snap to the 5-minute grid in the step direction, then move
+ * by `steps * 5` minutes — rolling the hour/day when crossing :00 (so
+ * 10:00 stepped down once becomes 9:55, never 10:55).
+ */
+export function stepLocalTime(
+  iso: string,
+  field: ClockTimeField,
+  steps: number,
+): string {
+  if (steps === 0) return iso
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso
+  if (field === 'hour') {
+    d.setHours(d.getHours() + steps)
+    return d.toISOString()
+  }
+  const m = d.getMinutes()
+  const snapped =
+    steps > 0 ? Math.floor(m / 5) * 5 : Math.ceil(m / 5) * 5
+  d.setMinutes(snapped, 0, 0)
+  d.setTime(d.getTime() + steps * 5 * 60_000)
+  return d.toISOString()
+}
+
 /** Normalize stored plan shapes (groups + legacy single stack / Task[]). */
 export function migratePlan(raw: unknown): Plan | null {
   if (!raw || typeof raw !== 'object') return null
