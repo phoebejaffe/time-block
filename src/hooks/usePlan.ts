@@ -180,17 +180,13 @@ export function usePlan() {
     [updatePlan],
   )
 
-  /** Insert an empty "delay" before the block containing now. Returns true if applied. */
+  /** Insert an empty "delay" before the current block, or append at the end. */
   const insertGotDelayed = useCallback(
     (groupId: string, now: Date = new Date()): boolean => {
       const group = plan.groups.find((g) => g.id === groupId)
-      if (!group || !applyGotDelayed(group, now)) return false
+      if (!group) return false
       updatePlan((prev) => ({
-        groups: mapGroup(
-          prev.groups,
-          groupId,
-          (g) => applyGotDelayed(g, now) ?? g,
-        ),
+        groups: mapGroup(prev.groups, groupId, (g) => applyGotDelayed(g, now)),
       }))
       return true
     },

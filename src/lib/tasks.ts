@@ -729,59 +729,75 @@ export function roundMinutesToNearestFive(minutes: number): number {
   return Math.max(0, Math.round(minutes / 5) * 5)
 }
 
-export type GotDelayedPlan =
-  | {
-      ok: true
-      /** Index in `tasks` to insert the delay block before. */
-      index: number
-      delayMinutes: number
-    }
-  | { ok: false; reason: 'no-current-block' | 'too-small' }
+export type GotDelayedPlan = {
+  ok: true
+  /** Index in `tasks` to insert the delay block before (length = append). */
+  index: number
+  delayMinutes: number
+}
 
 /**
- * Plan an "I got delayed" insertion: find the block containing `now` (on
- * today's clock for this group's anchor), size an empty "delay" from that
- * block's start to now (nearest 5 minutes). Used in execution mode where
- * the stack is start-anchored, so inserting empty time pushes later blocks
- * later without moving the start.
+ * Plan an "I got delayed" insertion. Always succeeds with at least 5 minutes.
  *
- * When still within 5 minutes of the current block's start, insert two
- * blocks back instead (before the previous block), sizing the delay from
- * that previous block's start to now — early entry into the next block
- * usually means the prior block ran long.
+ * When `now` is inside a block: insert before that block (or the previous
+ * active block when still within 5 minutes of the current block's start),
+ * sized from that block's start to now (nearest 5 minutes, minimum 5).
+ *
+ * When `now` is outside the stack: append at the end. After the stack ends,
+ * size from stack end to now; otherwise use 5 minutes.
  */
 export function planGotDelayed(
   tasks: Task[],
   anchor: StackAnchor,
   now: Date = new Date(),
 ): GotDelayedPlan {
-  if (tasks.length === 0) return { ok: false, reason: 'no-current-block' }
+  if (tasks.length === 0) {
+    return { ok: true, index: 0, delayMinutes: 5 }
+  }
   const resolved = resolveStack(tasks, anchorOnDay(anchor, now))
   const t = now.getTime()
   const currentIndex = resolved.findIndex(
-    (task) => task.start.getTime() <= t && t < task.end.getTime(),
+    (task) =>
+      !isTaskDisabled(task) &&
+      task.start.getTime() <= t &&
+      t < task.end.getTime(),
   )
-  if (currentIndex < 0) return { ok: false, reason: 'no-current-block' }
-  const current = resolved[currentIndex]!
-  const elapsedMinutes = (t - current.start.getTime()) / 60_000
-  // Still near the start of this block → attribute the delay to the prior one.
-  const insertIndex =
-    elapsedMinutes < 5 && currentIndex >= 1 ? currentIndex - 1 : currentIndex
-  const from = resolved[insertIndex]!
-  const delayMinutes = roundMinutesToNearestFive(
-    (t - from.start.getTime()) / 60_000,
-  )
-  if (delayMinutes < 5) return { ok: false, reason: 'too-small' }
-  return { ok: true, index: insertIndex, delayMinutes }
+
+  if (currentIndex >= 0) {
+    const current = resolved[currentIndex]!
+    const elapsedMinutes = (t - current.start.getTime()) / 60_000
+    let insertIndex = currentIndex
+    if (elapsedMinutes < 5) {
+      for (let i = currentIndex - 1; i >= 0; i -= 1) {
+        if (!isTaskDisabled(resolved[i]!)) {
+          insertIndex = i
+          break
+        }
+      }
+    }
+    const from = resolved[insertIndex]!
+    const delayMinutes = Math.max(
+      5,
+      roundMinutesToNearestFive((t - from.start.getTime()) / 60_000),
+    )
+    return { ok: true, index: insertIndex, delayMinutes }
+  }
+
+  const active = resolved.filter((task) => !isTaskDisabled(task))
+  const stackEnd = (active.at(-1) ?? resolved.at(-1))!.end.getTime()
+  const delayMinutes =
+    t > stackEnd
+      ? Math.max(5, roundMinutesToNearestFive((t - stackEnd) / 60_000))
+      : 5
+  return { ok: true, index: tasks.length, delayMinutes }
 }
 
-/** Insert the delay block before the interrupted block. */
+/** Insert the delay block before the interrupted block (or append). */
 export function applyGotDelayed(
   group: BlockGroup,
   now: Date = new Date(),
-): BlockGroup | null {
+): BlockGroup {
   const planned = planGotDelayed(group.tasks, group.anchor, now)
-  if (!planned.ok) return null
   const delay = createTask({
     title: 'Delay',
     durationMinutes: planned.delayMinutes,

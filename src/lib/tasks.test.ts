@@ -620,17 +620,27 @@ describe('planGotDelayed / applyGotDelayed', () => {
     )
   })
 
-  it('rejects when now is outside the stack or too early in the first block', () => {
+  it('appends a delay at the end when now is outside the stack', () => {
     const anchor: StackAnchor = {
       kind: 'start',
       at: '2026-07-18T09:00:00.000Z',
     }
     expect(
       planGotDelayed(tasks, anchor, new Date('2026-07-18T08:59:00.000Z')),
-    ).toEqual({ ok: false, reason: 'no-current-block' })
+    ).toEqual({ ok: true, index: 3, delayMinutes: 5 })
+    expect(
+      planGotDelayed(tasks, anchor, new Date('2026-07-18T11:00:00.000Z')),
+    ).toEqual({ ok: true, index: 3, delayMinutes: 30 })
+  })
+
+  it('uses at least 5 minutes when barely into the first block', () => {
+    const anchor: StackAnchor = {
+      kind: 'start',
+      at: '2026-07-18T09:00:00.000Z',
+    }
     expect(
       planGotDelayed(tasks, anchor, new Date('2026-07-18T09:01:00.000Z')),
-    ).toEqual({ ok: false, reason: 'too-small' })
+    ).toEqual({ ok: true, index: 0, delayMinutes: 5 })
   })
 
   it('inserts two blocks back when within 5 minutes of the current block start', () => {

@@ -516,7 +516,8 @@ Top to bottom:
        its duration ("· N min"); then edit, disable, and delete
        icon-buttons (always reserved space so long titles can't crowd them
        out). The disable control (bell-with-X) toggles `disabled` —
-       strikethrough title, omitted from stack layout/calendar/push (§4.1).
+       strikethrough title, omitted from stack layout/calendar/push (§4.1);
+       disabled (non-interactive) on delay spacers.
        Tasks with `empty: true` render in a visually muted/reduced style
        when not being edited. Clicking anywhere on a row's main area
        (other than the trailing icon buttons) opens that task for inline
@@ -698,13 +699,13 @@ for running one group against the clock:
    the next step would leave the local days occupied by the executing stack
    (a stack may span midnight).
    **"I’m delayed"** (with a clock icon) inserts an empty spacer titled
-   "Delay" with `delay: true` immediately before the block that currently
-   contains wall-clock now, sized to the elapsed time in that block rounded
-   to the nearest 5 minutes; when still within 5 minutes of that block's
-   start, inserts before the *previous* block instead and sizes the delay
-   from that previous block's start to now; disabled when now isn't inside
-   a block, when the rounded delay would be under 5 minutes, or when within
-   5 minutes of the first block's start.
+   "Delay" with `delay: true`. When wall-clock now is inside a block, insert
+   immediately before that block (or before the previous active block when
+   still within 5 minutes of the current block's start), sized to the elapsed
+   time from that block's start to now rounded to the nearest 5 minutes
+   (minimum 5). When now is outside the stack, append at the end — after the
+   stack ends, size from stack end to now (minimum 5); otherwise use 5
+   minutes. Always available in the execution view (not disabled by time).
 4. **Finished toggle**: beside each non-delay block, a clickable pending icon
    (circle with three dots) or green check when `done`. Starts pending; click
    the icon **or the row title/main area** toggles `done` (title click does

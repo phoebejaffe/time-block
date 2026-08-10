@@ -28,7 +28,6 @@ import {
   isTaskEmpty,
   localDateKey,
   groupMatchesCheckpoint,
-  planGotDelayed,
   resolveSavedBlocksFromKeys,
   resolveStack,
   stackDurationMinutes,
@@ -844,8 +843,6 @@ function BlockGroupPanel({
   )
   const endStatus =
     mode === 'execution' ? getStackEndStatus(group) : null
-  const canGotDelayed =
-    mode === 'execution' && enabled && planGotDelayed(tasks, anchor).ok
   const groupStyle = {
     ['--group-accent' as string]: groupSidebarAccentColor(group.color),
   }
@@ -1480,12 +1477,8 @@ function BlockGroupPanel({
           <button
             type="button"
             className="btn btn-ghost btn-sm execution-delayed-btn"
-            disabled={busy || !canGotDelayed}
-            title={
-              canGotDelayed
-                ? 'Insert an empty delay so the current block starts around now'
-                : 'Available while you’re inside a block'
-            }
+            disabled={busy}
+            title="Insert an empty delay so later blocks shift later"
             onClick={onGotDelayed}
           >
             I’m delayed
@@ -1640,9 +1633,16 @@ function BlockGroupPanel({
                           : `Disable ${task.title}`
                       }
                       aria-pressed={isTaskDisabled(task)}
-                      title={isTaskDisabled(task) ? 'Enable' : 'Disable'}
+                      title={
+                        isTaskDelay(task)
+                          ? 'Delays can’t be disabled'
+                          : isTaskDisabled(task)
+                            ? 'Enable'
+                            : 'Disable'
+                      }
+                      disabled={isTaskDelay(task)}
                       onClick={() => {
-                        if (suppressClickRef.current) return
+                        if (suppressClickRef.current || isTaskDelay(task)) return
                         if (isTaskDisabled(task)) {
                           const { disabled: _d, ...rest } = task
                           onUpdate(rest)

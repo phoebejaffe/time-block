@@ -188,10 +188,7 @@ export default function App() {
     const group = plan.plan.groups.find((g) => g.id === groupId)
     if (!group) return
     const previousTasks = group.tasks
-    if (!plan.insertGotDelayed(groupId)) {
-      show('info', 'Delay only works while you’re inside a block.')
-      return
-    }
+    if (!plan.insertGotDelayed(groupId)) return
     show('info', 'Added a delay block.', {
       actionLabel: 'Undo',
       progressMs: 5_000,
