@@ -2,7 +2,7 @@ import { formatError } from './errors'
 import {
   prunePushedEvents,
   stackPushFingerprint,
-  TIMEBLOCK_EVENT_DESCRIPTION,
+  timeblockEventDescription,
   type PushSnapshot,
   type PushedEvent,
 } from './pushedEvents'
@@ -200,14 +200,17 @@ export function isNotFoundError(err: unknown): boolean {
   )
 }
 
-function eventResource(task: {
-  title: string
-  start: Date
-  end: Date
-}): gapi.client.calendar.Event {
+function eventResource(
+  task: {
+    title: string
+    start: Date
+    end: Date
+  },
+  userId: string | null | undefined,
+): gapi.client.calendar.Event {
   return {
     summary: task.title,
-    description: TIMEBLOCK_EVENT_DESCRIPTION,
+    description: timeblockEventDescription(userId),
     start: { dateTime: task.start.toISOString() },
     end: { dateTime: task.end.toISOString() },
   }
@@ -260,6 +263,7 @@ export async function syncTasksToCalendar(
   tasks: Task[],
   anchor: StackAnchor,
   pushedEvents: PushedEvent[],
+  userId?: string | null,
 ): Promise<SyncTasksResult> {
   const resolved = resolveStack(tasks, anchor)
   const dayKey = localDateKey(anchor.at)
@@ -348,7 +352,7 @@ export async function syncTasksToCalendar(
       continue
     }
 
-    const resource = eventResource(task)
+    const resource = eventResource(task, userId)
     // Only ever reuse an event already pushed for this exact group/day —
     // never one from another day, even if the block id matches.
     const match = unusedDay.find((e) => e.taskId === task.id) || unusedDay[0]
@@ -526,6 +530,7 @@ export async function syncGroupToCalendars(
   tasks: Task[],
   anchor: StackAnchor,
   pushedEvents: PushedEvent[],
+  userId?: string | null,
 ): Promise<SyncGroupCalendarsResult> {
   const dayKey = localDateKey(anchor.at)
   const previouslyPushed = [
@@ -565,6 +570,7 @@ export async function syncGroupToCalendars(
       tasks,
       anchor,
       tracked,
+      userId,
     )
     tracked = result.pushedEvents
     updated += result.updated

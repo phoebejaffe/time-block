@@ -336,6 +336,7 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
     pushedEvents,
     pushSnapshots,
     executingGroupId,
+    firebaseUser,
     loading: loading || (signedIn && !firebaseUser && isFirebaseConfigured()),
     status,
     syncError,

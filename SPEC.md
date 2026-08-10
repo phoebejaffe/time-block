@@ -422,9 +422,11 @@ token is applied.
 - **Create/update/delete events** (write path, used only when pushing the
   user's plan — see §8) via `events.insert` / `events.patch` /
   `events.delete`. Every event created by this app carries a fixed
-  description string identifying it as app-created (e.g. "Added with love,
-  by Timeblock") — purely informational, not used for matching (matching
-  is done via the tracked `PushedEvent` records instead, see §8).
+  description string identifying it as app-created (e.g. "Added via
+  Timeblock, with love ❤️"). Most accounts get a heart; a small Firebase
+  Auth UID allowlist gets a weighted random love/seasonal emoji instead.
+  Purely informational, not used for matching (matching is done via the
+  tracked `PushedEvent` records instead, see §8).
 - **404/410/"not found" detection**: a small helper normalizes many
   different shapes of Google API error (numeric HTTP status, nested
   `error.code`, `error.errors[].reason`, or a plain-text message containing

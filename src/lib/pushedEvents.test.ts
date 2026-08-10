@@ -6,8 +6,10 @@ import {
   isPushUnchanged,
   isTaskPushUnchanged,
   normalizePushedEvents,
+  pickLoveEmoji,
   prunePushedEvents,
   stackPushFingerprint,
+  timeblockEventDescription,
   upsertPushSnapshot,
   type PushedEvent,
 } from './pushedEvents'
@@ -169,5 +171,36 @@ describe('pushedEvents', () => {
     expect(isPushUnchanged(snapshots, 'cal-b', 'group-1', '2026-07-18', 'fp-b')).toBe(
       true,
     )
+  })
+
+  it('stamps calendar events with a default love emoji for most users', () => {
+    expect(timeblockEventDescription(null)).toBe(
+      'Added via Timeblock, with love ❤️',
+    )
+    expect(timeblockEventDescription('some-other-uid')).toBe(
+      'Added via Timeblock, with love ❤️',
+    )
+    expect(pickLoveEmoji(undefined)).toBe('❤️')
+  })
+
+  it('picks from the special emoji pool for allowlisted Firebase UIDs', () => {
+    const uid = 'U3gTVL0CZJXNKCbtepijZfKbIE82'
+    const pool =
+      '❤️❤️❤️❤️❤️🩷❤️‍🔥❣️💞💖💘💝💌🌹🥂🍾🌷✨🍲🍜🍵🌱🪴🪺🎶🌈🕊️🦢🐈🐝🦋🐣🐣🐣🐣🐣'
+    const graphemes = [
+      ...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(
+        pool,
+      ),
+    ].map((s) => s.segment)
+    const prefix = 'Added via Timeblock, with love '
+    const seen = new Set<string>()
+    for (let i = 0; i < 300; i++) {
+      const desc = timeblockEventDescription(uid)
+      expect(desc.startsWith(prefix)).toBe(true)
+      const emoji = desc.slice(prefix.length)
+      expect(graphemes).toContain(emoji)
+      seen.add(emoji)
+    }
+    expect(seen.size).toBeGreaterThan(1)
   })
 })

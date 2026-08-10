@@ -4,7 +4,43 @@ const RETAIN_MS = 31 * 24 * 60 * 60 * 1000
 const LEGACY_EVENTS_KEY = 'time-blocking.pushed-events'
 const LEGACY_SNAPSHOTS_KEY = 'time-blocking.pushed-snapshots'
 
-export const TIMEBLOCK_EVENT_DESCRIPTION = 'Added with love, by Timeblock'
+const DEFAULT_LOVE_EMOJI = '❤️'
+
+/** Firebase Auth UIDs that get a weighted random love emoji. */
+const SPECIAL_LOVE_EMOJI_UIDS = new Set([
+  'U3gTVL0CZJXNKCbtepijZfKbIE82',
+  'T3ysIyCIQIcrkC6jZqmBtKYuZBD3',
+])
+
+/**
+ * Weighted pool (repeats raise odds). Segmented as grapheme clusters so
+ * ZWJ sequences stay intact.
+ */
+const SPECIAL_LOVE_EMOJI_POOL =
+  '❤️❤️❤️❤️❤️🩷❤️‍🔥❣️💞💖💘💝💌🌹🥂🍾🌷✨🍲🍜🍵🌱🪴🪺🎶🌈🕊️🦢🐈🐝🦋🐣🐣🐣🐣🐣'
+
+const loveEmojiGraphemes: string[] = (() => {
+  if (typeof Intl !== 'undefined' && 'Segmenter' in Intl) {
+    const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
+    return [...segmenter.segment(SPECIAL_LOVE_EMOJI_POOL)].map((s) => s.segment)
+  }
+  return [...SPECIAL_LOVE_EMOJI_POOL]
+})()
+
+export function pickLoveEmoji(uid: string | null | undefined): string {
+  if (!uid || !SPECIAL_LOVE_EMOJI_UIDS.has(uid)) return DEFAULT_LOVE_EMOJI
+  const pool = loveEmojiGraphemes
+  if (pool.length === 0) return DEFAULT_LOVE_EMOJI
+  const index = Math.floor(Math.random() * pool.length)
+  return pool[index]!
+}
+
+/** Description stamped on Google Calendar events created by Timeblock. */
+export function timeblockEventDescription(
+  uid: string | null | undefined,
+): string {
+  return `Added via Timeblock, with love ${pickLoveEmoji(uid)}`
+}
 
 export type PushedEvent = {
   calendarId: string

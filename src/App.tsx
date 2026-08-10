@@ -403,6 +403,7 @@ export default function App() {
         group.tasks,
         anchor,
         userData.pushedEvents,
+        userData.firebaseUser?.uid ?? null,
       )
       userData.applyCalendarSync(
         pushedEvents,
