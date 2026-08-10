@@ -697,7 +697,8 @@ for running one group against the clock:
    and calendar commit still work. The group power/title row is hidden (no
    collapsing), and **Delete block group** is omitted from the menu.
    Start / Intended End / the end-status strip stay pinned at the top of the
-   pane while the block list scrolls beneath. Calendar ‹ › are disabled when
+   pane while the block list scrolls beneath. On open, the calendar scrolls
+   so the group's blocks are in view. Calendar ‹ › are disabled when
    the next step would leave the local days occupied by the executing stack
    (a stack may span midnight).
    **"I’m delayed"** (with a clock icon) inserts an empty spacer titled

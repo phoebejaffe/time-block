@@ -205,6 +205,7 @@ export function ExecutionModal({
             busy={busy}
             stackDragEnabled={false}
             navDayBounds={navDayBounds}
+            scrollTasksIntoViewOnMount
           />
         </main>
       </div>

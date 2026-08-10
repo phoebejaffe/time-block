@@ -66,6 +66,8 @@ type CalendarViewProps = {
    * these inclusive local days occupied by the executing stack.
    */
   navDayBounds?: { first: Date; last: Date } | null
+  /** Scroll the time grid so the group's blocks are in view (execution open). */
+  scrollTasksIntoViewOnMount?: boolean
 }
 
 type ResolvedTaskEvent = {
@@ -274,6 +276,7 @@ export function CalendarView({
   busy,
   stackDragEnabled = true,
   navDayBounds = null,
+  scrollTasksIntoViewOnMount = false,
 }: CalendarViewProps) {
   const calendarRef = useRef<FullCalendar>(null)
   const shellRef = useRef<HTMLDivElement>(null)
@@ -327,6 +330,29 @@ export function CalendarView({
     () => buildResolvedTaskEvents(groups),
     [groups],
   )
+  const didScrollTasksIntoViewRef = useRef(false)
+
+  // Execution mode: once the grid has a real height and we have blocks, scroll
+  // so the stack sits in view (a bit of padding above the first block).
+  useEffect(() => {
+    if (!scrollTasksIntoViewOnMount || didScrollTasksIntoViewRef.current) return
+    if (calendarHeight < 2 || resolvedTaskEvents.length === 0) return
+    const api = calendarRef.current?.getApi()
+    if (!api) return
+
+    let earliest = resolvedTaskEvents[0]!.start
+    for (const task of resolvedTaskEvents) {
+      if (task.start.getTime() < earliest.getTime()) earliest = task.start
+    }
+    const padMs = 30 * 60_000
+    const scrollAt = new Date(earliest.getTime() - padMs)
+    api.scrollToTime({
+      hours: scrollAt.getHours(),
+      minutes: scrollAt.getMinutes(),
+      seconds: 0,
+    })
+    didScrollTasksIntoViewRef.current = true
+  }, [scrollTasksIntoViewOnMount, resolvedTaskEvents, calendarHeight])
   const groupColors = useMemo(() => {
     const map = new Map<string, ReturnType<typeof groupEventColors>>()
     for (const group of groups) {

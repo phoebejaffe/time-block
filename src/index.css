@@ -648,7 +648,8 @@ body.is-sidebar-resizing .main-panel {
 @media (hover: none) and (pointer: coarse) {
   .stack-anchor .stack-anchor-time input {
     cursor: pointer;
-    touch-action: manipulation;
+    /* Keep none so vertical scrub doesn't scroll the sidebar/page. */
+    touch-action: none;
   }
 }
 
@@ -656,6 +657,14 @@ body.is-datetime-scrubbing {
   cursor: ns-resize;
   user-select: none;
   -webkit-user-select: none;
+  touch-action: none;
+}
+
+body.is-datetime-scrubbing .task-sidebar,
+body.is-datetime-scrubbing .block-group,
+body.is-datetime-scrubbing .help-modal-body {
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
 body.is-datetime-scrubbing .stack-anchor-time input {
