@@ -4,16 +4,12 @@
       <stop offset="0%" stop-color="#147a5f"/>
       <stop offset="70%" stop-color="#0b5341"/>
     </linearGradient>
-    <pattern id="stripes" width="7" height="32" patternUnits="userSpaceOnUse">
-      <rect x="6" width="1" height="32" fill="#ffffff" fill-opacity="0.15"/>
-    </pattern>
     <clipPath id="round">
       <rect width="32" height="32" rx="8"/>
     </clipPath>
   </defs>
   <g clip-path="url(#round)">
     <rect width="32" height="32" fill="url(#brand)"/>
-    <rect width="32" height="32" fill="url(#stripes)"/>
     <rect
       x="0.5"
       y="0.5"
