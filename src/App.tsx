@@ -560,12 +560,12 @@ export default function App() {
             className="execution-banner-open"
             onClick={() => setExecutionModalOpen(true)}
           >
-            Executing {executingGroup.name?.trim() || 'Untitled plan'}
+            Running {executingGroup.name?.trim() || 'Untitled plan'}
           </button>
           <button
             type="button"
             className="execution-banner-dismiss"
-            aria-label="Stop executing"
+            aria-label="End run"
             onClick={handleEndExecution}
           >
             ×

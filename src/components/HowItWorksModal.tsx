@@ -93,11 +93,10 @@ export function HowItWorksModal({ onClose }: HowItWorksModalProps) {
 
           <h3>Run it</h3>
           <p>
-            When you&apos;re ready to execute your plan, enter{' '}
-            <strong>execution mode</strong> to help you stay on track.{' '}
-            <strong>Execute this plan</strong> appears next to the group title when the
-            current time is within an hour of the block group, so you can open a
-            focused view of that one list beside the calendar.
+            When you&apos;re ready, <strong>Start run</strong> appears next to
+            the group title if the current time is within an hour of the block
+            group. That opens a focused view of that one list beside the calendar
+            to help you stay on track.
           </p>
           <p>
             Watch <strong>Start</strong> and <strong>Intended End</strong>, and the
@@ -112,7 +111,7 @@ export function HowItWorksModal({ onClose }: HowItWorksModalProps) {
           </p>
           <p>
             Close the view anytime; a banner keeps the run alive so you can jump
-            back in. <strong>Stop executing</strong> when you&apos;re done. If
+            back in. <strong>End run</strong> when you&apos;re done. If
             you&apos;re signed in on another device, you can pick up the same run
             there.
           </p>

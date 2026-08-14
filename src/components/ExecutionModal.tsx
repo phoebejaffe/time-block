@@ -128,7 +128,7 @@ export function ExecutionModal({
   )
 
   return (
-    <div className="execution-modal" role="dialog" aria-modal="true" aria-label={`Executing ${label}`}>
+    <div className="execution-modal" role="dialog" aria-modal="true" aria-label={`Running ${label}`}>
       <div className="execution-modal-toolbar">
         <div className="execution-modal-toolbar-title">
           <strong>{label}</strong>
@@ -139,12 +139,12 @@ export function ExecutionModal({
             className="btn btn-ghost btn-sm"
             onClick={onEndExecution}
           >
-            Stop executing
+            End run
           </button>
           <button
             type="button"
             className="btn btn-ghost btn-sm execution-modal-close"
-            aria-label="Close execution view"
+            aria-label="Close run view"
             onClick={onClose}
           >
             ×

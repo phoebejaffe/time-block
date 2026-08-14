@@ -842,7 +842,7 @@ export function applyGotDelayed(
 /**
  * True when wall-clock `now` is within one hour of this group's stack on
  * today's day (from an hour before start through an hour after end) —
- * eligibility for "Execute this plan".
+ * eligibility for "Start run".
  */
 export function isGroupExecutableNow(
   group: Pick<BlockGroup, 'tasks' | 'anchor' | 'enabled'>,

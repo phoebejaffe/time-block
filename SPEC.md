@@ -560,7 +560,7 @@ Top to bottom:
        commit modal (§7.4). When wall-clock now is within one hour of the
        group's stack on today (from an hour before start through an hour
        after end) — and no other group is already executing — an
-       **"Execute this plan"** button appears to the right of that group's
+       **"Start run"** button appears to the right of that group's
        title (§7.9).
 3. **"New group +"** button at the very bottom of the group list, appending
    a fresh empty group (anchored to "ends at 9:00am today" by default).
@@ -682,12 +682,12 @@ duration, not the trailing icon buttons) reorders it within its list:
 Planning mode is for drafting multiple block groups. **Execution mode** is
 for running one group against the clock:
 
-1. **"Execute this plan"** (planning sidebar, to the right of the group's title
+1. **"Start run"** (planning sidebar, to the right of the group's title
    when expanded) appears on an enabled group when wall-clock now is within one
    hour of that group's stack on today (from an hour before start through an
    hour after end), and no other group is already executing. While **this**
-   group is executing, the same button stays available (labeled **Executing
-   this plan**) to reopen the execution modal.
+   group is executing, the same button stays available (labeled **Running**)
+   to reopen the run modal.
 2. Entering execution: persist `executingGroupId` on the user sync document;
    flip the group to `anchor.kind: 'start'` via `toggleAnchorPreservingStack`
    if needed; set `intendedEndAt` from the resolved stack end if not already
@@ -728,8 +728,8 @@ for running one group against the clock:
    **Ending late at … (Xm late)** — switching **Ending** → **Ended** once
    wall-clock now is at or past the stack's actual end.
 7. Closing the modal (× / Escape) leaves `executingGroupId` set and shows a
-   **top banner** ("Executing …") to reopen the modal; the banner's ×
-   (or "Stop executing" in the modal) clears `executingGroupId` and that
+   **top banner** ("Running …") to reopen the modal; the banner's ×
+   (or "End run" in the modal) clears `executingGroupId` and that
    group's `intendedEndAt` and any task `done` flags. After ending execution,
    the user may flip the group back to Ends in planning if they want. Only
    one group may execute at a time.

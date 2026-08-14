@@ -105,7 +105,7 @@ type TaskSidebarProps = {
   onGotDelayed: (groupId: string) => void
   onExecutePlan?: (groupId: string) => void
   onIntendedEndChange?: (groupId: string, intendedEndAt: string) => void
-  /** When set, another group is already executing (hides Execute on others). */
+  /** When set, another group is already running (hides Start run on others). */
   executingGroupId?: string | null
   /** Planning sidebar vs single-group execution panel. */
   mode?: 'planning' | 'execution'
@@ -1376,7 +1376,7 @@ function BlockGroupPanel({
                 disabled={busy}
                 onClick={onExecutePlan}
               >
-                {isExecutingPlan ? 'Executing this plan' : 'Execute this plan'}
+                {isExecutingPlan ? 'Running' : 'Start run'}
               </button>
             )}
           </div>
