@@ -6,7 +6,7 @@ import {
   type RefObject,
 } from 'react'
 
-const CAL_ZOOM_MIN = 0.7
+const CAL_ZOOM_MIN = 0.95
 const CAL_ZOOM_MAX = 2.5
 
 function clampZoom(value: number): number {

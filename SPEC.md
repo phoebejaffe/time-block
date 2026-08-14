@@ -805,8 +805,8 @@ whenever the calendar's visible date range changes.
   label renders the start time floating beside the title on the first line
   so wrapped lines run flush left, wraps onto further lines as space
   allows, then ellipsizes once it exceeds the event box's available height
-  (skipped for the very shortest, ≤5-minute events, which intentionally let
-  their label overflow above the box); label text color is chosen
+  (for ≤5-minute events below 1.7× zoom, time and title stay on one
+  baseline and the label overflows above the box instead); label text color is chosen
   per-event for WCAG-contrast against that event's background color (black
   or white, whichever has the higher contrast), with a soft outline in the
   opposite color so it stays legible over any group color.
@@ -840,7 +840,7 @@ whenever the calendar's visible date range changes.
 - **Clicking** a block (rather than dragging it) opens that task for inline
   editing in the sidebar (scrolling it into view if needed).
 - **Zoom**: pinch gesture (touch) or Ctrl/Cmd + mouse-wheel scroll changes a
-  vertical zoom factor (clamped, e.g. 0.7×–2.5×) applied to the calendar's
+  vertical zoom factor (clamped 0.95×–2.5×) applied to the calendar's
   row heights via a CSS custom property. Zoom is anchored to the pointer
   (wheel) or the midpoint between the two touches (pinch), adjusting the
   time-grid scroller so content under that point stays put instead of

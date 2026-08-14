@@ -206,8 +206,8 @@ function taskEventTextStyle(groupBackgroundColor: string): {
 /**
  * Task event label: time floats left so the title starts beside it on the
  * first line, wraps to subsequent full-width lines, then ellipsizes once it
- * runs out of the event box's height. Skipped for `event-xxs` (≤5min)
- * blocks, which intentionally let their label overflow above the tiny box.
+ * runs out of the event box's height. Below zoom 1.7, `event-xxs` (≤5min)
+ * CSS lets the label overflow above the tiny box instead of clamping.
  */
 function TaskEventLabel({
   timeText,
@@ -798,23 +798,18 @@ export function CalendarView({
       ? resolvedTaskEventsRef.current.find((task) => task.taskId === taskId)
       : undefined
     const start = resolved?.start ?? arg.event.start
-    const end = resolved?.end ?? arg.event.end
     const timeText = start ? formatTaskEventTime(start) : ''
     const groupId = arg.event.extendedProps.groupId as string | undefined
     const groupColor = groupId ? groupColors.get(groupId) : undefined
     const groupBg =
       groupColor?.backgroundColor ?? groupEventColors().backgroundColor
     const textStyle = taskEventTextStyle(groupBg)
-    const clamp =
-      start && end
-        ? !durationClass(start, end).includes('event-xxs')
-        : true
 
     return (
       <TaskEventLabel
         timeText={timeText}
         title={arg.event.title}
-        clamp={clamp}
+        clamp
         textStyle={textStyle}
       />
     )
@@ -864,7 +859,12 @@ export function CalendarView({
       />
 
       <div
-        className="calendar-body"
+        className={[
+          'calendar-body',
+          zoom < 1.7 ? 'is-xxs-overflow' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
         ref={calendarBodyRef}
         style={{ ['--cal-zoom' as string]: String(zoom) }}
       >
