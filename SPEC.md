@@ -347,7 +347,7 @@ type PlanArchive = { folders: ArchiveFolder[]; updatedAt: string }
   folder should receive their plans, including Unfiled; an empty folder is
   removed immediately). All folders, including Unfiled, can be reordered
   with Move up / Move down.
-- **Archive** (group ··· menu) takes the live group off Home and writes a
+- **Archive block group** (group ··· menu) takes the live group off Home and writes a
   snapshot into Unfiled: name, color, tasks (title/duration/empty/delay/
   disabled — no live ids, no `done`), optional checkpoint, and anchor kind +
   clock time. Google events already pushed for that group are left alone
@@ -550,8 +550,8 @@ Top to bottom:
      N" label) followed by its total duration in parens if it has any
      tasks (e.g. "Morning (1h 30m)"), and a small "···" overflow menu
      (Rename / Move up / Move down / Duplicate group / — separator — /
-     Archive / Delete block group) — expand it again by tapping the name.
-     Archive is disabled on the last Home group and while
+     Archive block group / Delete block group) — expand it again by tapping
+     the name. Archive is disabled on the last Home group and while
      that group is in a run. If this group is currently executing (§7.9),
      the collapsed row is highlighted (blue wash matching the Running
      banner, no grayscale) and keeps a **Running** button; clicking it
@@ -571,8 +571,9 @@ Top to bottom:
        separator — / Move up / Move down (either omitted if not
        applicable) / Duplicate group / — separator — / Delete blocks from
        calendar (disabled unless something's currently pushed for this
-       group+day) / **Archive** (disabled if it's the only remaining Home
-       group, or while this group is in a run) / Delete block group
+       group+day) / — separator — / **Archive block group** (disabled if
+       it's the only remaining Home group, or while this group is in a
+       run) / Delete block group
        (disabled if it's the only remaining group).
      - **Anchor row**: a two-state toggle button labeled "Starts" or "Ends"
        (tapping flips the anchor's `kind` and shifts `at` by the stack's

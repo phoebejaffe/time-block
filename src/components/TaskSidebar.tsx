@@ -1110,6 +1110,9 @@ function BlockGroupPanel({
         )}
         {mode !== 'execution' && (
           <>
+            {enabled && (
+              <div className="calendar-menu-sep" role="separator" />
+            )}
             <button
               type="button"
               role="menuitem"
@@ -1127,7 +1130,7 @@ function BlockGroupPanel({
                 onArchiveGroup()
               }}
             >
-              Archive
+              Archive block group
             </button>
             <button
               type="button"
