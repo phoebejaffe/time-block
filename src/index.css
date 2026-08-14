@@ -917,6 +917,8 @@ body.is-datetime-scrubbing .task-form-duration input {
 }
 
 .task-done-btn {
+  position: relative;
+  z-index: 1;
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
@@ -930,6 +932,12 @@ body.is-datetime-scrubbing .task-form-duration input {
   background: transparent;
   color: var(--ink-muted);
   cursor: pointer;
+}
+
+.task-done-btn::before {
+  content: '';
+  position: absolute;
+  inset: -0.45rem;
 }
 
 .task-done-btn-spacer {

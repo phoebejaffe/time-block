@@ -102,8 +102,8 @@ export function HowItWorksModal({ onClose }: HowItWorksModalProps) {
           <p>
             Watch <strong>Start</strong> and <strong>Intended End</strong>, and the
             strip that tells you whether you&apos;re ending on time, early, or late.
-            Mark blocks finished as you go—tap the pending icon or the row for a
-            green check; use the pencil when you need to edit.
+            Mark blocks finished as you go—tap the pending icon for a green
+            check; tap the row (or pencil) when you need to edit title or length.
           </p>
           <p>
             If you&apos;ve slipped, <strong>I&apos;m delayed</strong> inserts time

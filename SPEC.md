@@ -717,10 +717,10 @@ for running one group against the clock:
    indent).
 5. **Finished toggle**: beside each non-delay block, a clickable pending icon
    (circle with three dots) or green check when `done`. Starts pending; click
-   the icon **or the row title/main area** toggles `done` (title click does
-   not open the inline editor in execution — use the edit icon for that).
+   the icon to toggle `done`. Clicking the row title/main area opens the
+   inline editor (same as planning) so duration/title edits stay one tap away.
    Delay spacers omit the control but keep matching empty space so rows
-   align; clicking a delay row's title does nothing. Cleared with
+   align; clicking a delay row's title still opens the editor. Cleared with
    `intendedEndAt` when execution ends.
 6. **End time**: above the status block, show scrubbable **Start** and
    **Intended End** time inputs. The status block shows green **Ending on

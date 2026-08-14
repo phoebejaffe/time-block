@@ -1644,10 +1644,6 @@ function BlockGroupPanel({
                     onPointerDown={(e) => beginTaskDrag(e, index)}
                     onClick={() => {
                       if (suppressClickRef.current) return
-                      if (mode === 'execution') {
-                        toggleTaskDone()
-                        return
-                      }
                       onEditingIdChange(task.id)
                     }}
                   >
