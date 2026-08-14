@@ -128,17 +128,24 @@ export function touchPlanArchive(folders: ArchiveFolder[]): PlanArchive {
 }
 
 export function ensureUnfiledFolder(folders: ArchiveFolder[]): ArchiveFolder[] {
-  const orphans: ArchivedPlan[] = []
   const rest: ArchiveFolder[] = []
+  let unfiledIndex = -1
   let unfiledPlans: ArchivedPlan[] = []
   for (const folder of folders) {
     if (folder.id === UNFILED_FOLDER_ID) {
       unfiledPlans = [...unfiledPlans, ...folder.plans]
+      if (unfiledIndex < 0) {
+        unfiledIndex = rest.length
+        rest.push(unfiledFolder())
+      }
       continue
     }
     rest.push(folder)
   }
-  return [unfiledFolder([...unfiledPlans, ...orphans]), ...rest]
+  const unfiled = unfiledFolder(unfiledPlans)
+  if (unfiledIndex < 0) return [unfiled, ...rest]
+  rest[unfiledIndex] = unfiled
+  return rest
 }
 
 function normalizeArchivedTask(raw: unknown): ArchivedPlanTask | null {
@@ -322,6 +329,27 @@ export function renameArchivedPlan(
   )
 }
 
+export function setArchivedPlanColor(
+  archive: PlanArchive,
+  planId: string,
+  color: string | undefined,
+): PlanArchive {
+  const trimmed = color?.trim()
+  return mapFolders(archive, (folders) =>
+    folders.map((folder) => ({
+      ...folder,
+      plans: folder.plans.map((plan) => {
+        if (plan.id !== planId) return plan
+        if (!trimmed) {
+          const { color: _c, ...rest } = plan
+          return rest
+        }
+        return { ...plan, color: trimmed }
+      }),
+    })),
+  )
+}
+
 export function duplicateArchivedPlan(
   archive: PlanArchive,
   planId: string,
@@ -430,16 +458,20 @@ export function renameArchiveFolder(
 export function removeArchiveFolder(
   archive: PlanArchive,
   folderId: string,
+  destinationFolderId: string = UNFILED_FOLDER_ID,
 ): PlanArchive {
   if (folderId === UNFILED_FOLDER_ID) return archive
+  if (destinationFolderId === folderId) return archive
   const folders = ensureUnfiledFolder(archive.folders)
   const removed = folders.find((f) => f.id === folderId)
   if (!removed) return archive
+  const destExists = folders.some((f) => f.id === destinationFolderId)
+  const destId = destExists ? destinationFolderId : UNFILED_FOLDER_ID
   return touchPlanArchive(
     folders
       .filter((f) => f.id !== folderId)
       .map((folder) =>
-        folder.id === UNFILED_FOLDER_ID
+        folder.id === destId
           ? { ...folder, plans: [...folder.plans, ...removed.plans] }
           : folder,
       ),
@@ -451,12 +483,11 @@ export function moveArchiveFolder(
   folderId: string,
   direction: -1 | 1,
 ): PlanArchive {
-  if (folderId === UNFILED_FOLDER_ID) return archive
   const folders = ensureUnfiledFolder(archive.folders)
   const index = folders.findIndex((f) => f.id === folderId)
   if (index < 0) return archive
   const target = index + direction
-  if (target <= 0 || target >= folders.length) return archive
+  if (target < 0 || target >= folders.length) return archive
   const next = [...folders]
   const [moved] = next.splice(index, 1)
   if (!moved) return archive
@@ -473,4 +504,18 @@ export function archivedPlanMatchesQuery(
   const name = (plan.name ?? '').toLowerCase()
   if (name.includes(q)) return true
   return plan.tasks.some((t) => t.title.toLowerCase().includes(q))
+}
+
+/** Compact local date for archive rows: "Aug 14" or "Aug 14, 2025". */
+export function formatArchivedDate(
+  isoOrDate: string | Date,
+  now: Date = new Date(),
+): string {
+  const d = typeof isoOrDate === 'string' ? new Date(isoOrDate) : isoOrDate
+  if (Number.isNaN(d.getTime())) return ''
+  const month = new Intl.DateTimeFormat(undefined, { month: 'short' }).format(d)
+  if (d.getFullYear() === now.getFullYear()) {
+    return `${month} ${d.getDate()}`
+  }
+  return `${month} ${d.getDate()}, ${d.getFullYear()}`
 }

@@ -155,8 +155,8 @@ type BlockGroup = {
   name?: string            // shown as the label when collapsed
   color?: string           // hex or CSS color, used for the group's calendar
                             // event fill (never sent to Google Calendar)
-  enabled?: boolean        // default true; false = "powered off" — group is
-                            // collapsed in the sidebar and hidden from the
+  enabled?: boolean        // default true; false = collapsed in the sidebar
+                            // and hidden from the
                             // in-app calendar overlay (its tasks are *not*
                             // deleted, and existing Google Calendar events
                             // pushed for it are untouched)
@@ -243,11 +243,11 @@ day but should be easy to reset).
   the checkpoint includes an `anchor` — by comparing anchor `kind` and local
   clock time (`HH:mm`). Changing Starts/Ends or the anchor time therefore
   shows Revert. Legacy checkpoints without `anchor` only compare tasks.
-  While drifted, an inline **Revert** button (with its own icon) appears next
-  to the group's overflow-menu trigger — a one-click shortcut that replaces
-  the group's tasks wholesale with fresh copies (new ids) rebuilt from the
-  checkpoint and restores the saved anchor when present, without opening the
-  menu.
+  While drifted, an inline **Revert** button (with its own icon) appears in
+  the group footer in **planning** (not in execution mode) — a one-click
+  shortcut that replaces the group's tasks wholesale with fresh copies (new
+  ids) rebuilt from the checkpoint and restores the saved anchor when
+  present, without opening the menu.
 - Both saving and reverting show an "Undo" toast (§7.6) that restores the
   exact previous state (the prior checkpoint, or the prior task list and
   anchor, respectively) if clicked.
@@ -342,18 +342,20 @@ type PlanArchive = { folders: ArchiveFolder[]; updatedAt: string }
 - Stored as its own Firestore field (`users/{uid}.planArchive`), parallel to
   `blockLibrary` — **not** inside `Plan.groups`.
 - Folders are a flat user-created list (no nesting). A built-in **Unfiled**
-  folder (id `unfiled`) always exists first and cannot be renamed or deleted;
-  user folders can be renamed, reordered (never above Unfiled), and deleted
-  (their plans move to Unfiled rather than vanishing).
+  folder (id `unfiled`) always exists and cannot be renamed or deleted;
+  user folders can be renamed and deleted (a nested picker asks which other
+  folder should receive their plans, including Unfiled; an empty folder is
+  removed immediately). All folders, including Unfiled, can be reordered
+  with Move up / Move down.
 - **Archive** (group ··· menu) takes the live group off Home and writes a
   snapshot into Unfiled: name, color, tasks (title/duration/empty/delay/
   disabled — no live ids, no `done`), optional checkpoint, and anchor kind +
   clock time. Google events already pushed for that group are left alone
-  (same as powering a group off). Disabled on the last remaining Home group
+  (same as collapsing a group). Disabled on the last remaining Home group
   and while that group is in a run (toast: "End run first."). An Undo toast
   restores the **same** group object (same ids, so push history still
   matches) at its previous index and removes the archive snapshot.
-- **Add to Home** stamps a *new* enabled group (fresh ids) onto the end of
+- **Add copy to home** stamps a *new* enabled group (fresh ids) onto the end of
   Home with copied tasks, name, color, and checkpoint. The archived original
   stays put. Anchor clock time is kept and remapped onto today (same idea as
   Duplicate group). Push history does not come along. After add, the new
@@ -544,20 +546,34 @@ Top to bottom:
 2. **A vertical list of "block group" panels**, one per group in the plan,
    each independently either **expanded** or **collapsed**:
    - **Collapsed** group (its `enabled` flag is off): a single compact row
-     showing a power toggle, the group's name (or a synthesized "Unnamed
+     showing the group's name (or a synthesized "Unnamed
      N" label) followed by its total duration in parens if it has any
      tasks (e.g. "Morning (1h 30m)"), and a small "···" overflow menu
-     (Set name / Move up / Move down / Duplicate group / — separator — /
-     Archive / Delete block group) — expand it again via the power toggle or by
-     tapping the row. Archive is disabled on the last Home group and while
+     (Rename / Move up / Move down / Duplicate group / — separator — /
+     Archive / Delete block group) — expand it again by tapping the name.
+     Archive is disabled on the last Home group and while
      that group is in a run. If this group is currently executing (§7.9),
      the collapsed row is highlighted (blue wash matching the Running
-     banner, no grayscale) and keeps a **Running** button to reopen the
-     run modal.
+     banner, no grayscale) and keeps a **Running** button; clicking it
+     expands the group (`enabled: true`) and reopens the run modal.
    - **Expanded** group:
-     - **Name row**: a power toggle (turns the group off/collapses it) and
-       the group's name (or its synthesized "Unnamed N" label), always
-       visible above the anchor controls.
+     - **Name row**: the group's name (or its synthesized "Unnamed N"
+       label), always visible above the anchor controls — tapping the name
+       collapses the group (hides it from the calendar); a **Start** /
+       **Running**
+       button when eligible (§7.9); and a "···" overflow menu on the far
+       right — positioned via a portal that flips above/below and clamps
+       horizontally to stay on-screen, the same technique used by the
+       block library picker — containing, when the group is enabled:
+       "Save as default"/"Update default blocks" (only shown while there's
+       no checkpoint yet or the blocks have drifted from it — see §4.6) /
+       — separator — / Rename / a "Change color" swatch input / —
+       separator — / Move up / Move down (either omitted if not
+       applicable) / Duplicate group / — separator — / Delete blocks from
+       calendar (disabled unless something's currently pushed for this
+       group+day) / **Archive** (disabled if it's the only remaining Home
+       group, or while this group is in a run) / Delete block group
+       (disabled if it's the only remaining group).
      - **Anchor row**: a two-state toggle button labeled "Starts" or "Ends"
        (tapping flips the anchor's `kind` and shifts `at` by the stack's
        total duration so the resolved blocks stay on the same calendar
@@ -587,28 +603,17 @@ Top to bottom:
        flag, and Cancel/Save (or Cancel/Add) buttons. See §7.7 for its
        interaction details.
      - **"Add new" row** (bottom of the list, when not actively adding or
-       editing): a primary "New block +" trigger that opens a **block
-       library picker** dropdown (grouped by category, each block showing
-       its title + duration, multi-selectable with a running numeric
+       editing): two side-by-side triggers — **"Library block"** opens a
+       **block library picker** dropdown (grouped by category, each block
+       showing its title + duration, multi-selectable with a running numeric
        selection order, plus an "Add N block(s)" confirm button; shows an
        empty-state message pointing at Settings → Block library if the
-       library has no categories yet) and a secondary "Custom +" trigger
-       that opens the inline task editor directly for a one-off task. On
-       the same row: a "···" overflow menu — positioned via a portal that
-       flips above/below and clamps horizontally to stay on-screen, the
-       same technique used by the block library picker — containing, when
-       the group is enabled: "Save as default"/"Update default blocks"
-       (only shown while there's no checkpoint yet or the blocks have
-       drifted from it — see §4.6) / — separator — /
-       Set name / a "Set color" swatch input / — separator — / Move up /
-       Move down (either omitted if not applicable) / Duplicate group / —
-       separator — / Delete blocks from calendar (disabled unless
-       something's currently pushed for this group+day) / **Archive**
-       (disabled if it's the only remaining Home group, or while this
-       group is in a run) / Delete block
-       group (disabled if it's the only remaining group). An inline
-       **Revert** button appears next to the menu trigger whenever the
-       group has drifted from its saved checkpoint (§4.6). Finally, an
+       library has no categories yet) and **"Custom"** opens the inline
+       task editor directly for a one-off task.
+     - **Group footer** (below the task list, on the group's grey outer
+       surface, right-aligned): an inline **Revert** button whenever the
+       group has drifted from its saved checkpoint (§4.6), except in
+       execution mode where it is hidden; then an
        **"Add to calendar"** / **"Update calendar"** /
        **"Update calendars"** button (label swaps to Update once anything
        has been pushed for this group on the viewed day; plural when that
@@ -616,11 +621,7 @@ Top to bottom:
        nothing has ever been pushed and the group has zero tasks; visually
        "soft-disabled" — clickable but styled inert — when the stack
        already exactly matches the last successful push) that opens the
-       commit modal (§7.4). When wall-clock now is within one hour of the
-       group's stack on today (from an hour before start through an hour
-       after end) — and no other group is already executing — an
-       **"Start run"** button appears to the right of that group's
-       title (§7.9).
+       commit modal (§7.4).
 3. **"New group +"** and **"Archived plans"** at the bottom of the group
    list, side by side. New group appends a fresh empty group (anchored to
    "ends at 9:00am today" by default). Archived plans opens the archive
@@ -633,7 +634,7 @@ All modals share a common shell: a full-screen semi-transparent backdrop
 (title + "×" close button) and a body, rendered via a portal so they sit
 above everything else. Modals used:
 
-- **Name group** (opened via the group menu's "Set name" item) — one field
+- **Name group** (opened via the group menu's "Rename" item) — one field
   (group name); Cancel / Save.
 - **Commit to calendar** ("Add to calendar" / "Update calendar" /
   "Update calendars", titled based on whether this group+day has already
@@ -670,16 +671,22 @@ above everything else. Modals used:
   patterned on Block library. Search at the top matches plan names and
   block titles; results flatten across folders with the folder name as a
   quiet subtitle. Below that, named **folder** sections (flat, not nested;
-  Unfiled first; tapping a folder header collapses or expands it, with a
+  order as stored, Unfiled included; tapping a folder header collapses or
+  expands it, with a
   plan count when collapsed). Each row shows a left color bar, name, and muted
-  `N blocks · duration`; tapping the row expands it in place and shows the
+  `N blocks · duration · archived date`; tapping the row expands it in place and shows the
   archived blocks in a mini group panel (light grey wash, no heading/anchor
-  bar; white task-row list underneath). **Add to Home** in
+  bar; white task-row list underneath). **Add copy to home** in
   the row ···
   menu stamps a new copy onto Home and **leaves the modal open**. Row ···:
-  Add to Home / Rename / Move to folder… / Delete from archive (Undo toast).
-  Folder ··· (not on Unfiled): Rename / Move up/down / Delete folder (plans
-  go to Unfiled). **New folder +** opens a nested name dialog (Create).
+  Add copy to home / Rename / Change color / Move to folder / Delete from
+  archive (Undo toast). Name and color edits apply to the archived snapshot.
+  Folder ···: Move up / Move down (omitted at the ends). Named folders
+  also have Rename and Delete folder (a nested picker asks which other
+  folder should receive the plans; empty folders delete immediately);
+  Unfiled cannot be renamed or deleted, and its ··· is hidden when it is
+  the only folder.
+  **New folder +** opens a nested name dialog (Create).
   Empty archive: "Archive a plan from its ··· menu to tuck it off Home."
   Closed via header "×", click-outside, or Escape. Plans can be
   drag-reordered within a folder.
@@ -762,22 +769,27 @@ duration, not the trailing icon buttons) reorders it within its list:
 Planning mode is for drafting multiple block groups. **Execution mode** is
 for running one group against the clock:
 
-1. **"Start run"** (planning sidebar, to the right of the group's title
+1. **"Start"** (planning sidebar, to the right of the group's title
    when expanded) appears on an enabled group when wall-clock now is within one
    hour of that group's stack on today (from an hour before start through an
    hour after end), and no other group is already executing. While **this**
    group is executing, the same button stays available (labeled **Running**)
-   to reopen the run modal.
+   even if the group is collapsed, to expand it and reopen the run modal.
 2. Entering execution: persist `executingGroupId` on the user sync document;
    flip the group to `anchor.kind: 'start'` via `toggleAnchorPreservingStack`
    if needed; set `intendedEndAt` from the resolved stack end if not already
-   set for this run; open a full-screen **execution modal**.
+   set for this run; turn the group on (`enabled: true`) if it was collapsed;
+   open a full-screen **execution modal**. Reopening a run (Running button
+   or the top banner) also expands the group.
 3. **Execution modal** shows only that group's sidebar panel + the calendar
    filtered to that group. Starts is locked (no kind toggle). Stack-drag on
    the calendar is disabled; event click/select still works. Block
-   durations, order, add/delete, empty spacers, checkpoints, library add,
-   and calendar commit still work. The group power/title row is hidden (no
-   collapsing), and **Delete block group** is omitted from the menu.
+   durations, order, add/delete, empty spacers, checkpoints (save/update
+   default blocks), library add, and calendar commit still work; the inline
+   **Revert** button is hidden. The group always renders **expanded**
+   (never the collapsed row); the title row is hidden (no
+   collapsing), and the "···" overflow sits on the Start / Intended End
+   row instead. **Delete block group** is omitted from the menu.
    Start / Intended End / the end-status strip stay pinned at the top of the
    pane while the block list scrolls beneath. On open, the calendar scrolls
    so the group's blocks are in view. Calendar ‹ › are disabled when
@@ -813,8 +825,15 @@ for running one group against the clock:
    group's `intendedEndAt` and any task `done` flags. After ending execution,
    the user may flip the group back to Ends in planning if they want. Only
    one group may execute at a time. Collapsing the executing group in the
-   planning sidebar (power off) still leaves the run active: the collapsed
-   row is highlighted and its **Running** button reopens the modal.
+   planning sidebar still leaves the run active: the collapsed
+   row is highlighted and its **Running** button expands the group and
+   reopens the modal. Execution mode itself never shows a collapsed group.
+8. **Auto-end**: a run ends on its own (same as **End run**) once wall-clock
+   now is 2 hours or more after the last non-disabled block in the executing
+   group, using the stored anchor times (not remapped onto today). If the
+   stack has no active blocks, it does not auto-end. Delays that push the
+   stack later also push this deadline. A leftover run from a previous day
+   ends on the next load or when the tab becomes visible again.
 
 ## 8. Core interaction flows
 

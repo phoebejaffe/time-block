@@ -43,7 +43,7 @@ export type BlockGroup = {
   id: string
   tasks: Task[]
   anchor: StackAnchor
-  /** Optional label shown when the group is powered off. */
+  /** Optional label shown when the group is collapsed. */
   name?: string
   /** Overlay color for in-app calendar blocks (hex or CSS color). */
   color?: string
@@ -844,7 +844,7 @@ export function applyGotDelayed(
 /**
  * True when wall-clock `now` is within one hour of this group's stack on
  * today's day (from an hour before start through an hour after end) —
- * eligibility for "Start run".
+ * eligibility for "Start".
  */
 export function isGroupExecutableNow(
   group: Pick<BlockGroup, 'tasks' | 'anchor' | 'enabled'>,
@@ -860,6 +860,33 @@ export function isGroupExecutableNow(
   const stackEnd = resolved[resolved.length - 1]!.end.getTime()
   const hourMs = 60 * 60_000
   return t >= stackStart - hourMs && t <= stackEnd + hourMs
+}
+
+/** How long after the last active block a forgotten run is ended. */
+export const EXECUTION_AUTO_END_AFTER_MS = 2 * 60 * 60 * 1000
+
+/**
+ * Instant at which a run should auto-end: 2 hours after the last
+ * non-disabled resolved block (stored anchor, not remapped onto today).
+ * `null` when the stack has no active blocks.
+ */
+export function executionAutoEndAt(
+  group: Pick<BlockGroup, 'tasks' | 'anchor'>,
+): number | null {
+  const resolved = resolveStack(group.tasks, group.anchor).filter(
+    (task) => !isTaskDisabled(task),
+  )
+  const last = resolved.at(-1)
+  if (!last) return null
+  return last.end.getTime() + EXECUTION_AUTO_END_AFTER_MS
+}
+
+export function shouldAutoEndExecution(
+  group: Pick<BlockGroup, 'tasks' | 'anchor'>,
+  now: Date = new Date(),
+): boolean {
+  const at = executionAutoEndAt(group)
+  return at != null && now.getTime() >= at
 }
 
 /**

@@ -7,12 +7,15 @@ import {
   blockGroupFromArchivedPlan,
   defaultPlanArchive,
   duplicateArchivedPlan,
+  formatArchivedDate,
   moveArchivedPlanToFolder,
   moveArchiveFolder,
   normalizePlanArchive,
   removeArchiveFolder,
   removeArchivedPlan,
   renameArchiveFolder,
+  renameArchivedPlan,
+  setArchivedPlanColor,
   UNFILED_FOLDER_ID,
   UNFILED_FOLDER_NAME,
 } from './planArchive'
@@ -75,7 +78,7 @@ describe('plan archive', () => {
     expect(archive.folders[1]!.plans[0]!.id).toBe(archived.id)
   })
 
-  it('deleting a folder sends plans back to Unfiled', () => {
+  it('deleting a folder sends plans back to Unfiled by default', () => {
     const archived = archivedPlanFromGroup(group)
     let archive = addArchiveFolder(defaultPlanArchive(), 'Work')
     const workId = archive.folders[1]!.id
@@ -84,6 +87,22 @@ describe('plan archive', () => {
     expect(archive.folders).toHaveLength(1)
     expect(archive.folders[0]!.id).toBe(UNFILED_FOLDER_ID)
     expect(archive.folders[0]!.plans[0]!.id).toBe(archived.id)
+  })
+
+  it('deleting a folder can move plans into another named folder', () => {
+    const archived = archivedPlanFromGroup(group)
+    let archive = addArchiveFolder(defaultPlanArchive(), 'Work')
+    archive = addArchiveFolder(archive, 'Home')
+    const workId = archive.folders[1]!.id
+    const homeId = archive.folders[2]!.id
+    archive = addArchivedPlan(archive, archived, workId)
+    archive = removeArchiveFolder(archive, workId, homeId)
+    expect(archive.folders.map((f) => f.id)).toEqual([
+      UNFILED_FOLDER_ID,
+      homeId,
+    ])
+    expect(archive.folders[0]!.plans).toHaveLength(0)
+    expect(archive.folders[1]!.plans[0]!.id).toBe(archived.id)
   })
 
   it('cannot delete or rename Unfiled', () => {
@@ -105,6 +124,17 @@ describe('plan archive', () => {
     expect(archive.folders[0]!.plans).toHaveLength(2)
     expect(archive.folders[0]!.plans[1]!.id).not.toBe(archived.id)
     expect(archive.folders[0]!.plans[1]!.name).toBe('Morning')
+  })
+
+  it('renames and recolors an archived plan', () => {
+    const archived = archivedPlanFromGroup(group)
+    let archive = addArchivedPlan(defaultPlanArchive(), archived)
+    archive = renameArchivedPlan(archive, archived.id, 'Evening')
+    expect(archive.folders[0]!.plans[0]!.name).toBe('Evening')
+    archive = setArchivedPlanColor(archive, archived.id, '#aabbcc')
+    expect(archive.folders[0]!.plans[0]!.color).toBe('#aabbcc')
+    archive = setArchivedPlanColor(archive, archived.id, undefined)
+    expect(archive.folders[0]!.plans[0]!).not.toHaveProperty('color')
   })
 
   it('remove returns the snapshot for undo', () => {
@@ -129,13 +159,55 @@ describe('plan archive', () => {
     )
   })
 
-  it('does not move Unfiled when reordering folders', () => {
+  it('reorders folders including Unfiled', () => {
     let archive = addArchiveFolder(defaultPlanArchive(), 'Work')
     archive = addArchiveFolder(archive, 'Home')
     const workId = archive.folders[1]!.id
-    archive = moveArchiveFolder(archive, workId, -1)
-    expect(archive.folders[0]!.id).toBe(UNFILED_FOLDER_ID)
+    const homeId = archive.folders[2]!.id
     archive = moveArchiveFolder(archive, UNFILED_FOLDER_ID, 1)
-    expect(archive.folders[0]!.id).toBe(UNFILED_FOLDER_ID)
+    expect(archive.folders.map((f) => f.id)).toEqual([
+      workId,
+      UNFILED_FOLDER_ID,
+      homeId,
+    ])
+    archive = moveArchiveFolder(archive, workId, 1)
+    expect(archive.folders.map((f) => f.id)).toEqual([
+      UNFILED_FOLDER_ID,
+      workId,
+      homeId,
+    ])
+    archive = moveArchiveFolder(archive, UNFILED_FOLDER_ID, -1)
+    expect(archive.folders.map((f) => f.id)).toEqual([
+      UNFILED_FOLDER_ID,
+      workId,
+      homeId,
+    ])
+    archive = moveArchiveFolder(archive, homeId, 1)
+    expect(archive.folders.map((f) => f.id)).toEqual([
+      UNFILED_FOLDER_ID,
+      workId,
+      homeId,
+    ])
+  })
+
+  it('keeps Unfiled in place when normalizing', () => {
+    const archive = normalizePlanArchive({
+      folders: [
+        { id: 'work', name: 'Work', plans: [] },
+        { id: UNFILED_FOLDER_ID, name: 'Unfiled', plans: [] },
+      ],
+      updatedAt: '2026-08-14T00:00:00.000Z',
+    })
+    expect(archive.folders.map((f) => f.id)).toEqual([
+      'work',
+      UNFILED_FOLDER_ID,
+    ])
+  })
+
+  it('formats archived dates compactly', () => {
+    const now = new Date(2026, 7, 14)
+    expect(formatArchivedDate(new Date(2026, 7, 14), now)).toBe('Aug 14')
+    expect(formatArchivedDate(new Date(2025, 11, 3), now)).toBe('Dec 3, 2025')
+    expect(formatArchivedDate('not-a-date', now)).toBe('')
   })
 })

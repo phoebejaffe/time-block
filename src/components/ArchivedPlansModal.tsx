@@ -4,6 +4,7 @@ import {
   addArchivedPlan,
   archivedPlanCount,
   archivedPlanMatchesQuery,
+  formatArchivedDate,
   moveArchivedPlanToFolder,
   moveArchiveFolder,
   removeArchiveFolder,
@@ -11,12 +12,14 @@ import {
   renameArchiveFolder,
   renameArchivedPlan,
   reorderArchivedPlans,
+  setArchivedPlanColor,
   UNFILED_FOLDER_ID,
   type ArchivedPlan,
   type ArchiveFolder,
   type PlanArchive,
 } from '../lib/planArchive'
 import {
+  DEFAULT_GROUP_COLOR,
   formatDurationMinutes,
   groupSidebarAccentColor,
   isTaskDisabled,
@@ -52,6 +55,7 @@ export function ArchivedPlansModal({
   const [renamingFolderId, setRenamingFolderId] = useState<string | null>(null)
   const [renamingPlanId, setRenamingPlanId] = useState<string | null>(null)
   const [movingPlanId, setMovingPlanId] = useState<string | null>(null)
+  const [deletingFolderId, setDeletingFolderId] = useState<string | null>(null)
   const [creatingFolder, setCreatingFolder] = useState(false)
   const [nameInput, setNameInput] = useState('')
 
@@ -59,6 +63,7 @@ export function ArchivedPlansModal({
     setRenamingFolderId(null)
     setRenamingPlanId(null)
     setMovingPlanId(null)
+    setDeletingFolderId(null)
     setCreatingFolder(false)
     setNameInput('')
   }
@@ -67,6 +72,7 @@ export function ArchivedPlansModal({
     Boolean(renamingFolderId) ||
     Boolean(renamingPlanId) ||
     Boolean(movingPlanId) ||
+    Boolean(deletingFolderId) ||
     creatingFolder
 
   useEffect(() => {
@@ -106,6 +112,9 @@ export function ArchivedPlansModal({
     : null
   const movingFromFolder = movingPlanId
     ? archive.folders.find((f) => f.plans.some((p) => p.id === movingPlanId))
+    : null
+  const deletingFolder = deletingFolderId
+    ? archive.folders.find((f) => f.id === deletingFolderId)
     : null
 
   function toggleExpanded(planId: string) {
@@ -147,6 +156,16 @@ export function ArchivedPlansModal({
     closeNested()
   }
 
+  function handleDeleteFolder(folderId: string) {
+    const folder = archive.folders.find((f) => f.id === folderId)
+    if (!folder || folder.id === UNFILED_FOLDER_ID) return
+    if (folder.plans.length === 0) {
+      onChange(removeArchiveFolder(archive, folderId))
+      return
+    }
+    setDeletingFolderId(folderId)
+  }
+
   function handleDeletePlan(plan: ArchivedPlan, folder: ArchiveFolder) {
     const label = plan.name?.trim() || 'Untitled plan'
     const { archive: next, removed } = removeArchivedPlan(archive, plan.id)
@@ -170,6 +189,9 @@ export function ArchivedPlansModal({
     onRename: (plan: ArchivedPlan) => {
       setRenamingPlanId(plan.id)
       setNameInput(plan.name ?? '')
+    },
+    onSetColor: (plan: ArchivedPlan, color: string | undefined) => {
+      onChange(setArchivedPlanColor(archive, plan.id, color))
     },
     onMove: (plan: ArchivedPlan) => setMovingPlanId(plan.id),
     onDelete: handleDeletePlan,
@@ -230,6 +252,7 @@ export function ArchivedPlansModal({
                     onToggleExpanded={() => toggleExpanded(plan.id)}
                     onAddToHome={() => onAddToHome(plan)}
                     onRename={() => rowActions.onRename(plan)}
+                    onSetColor={(color) => rowActions.onSetColor(plan, color)}
                     onMove={() => rowActions.onMove(plan)}
                     onDelete={() => handleDeletePlan(plan, folder)}
                   />
@@ -241,11 +264,8 @@ export function ArchivedPlansModal({
               <FolderSection
                 key={folder.id}
                 folder={folder}
-                canMoveUp={folderIndex > 1}
-                canMoveDown={
-                  folder.id !== UNFILED_FOLDER_ID &&
-                  folderIndex < archive.folders.length - 1
-                }
+                canMoveUp={folderIndex > 0}
+                canMoveDown={folderIndex < archive.folders.length - 1}
                 expandedPlanId={expandedPlanId}
                 collapsed={collapsedFolderIds.has(folder.id)}
                 onToggleCollapsed={() => toggleFolderCollapsed(folder.id)}
@@ -259,12 +279,11 @@ export function ArchivedPlansModal({
                 onMoveDown={() =>
                   onChange(moveArchiveFolder(archive, folder.id, 1))
                 }
-                onDelete={() =>
-                  onChange(removeArchiveFolder(archive, folder.id))
-                }
+                onDelete={() => handleDeleteFolder(folder.id)}
                 onToggleExpanded={toggleExpanded}
                 onAddToHome={onAddToHome}
                 onRenamePlan={rowActions.onRename}
+                onSetColor={(plan, color) => rowActions.onSetColor(plan, color)}
                 onMovePlan={rowActions.onMove}
                 onDeletePlan={(plan) => handleDeletePlan(plan, folder)}
                 onReorder={(from, to) =>
@@ -320,82 +339,32 @@ export function ArchivedPlansModal({
         />
       )}
       {movingPlan && movingFromFolder && (
-        <div
-          className="modal-backdrop modal-backdrop-nested"
-          role="presentation"
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) closeNested()
+        <FolderPickDialog
+          title="Move to folder"
+          folders={archive.folders}
+          currentFolderId={movingFromFolder.id}
+          onPick={(folderId) => {
+            onChange(
+              moveArchivedPlanToFolder(archive, movingPlan.id, folderId),
+            )
+            closeNested()
           }}
-        >
-          <div
-            className="modal-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Move to folder"
-          >
-            <div className="modal-header">
-              <h2>Move to folder</h2>
-              <button
-                type="button"
-                className="icon-btn"
-                aria-label="Close"
-                onClick={closeNested}
-              >
-                ×
-              </button>
-            </div>
-            <div className="modal-body archived-move-body">
-              <ul className="archived-move-list" role="listbox">
-                {archive.folders.map((folder) => {
-                  const current = folder.id === movingFromFolder.id
-                  return (
-                    <li key={folder.id}>
-                      <button
-                        type="button"
-                        role="option"
-                        aria-selected={current}
-                        className={
-                          current
-                            ? 'archived-move-option is-current'
-                            : 'archived-move-option'
-                        }
-                        disabled={current}
-                        onClick={() => {
-                          onChange(
-                            moveArchivedPlanToFolder(
-                              archive,
-                              movingPlan.id,
-                              folder.id,
-                            ),
-                          )
-                          closeNested()
-                        }}
-                      >
-                        <span className="archived-move-option-name">
-                          {folder.name}
-                        </span>
-                        {current && (
-                          <span className="archived-move-option-current">
-                            Current
-                          </span>
-                        )}
-                      </button>
-                    </li>
-                  )
-                })}
-              </ul>
-              <div className="modal-actions">
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-sm"
-                  onClick={closeNested}
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+          onCancel={closeNested}
+        />
+      )}
+      {deletingFolder && (
+        <FolderPickDialog
+          title="Delete folder"
+          hint={`Move ${deletingFolder.plans.length === 1 ? '1 plan' : `${deletingFolder.plans.length} plans`} from “${deletingFolder.name.trim() || 'Untitled'}” to:`}
+          folders={archive.folders.filter((f) => f.id !== deletingFolder.id)}
+          onPick={(folderId) => {
+            onChange(
+              removeArchiveFolder(archive, deletingFolder.id, folderId),
+            )
+            closeNested()
+          }}
+          onCancel={closeNested}
+        />
       )}
     </div>
   )
@@ -471,6 +440,93 @@ function NestedNameDialog({
   )
 }
 
+function FolderPickDialog({
+  title,
+  hint,
+  folders,
+  currentFolderId,
+  onPick,
+  onCancel,
+}: {
+  title: string
+  hint?: string
+  folders: ArchiveFolder[]
+  currentFolderId?: string
+  onPick: (folderId: string) => void
+  onCancel: () => void
+}) {
+  return (
+    <div
+      className="modal-backdrop modal-backdrop-nested"
+      role="presentation"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onCancel()
+      }}
+    >
+      <div
+        className="modal-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+      >
+        <div className="modal-header">
+          <h2>{title}</h2>
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label="Close"
+            onClick={onCancel}
+          >
+            ×
+          </button>
+        </div>
+        <div className="modal-body archived-move-body">
+          {hint && <p className="muted archived-move-hint">{hint}</p>}
+          <ul className="archived-move-list" role="listbox">
+            {folders.map((folder) => {
+              const current = folder.id === currentFolderId
+              return (
+                <li key={folder.id}>
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={current}
+                    className={
+                      current
+                        ? 'archived-move-option is-current'
+                        : 'archived-move-option'
+                    }
+                    disabled={current}
+                    onClick={() => onPick(folder.id)}
+                  >
+                    <span className="archived-move-option-name">
+                      {folder.name}
+                    </span>
+                    {current && (
+                      <span className="archived-move-option-current">
+                        Current
+                      </span>
+                    )}
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+          <div className="modal-actions">
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={onCancel}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function FolderSection({
   folder,
   canMoveUp,
@@ -485,6 +541,7 @@ function FolderSection({
   onToggleExpanded,
   onAddToHome,
   onRenamePlan,
+  onSetColor,
   onMovePlan,
   onDeletePlan,
   onReorder,
@@ -502,6 +559,7 @@ function FolderSection({
   onToggleExpanded: (planId: string) => void
   onAddToHome: (plan: ArchivedPlan) => void
   onRenamePlan: (plan: ArchivedPlan) => void
+  onSetColor: (plan: ArchivedPlan, color: string | undefined) => void
   onMovePlan: (plan: ArchivedPlan) => void
   onDeletePlan: (plan: ArchivedPlan) => void
   onReorder: (fromIndex: number, toIndex: number) => void
@@ -514,6 +572,7 @@ function FolderSection({
   const [dropLineIndex, setDropLineIndex] = useState<number | null>(null)
   const dropLineIndexRef = useRef<number | null>(null)
   const isUnfiled = folder.id === UNFILED_FOLDER_ID
+  const showFolderMenu = !isUnfiled || canMoveUp || canMoveDown
 
   useEffect(() => {
     dropLineIndexRef.current = dropLineIndex
@@ -658,7 +717,7 @@ function FolderSection({
             </span>
           )}
         </button>
-        {!isUnfiled && (
+        {showFolderMenu && (
           <div className="task-new-menu block-library-category-menu" ref={menuRef}>
             <button
               type="button"
@@ -672,20 +731,24 @@ function FolderSection({
             </button>
             {menuOpen && (
               <div className="task-new-menu-dropdown" role="menu">
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="calendar-menu-item"
-                  onClick={() => {
-                    setMenuOpen(false)
-                    onOpenRename()
-                  }}
-                >
-                  Rename
-                </button>
+                {!isUnfiled && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="calendar-menu-item"
+                    onClick={() => {
+                      setMenuOpen(false)
+                      onOpenRename()
+                    }}
+                  >
+                    Rename
+                  </button>
+                )}
                 {(canMoveUp || canMoveDown) && (
                   <>
-                    <div className="calendar-menu-sep" role="separator" />
+                    {!isUnfiled && (
+                      <div className="calendar-menu-sep" role="separator" />
+                    )}
                     {canMoveUp && (
                       <button
                         type="button"
@@ -714,18 +777,22 @@ function FolderSection({
                     )}
                   </>
                 )}
-                <div className="calendar-menu-sep" role="separator" />
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="calendar-menu-item"
-                  onClick={() => {
-                    setMenuOpen(false)
-                    onDelete()
-                  }}
-                >
-                  Delete folder
-                </button>
+                {!isUnfiled && (
+                  <>
+                    <div className="calendar-menu-sep" role="separator" />
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="calendar-menu-item"
+                      onClick={() => {
+                        setMenuOpen(false)
+                        onDelete()
+                      }}
+                    >
+                      Delete folder
+                    </button>
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -754,6 +821,7 @@ function FolderSection({
               }}
               onAddToHome={() => onAddToHome(plan)}
               onRename={() => onRenamePlan(plan)}
+              onSetColor={(color) => onSetColor(plan, color)}
               onMove={() => onMovePlan(plan)}
               onDelete={() => onDeletePlan(plan)}
             />
@@ -775,6 +843,7 @@ function ArchivedPlanRow({
   onToggleExpanded,
   onAddToHome,
   onRename,
+  onSetColor,
   onMove,
   onDelete,
 }: {
@@ -788,6 +857,7 @@ function ArchivedPlanRow({
   onToggleExpanded: () => void
   onAddToHome: () => void
   onRename: () => void
+  onSetColor: (color: string | undefined) => void
   onMove: () => void
   onDelete: () => void
 }) {
@@ -796,6 +866,11 @@ function ArchivedPlanRow({
   const accent = groupSidebarAccentColor(plan.color)
   const blockCount = plan.tasks.length
   const duration = formatDurationMinutes(stackDurationMinutes(plan.tasks))
+  const archivedOn = formatArchivedDate(plan.archivedAt)
+  const colorPickerValue =
+    plan.color && /^#[0-9a-fA-F]{6}$/.test(plan.color)
+      ? plan.color
+      : DEFAULT_GROUP_COLOR
   const showLineBefore =
     dropLineIndex === index &&
     dragIndex != null &&
@@ -855,6 +930,7 @@ function ArchivedPlanRow({
               {folderLabel ? `${folderLabel} · ` : ''}
               {blockCount} {blockCount === 1 ? 'block' : 'blocks'}
               {blockCount > 0 ? ` · ${duration}` : ''}
+              {archivedOn ? ` · ${archivedOn}` : ''}
             </span>
           </span>
         </button>
@@ -882,7 +958,7 @@ function ArchivedPlanRow({
                   onAddToHome()
                 }}
               >
-                Add to Home
+                Add copy to home
               </button>
               <button
                 type="button"
@@ -895,6 +971,18 @@ function ArchivedPlanRow({
               >
                 Rename
               </button>
+              <label className="calendar-menu-item group-color-menu-item">
+                <span>Change color</span>
+                <input
+                  type="color"
+                  value={colorPickerValue}
+                  aria-label="Plan color"
+                  onChange={(e) => {
+                    const next = e.target.value
+                    onSetColor(next === DEFAULT_GROUP_COLOR ? undefined : next)
+                  }}
+                />
+              </label>
               <button
                 type="button"
                 role="menuitem"
@@ -904,7 +992,7 @@ function ArchivedPlanRow({
                   onMove()
                 }}
               >
-                Move to folder…
+                Move to folder
               </button>
               <div className="calendar-menu-sep" role="separator" />
               <button

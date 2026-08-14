@@ -117,7 +117,9 @@ testing.
   + `BlockGroup.intendedEndAt` synced via Firestore). Calendar stack-drag is
   off while executing; planning Starts/Ends remains available after ending
   execution. Per-block `done` toggles (pending ↔ finished) live only in the
-  execution sidebar and clear when execution ends.
+  execution sidebar and clear when execution ends. A run auto-ends 2 hours
+  after the last non-disabled block (same as End run). Opening or reopening
+  a run expands the group; the execution sidebar never renders it collapsed.
 - **Checkpoints are per-group, inline, single-slot.** `BlockGroup.checkpoint`
   holds at most one saved snapshot (tasks + anchor); "drift" is computed by
   comparing title/duration/empty/delay/disabled in order plus anchor
@@ -130,7 +132,7 @@ testing.
 - **Firestore sync is last-write-wins at the whole-document level** (one doc
   per user at `users/{uid}`, no field-level merge). Local edits debounce
   ~2s before writing. Archived plans live in `planArchive` on that doc,
-  not inside `Plan.groups` — Home stays the live stack; Add to Home clones
+  not inside `Plan.groups` — Home stays the live stack; Add copy to home clones
   with new ids (push history does not come along).
 - **No comments that narrate the obvious.** Existing code favors short
   comments only where intent/trade-offs aren't obvious from the code itself

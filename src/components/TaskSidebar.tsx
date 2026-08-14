@@ -108,7 +108,7 @@ type TaskSidebarProps = {
   onGotDelayed: (groupId: string) => void
   onExecutePlan?: (groupId: string) => void
   onIntendedEndChange?: (groupId: string, intendedEndAt: string) => void
-  /** When set, another group is already running (hides Start run on others). */
+  /** When set, another group is already running (hides Start on others). */
   executingGroupId?: string | null
   /** Planning sidebar vs single-group execution panel. */
   mode?: 'planning' | 'execution'
@@ -633,7 +633,7 @@ function GroupColorMenuItem({
 }) {
   return (
     <label className="calendar-menu-item group-color-menu-item">
-      <span>Set color</span>
+      <span>Change color</span>
       <input
         type="color"
         value={value}
@@ -1039,7 +1039,7 @@ function BlockGroupPanel({
             onOpenName()
           }}
         >
-          Set name
+          Rename
         </button>
         {enabled && (
           <GroupColorMenuItem
@@ -1145,6 +1145,26 @@ function BlockGroupPanel({
         )}
       </div>,
       document.body,
+    )
+  }
+
+  function renderListMenu() {
+    return (
+      <div className="task-new-menu" ref={listMenuRef}>
+        <button
+          type="button"
+          ref={listMenuTriggerRef}
+          className="btn btn-text btn-icon task-new-menu-btn"
+          aria-label="Block group options"
+          aria-expanded={listMenuOpen}
+          aria-haspopup="true"
+          disabled={busy}
+          onClick={() => setListMenuOpen((open) => !open)}
+        >
+          ···
+        </button>
+        {renderListMenuDropdown()}
+      </div>
     )
   }
 
@@ -1379,7 +1399,7 @@ function BlockGroupPanel({
     document.addEventListener('pointercancel', onUp)
   }
 
-  if (!enabled) {
+  if (!enabled && mode !== 'execution') {
     return (
       <section
         className={[
@@ -1402,16 +1422,15 @@ function BlockGroupPanel({
             aria-expanded={false}
             aria-label={
               isExecutingPlan
-                ? 'Turn on and expand running group'
-                : 'Turn on and expand group'
+                ? 'Expand running group'
+                : 'Expand group'
             }
             title={
               isExecutingPlan
-                ? 'Turn on and expand running group'
-                : 'Turn on and expand group'
+                ? 'Expand running group'
+                : 'Expand group'
             }
           >
-            <PowerIndicator enabled={enabled} />
             <span className="block-group-collapsed-title">
               {collapsedLabel}
               {totalDurationMinutes > 0 && (
@@ -1429,24 +1448,10 @@ function BlockGroupPanel({
               disabled={busy}
               onClick={onExecutePlan}
             >
-              {isExecutingPlan ? 'Running' : 'Start run'}
+              {isExecutingPlan ? 'Running' : 'Start'}
             </button>
           )}
-          <div className="task-new-menu" ref={listMenuRef}>
-            <button
-              type="button"
-              ref={listMenuTriggerRef}
-              className="btn btn-text btn-icon task-new-menu-btn"
-              aria-label="Block group options"
-              aria-expanded={listMenuOpen}
-              aria-haspopup="true"
-              disabled={busy}
-              onClick={() => setListMenuOpen((open) => !open)}
-            >
-              ···
-            </button>
-            {renderListMenuDropdown()}
-          </div>
+          {renderListMenu()}
         </div>
       </section>
     )
@@ -1463,10 +1468,9 @@ function BlockGroupPanel({
               onClick={() => handlePowerChange(false)}
               disabled={busy}
               aria-expanded={true}
-              aria-label="Turn off and collapse group"
-              title="Turn off and collapse group"
+              aria-label="Collapse group"
+              title="Collapse group"
             >
-              <PowerIndicator enabled={enabled} />
               <span className="stack-anchor-name">{collapsedLabel}</span>
             </button>
             {canExecutePlan && onExecutePlan && (
@@ -1476,66 +1480,70 @@ function BlockGroupPanel({
                 disabled={busy}
                 onClick={onExecutePlan}
               >
-                {isExecutingPlan ? 'Running' : 'Start run'}
+                {isExecutingPlan ? 'Running' : 'Start'}
               </button>
             )}
+            {renderListMenu()}
           </div>
         )}
         <div className="stack-anchor-row">
           {mode === 'execution' ? (
             <>
-              <span className="execution-started-label">Start</span>
-              <label className="stack-anchor-time">
-                <span className="sr-only">List starts at</span>
-                <input
-                  type="time"
-                  step={300}
-                  value={toLocalTimeValue(anchor.at)}
-                  onChange={(e) => {
-                    applyTimeInputChange(e.target.value, anchor.at, (iso) =>
-                      onAnchorChange({ ...anchor, at: iso }),
-                    )
-                  }}
-                  onKeyDown={(e) =>
-                    handleTimeKeyDown(e, anchor.at, (iso) =>
-                      onAnchorChange({ ...anchor, at: iso }),
-                    )
-                  }
-                  onPointerDown={beginAnchorScrub}
-                />
-              </label>
-              {group.intendedEndAt && onIntendedEndChange && (
-                <>
-                  <span className="execution-times-gap" aria-hidden="true" />
-                  <span className="execution-started-label">Intended End</span>
-                  <label className="stack-anchor-time execution-delay-intended">
-                    <span className="sr-only">Intended end time</span>
-                    <input
-                      type="time"
-                      step={300}
-                      value={toLocalTimeValue(group.intendedEndAt)}
-                      disabled={busy}
-                      onChange={(e) => {
-                        if (!group.intendedEndAt) return
-                        applyTimeInputChange(
-                          e.target.value,
-                          group.intendedEndAt,
-                          onIntendedEndChange,
-                        )
-                      }}
-                      onKeyDown={(e) => {
-                        if (!group.intendedEndAt) return
-                        handleTimeKeyDown(
-                          e,
-                          group.intendedEndAt,
-                          onIntendedEndChange,
-                        )
-                      }}
-                      onPointerDown={beginIntendedEndScrub}
-                    />
-                  </label>
-                </>
-              )}
+              <div className="stack-anchor-times">
+                <span className="execution-started-label">Start</span>
+                <label className="stack-anchor-time">
+                  <span className="sr-only">List starts at</span>
+                  <input
+                    type="time"
+                    step={300}
+                    value={toLocalTimeValue(anchor.at)}
+                    onChange={(e) => {
+                      applyTimeInputChange(e.target.value, anchor.at, (iso) =>
+                        onAnchorChange({ ...anchor, at: iso }),
+                      )
+                    }}
+                    onKeyDown={(e) =>
+                      handleTimeKeyDown(e, anchor.at, (iso) =>
+                        onAnchorChange({ ...anchor, at: iso }),
+                      )
+                    }
+                    onPointerDown={beginAnchorScrub}
+                  />
+                </label>
+                {group.intendedEndAt && onIntendedEndChange && (
+                  <>
+                    <span className="execution-times-gap" aria-hidden="true" />
+                    <span className="execution-started-label">Intended End</span>
+                    <label className="stack-anchor-time execution-delay-intended">
+                      <span className="sr-only">Intended end time</span>
+                      <input
+                        type="time"
+                        step={300}
+                        value={toLocalTimeValue(group.intendedEndAt)}
+                        disabled={busy}
+                        onChange={(e) => {
+                          if (!group.intendedEndAt) return
+                          applyTimeInputChange(
+                            e.target.value,
+                            group.intendedEndAt,
+                            onIntendedEndChange,
+                          )
+                        }}
+                        onKeyDown={(e) => {
+                          if (!group.intendedEndAt) return
+                          handleTimeKeyDown(
+                            e,
+                            group.intendedEndAt,
+                            onIntendedEndChange,
+                          )
+                        }}
+                        onPointerDown={beginIntendedEndScrub}
+                      />
+                    </label>
+                  </>
+                )}
+              </div>
+              {renderListMenu()}
             </>
           ) : (
             <>
@@ -1975,48 +1983,35 @@ function BlockGroupPanel({
                   <span className="task-new-trigger-label">Custom</span>
                 </button>
               </div>
-              <div className="task-new-list-actions">
-                <div className="task-new-menu" ref={listMenuRef}>
-                  <button
-                    type="button"
-                    ref={listMenuTriggerRef}
-                    className="btn btn-text btn-icon task-new-menu-btn"
-                    aria-label="Block group options"
-                    aria-expanded={listMenuOpen}
-                    aria-haspopup="true"
-                    disabled={busy}
-                    onClick={() => setListMenuOpen((open) => !open)}
-                  >
-                    ···
-                  </button>
-                  {renderListMenuDropdown()}
-                </div>
-                {hasCheckpointDrift && (
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-sm task-new-revert"
-                    disabled={busy}
-                    title="Restore this group's default blocks"
-                    onClick={() => onRevertToCheckpoint()}
-                  >
-                    <RevertIcon />
-                    Revert
-                  </button>
-                )}
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-sm task-new-commit"
-                  onClick={onOpenCommit}
-                  disabled={busy || (!isUpdate && tasks.length === 0)}
-                >
-                  {commitLabel}
-                  <CalendarIcon />
-                </button>
-              </div>
             </div>
           )}
         </li>
       </ul>
+      <div className="block-group-footer">
+        <div className="task-new-list-actions">
+          {mode !== 'execution' && hasCheckpointDrift && (
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm task-new-revert"
+              disabled={busy}
+              title="Restore this group's default blocks"
+              onClick={() => onRevertToCheckpoint()}
+            >
+              <RevertIcon />
+              Revert
+            </button>
+          )}
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm task-new-commit"
+            onClick={onOpenCommit}
+            disabled={busy || (!isUpdate && tasks.length === 0)}
+          >
+            {commitLabel}
+            <CalendarIcon />
+          </button>
+        </div>
+      </div>
     </section>
   )
 }
@@ -2145,36 +2140,6 @@ function RevertIcon() {
     >
       <path d="M1 4v6h6" />
       <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
-    </svg>
-  )
-}
-
-function PowerIndicator({ enabled }: { enabled: boolean }) {
-  return (
-    <span
-      className={['power-toggle', enabled ? 'is-on' : ''].filter(Boolean).join(' ')}
-      aria-hidden
-    >
-      <PowerIcon />
-    </span>
-  )
-}
-
-function PowerIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d="M12 2v10" />
-      <path d="M18.4 6.6a9 9 0 1 1-12.77 0" />
     </svg>
   )
 }

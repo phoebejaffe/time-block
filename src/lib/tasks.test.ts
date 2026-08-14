@@ -33,6 +33,7 @@ import {
   planGotDelayed,
   toggleAnchorPreservingStack,
   isGroupExecutableNow,
+  shouldAutoEndExecution,
   getStackDelayOverrun,
   getStackEndStatus,
   prepareGroupForExecution,
@@ -768,6 +769,48 @@ describe('execution helpers', () => {
       isGroupExecutableNow(
         { ...group, enabled: false },
         new Date('2026-07-18T09:15:00.000Z'),
+      ),
+    ).toBe(false)
+  })
+
+  it('shouldAutoEndExecution is true 2 hours after the last active block', () => {
+    const group = { tasks, anchor: startAnchor }
+    // Stack is 09:00–10:30 UTC; auto-end at 12:30.
+    expect(
+      shouldAutoEndExecution(group, new Date('2026-07-18T10:30:00.000Z')),
+    ).toBe(false)
+    expect(
+      shouldAutoEndExecution(group, new Date('2026-07-18T12:29:59.000Z')),
+    ).toBe(false)
+    expect(
+      shouldAutoEndExecution(group, new Date('2026-07-18T12:30:00.000Z')),
+    ).toBe(true)
+  })
+
+  it('shouldAutoEndExecution ignores disabled trailing tasks', () => {
+    const group = {
+      tasks: [
+        ...tasks,
+        { id: 'd', title: 'D', durationMinutes: 60, disabled: true },
+      ],
+      anchor: startAnchor,
+    }
+    expect(
+      shouldAutoEndExecution(group, new Date('2026-07-18T12:30:00.000Z')),
+    ).toBe(true)
+    expect(
+      shouldAutoEndExecution(group, new Date('2026-07-18T13:29:59.000Z')),
+    ).toBe(true)
+  })
+
+  it('shouldAutoEndExecution is false when every task is disabled', () => {
+    expect(
+      shouldAutoEndExecution(
+        {
+          tasks: [{ id: 'a', title: 'A', durationMinutes: 30, disabled: true }],
+          anchor: startAnchor,
+        },
+        new Date('2026-07-18T20:00:00.000Z'),
       ),
     ).toBe(false)
   })

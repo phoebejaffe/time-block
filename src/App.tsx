@@ -28,10 +28,13 @@ import {
 import {
   anchorOnDay,
   applyTaskEditPreview,
+  executionAutoEndAt,
+  isGroupEnabled,
   isTaskDelay,
   localDateKey,
   pickViewDate,
   shiftAnchor,
+  shouldAutoEndExecution,
   startOfLocalDay,
   type StackAnchor,
   type Task,
@@ -229,6 +232,10 @@ export default function App() {
   }
 
   function handleBeginExecution(groupId: string) {
+    const group = plan.plan.groups.find((g) => g.id === groupId)
+    if (group && !isGroupEnabled(group)) {
+      plan.setGroupEnabled(groupId, true)
+    }
     if (executingGroupId === groupId) {
       setExecutionModalOpen(true)
       clear()
@@ -248,6 +255,33 @@ export default function App() {
     setExecutionModalOpen(false)
     clear()
   }
+
+  const handleEndExecutionRef = useRef(handleEndExecution)
+  handleEndExecutionRef.current = handleEndExecution
+
+  useEffect(() => {
+    if (!executingGroup) return
+
+    const endIfStale = () => {
+      if (shouldAutoEndExecution(executingGroup)) handleEndExecutionRef.current()
+    }
+
+    endIfStale()
+    const autoEndAt = executionAutoEndAt(executingGroup)
+    if (autoEndAt == null) return
+    const remaining = autoEndAt - Date.now()
+    if (remaining <= 0) return
+
+    const id = window.setTimeout(endIfStale, remaining)
+    const onResume = () => endIfStale()
+    document.addEventListener('visibilitychange', onResume)
+    window.addEventListener('focus', onResume)
+    return () => {
+      window.clearTimeout(id)
+      document.removeEventListener('visibilitychange', onResume)
+      window.removeEventListener('focus', onResume)
+    }
+  }, [executingGroup])
 
   function handleRemoveTask(groupId: string, taskId: string) {
     const group = plan.plan.groups.find((g) => g.id === groupId)
@@ -604,7 +638,7 @@ export default function App() {
           <button
             type="button"
             className="execution-banner-open"
-            onClick={() => setExecutionModalOpen(true)}
+            onClick={() => handleBeginExecution(executingGroup.id)}
           >
             Running {executingGroup.name?.trim() || 'Untitled plan'}
           </button>

@@ -68,8 +68,8 @@ export function HowItWorksModal({ onClose }: HowItWorksModalProps) {
             you aren&apos;t doing today.
           </p>
           <p>
-            For groups of blocks, you can turn a group off with the power control
-            when you don&apos;t want it on the calendar. The ··· menu covers
+            For groups of blocks, tap the group name to collapse it off the
+            calendar when you don&apos;t need it today. The ··· menu covers
             naming, color, saving a default list, revert, archiving a plan off
             Home, and clearing or deleting a group. Restore a fresh copy anytime
             from <strong>Archived plans</strong>.
@@ -94,7 +94,7 @@ export function HowItWorksModal({ onClose }: HowItWorksModalProps) {
 
           <h3>Run it</h3>
           <p>
-            When you&apos;re ready, <strong>Start run</strong> appears next to
+            When you&apos;re ready, <strong>Start</strong> appears next to
             the group title if the current time is within an hour of the block
             group. That opens a focused view of that one list beside the calendar
             to help you stay on track.
