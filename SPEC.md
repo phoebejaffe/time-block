@@ -496,7 +496,9 @@ Top to bottom:
      tasks (e.g. "Morning (1h 30m)"), and a small "···" overflow menu
      (Set name / Move up / Move down / Duplicate group / — separator — /
      Delete block group) — expand it again via the power toggle or by
-     tapping the row.
+     tapping the row. If this group is currently executing (§7.9), the
+     collapsed row is highlighted (blue wash matching the Running banner,
+     no grayscale) and keeps a **Running** button to reopen the run modal.
    - **Expanded** group:
      - **Name row**: a power toggle (turns the group off/collapses it) and
        the group's name (or its synthesized "Unnamed N" label), always
@@ -549,8 +551,8 @@ Top to bottom:
        something's currently pushed for this group+day) / Delete block
        group (disabled if it's the only remaining group). An inline
        **Revert** button appears next to the menu trigger whenever the
-       group has drifted from its saved checkpoint (§4.6). Finally, a
-       primary **"Add to calendar"** / **"Update calendar"** /
+       group has drifted from its saved checkpoint (§4.6). Finally, an
+       **"Add to calendar"** / **"Update calendar"** /
        **"Update calendars"** button (label swaps to Update once anything
        has been pushed for this group on the viewed day; plural when that
        group+day was pushed to more than one calendar; disabled while
@@ -732,7 +734,9 @@ for running one group against the clock:
    (or "End run" in the modal) clears `executingGroupId` and that
    group's `intendedEndAt` and any task `done` flags. After ending execution,
    the user may flip the group back to Ends in planning if they want. Only
-   one group may execute at a time.
+   one group may execute at a time. Collapsing the executing group in the
+   planning sidebar (power off) still leaves the run active: the collapsed
+   row is highlighted and its **Running** button reopens the modal.
 
 ## 8. Core interaction flows
 

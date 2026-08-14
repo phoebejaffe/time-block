@@ -1308,7 +1308,14 @@ function BlockGroupPanel({
   if (!enabled) {
     return (
       <section
-        className="block-group block-group-collapsed block-group-disabled"
+        className={[
+          'block-group',
+          'block-group-collapsed',
+          'block-group-disabled',
+          isExecutingPlan ? 'block-group-running' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
         style={groupStyle}
       >
         <div className="block-group-collapsed-row">
@@ -1318,8 +1325,16 @@ function BlockGroupPanel({
             onClick={() => onSetGroupEnabled(true)}
             disabled={busy}
             aria-expanded={false}
-            aria-label="Turn on and expand group"
-            title="Turn on and expand group"
+            aria-label={
+              isExecutingPlan
+                ? 'Turn on and expand running group'
+                : 'Turn on and expand group'
+            }
+            title={
+              isExecutingPlan
+                ? 'Turn on and expand running group'
+                : 'Turn on and expand group'
+            }
           >
             <PowerIndicator enabled={enabled} />
             <span className="block-group-collapsed-title">
@@ -1332,6 +1347,16 @@ function BlockGroupPanel({
               )}
             </span>
           </button>
+          {canExecutePlan && onExecutePlan && (
+            <button
+              type="button"
+              className="btn btn-primary btn-sm execution-start-btn"
+              disabled={busy}
+              onClick={onExecutePlan}
+            >
+              {isExecutingPlan ? 'Running' : 'Start run'}
+            </button>
+          )}
           <div className="task-new-menu" ref={listMenuRef}>
             <button
               type="button"
@@ -1905,7 +1930,7 @@ function BlockGroupPanel({
                 )}
                 <button
                   type="button"
-                  className="btn btn-primary btn-sm task-new-commit"
+                  className="btn btn-ghost btn-sm task-new-commit"
                   onClick={onOpenCommit}
                   disabled={busy || (!isUpdate && tasks.length === 0)}
                 >
