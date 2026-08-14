@@ -11,12 +11,12 @@ what's needed to understand structure and behavior.
 Timeblock is a single-page web app for **time-blocking your day**. A user
 signs in with Google, sees an overlay of their real Google Calendar events on
 a day/week grid, and drafts one or more ordered lists of "blocks" (tasks with
-a title and a duration) in a sidebar. Each list ("block group") is anchored
-to a single time — either "this group **starts** at 9:00am" or "this group
+a title and a duration) in a sidebar. Each list ("plan") is anchored
+to a single time — either "this plan **starts** at 9:00am" or "this plan
 **ends** at 5:00pm" — and the app lays the blocks out sequentially,
 back-to-back, from that anchor. The user can drag the whole stack around on
-the calendar, reorder/edit/delete individual blocks, reorder whole groups,
-save a group's blocks as a "default" checkpoint and revert back to it later,
+the calendar, reorder/edit/delete individual blocks, reorder whole plans,
+save a plan's blocks as a "default" checkpoint and revert back to it later,
 maintain a personal library of reusable blocks, and — when
 ready — push ("Add to calendar" / "Update") the resolved blocks as real
 events onto a chosen Google Calendar. The plan and all related settings sync
@@ -62,9 +62,10 @@ components (a sidebar and a calendar view):
 - `useCalendarEvents` — loads the list of the user's Google Calendars and the
   events visible in the calendar's current date range; tracks which
   calendars are toggled visible.
-- `usePlan` — in-memory CRUD for the "Plan" (the ordered block groups the
-  user is editing). This is *not* persisted directly; it's the local
-  editing buffer that gets mirrored to/from the cross-device store.
+- `usePlan` — in-memory CRUD for the "Plan" (the ordered `BlockGroup`s the
+  user is editing; the UI calls each one a plan). This is *not* persisted
+  directly; it's the local editing buffer that gets mirrored to/from the
+  cross-device store.
 - `useUserData` — owns everything that must sync across devices: the Plan
   (via a callback into `usePlan`), the block library, archived plans, the
   chosen "target calendar" for pushing, and calendar-push history. Uses a
@@ -80,7 +81,7 @@ components (a sidebar and a calendar view):
 
 Two data domains are kept deliberately separate:
 
-1. **Cross-device data** (synced via Firestore): the Plan (block groups,
+1. **Cross-device data** (synced via Firestore): the Plan (`BlockGroup`s,
    their tasks/anchors, and each group's optional saved checkpoint), the
    block library, archived plans, the chosen target calendar id, and the
    history of what's been pushed to Google Calendar (so the app can tell
@@ -166,9 +167,12 @@ type BlockGroup = {
 }
 ```
 
-A "Plan" is `{ groups: BlockGroup[] }` — the live **Home** stack. There is
-always at least one group; the UI never allows deleting or archiving the last
-remaining Home group. Archived whole-group templates live in a separate
+A "Plan" is `{ groups: BlockGroup[] }` — the live **Home** stack. The UI
+calls each `BlockGroup` a **plan**; the TypeScript `Plan` type is the Home
+stack of those plans. This document keeps the code names (`BlockGroup`,
+`Plan.groups`) in technical descriptions; quoted UI labels use “plan.”
+There is always at least one group; the UI never allows deleting or archiving
+the last remaining Home group. Archived whole-group templates live in a separate
 synced `planArchive` field (§4.9), not inside `groups`. Groups are edited
 independently — each has its own anchor, its own enabled state, its own
 checkpoint, and its own push history — and can be reordered top-to-bottom in
@@ -228,15 +232,13 @@ version of this group's blocks" that the user can always get back to after
 making one-off adjustments (e.g. a daily routine that gets tweaked day to
 day but should be easy to reset).
 
-- **Save as default / Update default blocks** snapshots the group's current
+- **Update default** snapshots the group's current
   tasks (title, duration, `empty`/`delay`/`disabled` flags, and order — no
   ids) and its current anchor (kind + datetime) as the checkpoint,
   overwriting any previous one.
-  The overflow menu labels this action "Save as default" if the group has no
-  checkpoint yet, or "Update default blocks" if it does; updating an existing
-  checkpoint asks for confirmation via a native dialog first. Only offered
-  while the group is enabled, and only when there either is no checkpoint yet
-  or the current group has "drifted" from it.
+  Updating an existing checkpoint asks for confirmation via a native dialog
+  first. Only offered while the group is enabled, and only when there either
+  is no checkpoint yet or the current group has "drifted" from it.
 - **Drift** is computed by comparing the group's current tasks against the
   checkpoint's tasks, in order, by title/duration/empty-state/delay/disabled
   (ids ignored; differing lengths always count as drifted), **and** — when
@@ -347,7 +349,7 @@ type PlanArchive = { folders: ArchiveFolder[]; updatedAt: string }
   folder should receive their plans, including Unfiled; an empty folder is
   removed immediately). All folders, including Unfiled, can be reordered
   with Move up / Move down.
-- **Archive block group** (group ··· menu) takes the live group off Home and writes a
+- **Archive** (plan ··· menu) takes the live group off Home and writes a
   snapshot into Unfiled: name, color, tasks (title/duration/empty/delay/
   disabled — no live ids, no `done`), optional checkpoint, and anchor kind +
   clock time. Google events already pushed for that group are left alone
@@ -358,7 +360,7 @@ type PlanArchive = { folders: ArchiveFolder[]; updatedAt: string }
 - **Add copy to home** stamps a *new* enabled group (fresh ids) onto the end of
   Home with copied tasks, name, color, and checkpoint. The archived original
   stays put. Anchor clock time is kept and remapped onto today (same idea as
-  Duplicate group). Push history does not come along. After add, the new
+  Duplicate). Push history does not come along. After add, the new
   group is scrolled into view and expanded. The archive modal stays open so
   several plans can be restored in one sitting.
 
@@ -543,14 +545,14 @@ Top to bottom:
 1. **Header row** — app name/logo mark, plus a settings menu button on the
    far side (an icon-only "hamburger"-style trigger opening a dropdown; see
    §7.5 for its menu contents).
-2. **A vertical list of "block group" panels**, one per group in the plan,
+2. **A vertical list of "plan" panels**, one per group in the plan,
    each independently either **expanded** or **collapsed**:
    - **Collapsed** group (its `enabled` flag is off): a single compact row
      showing the group's name (or a synthesized "Unnamed
      N" label) followed by its total duration in parens if it has any
      tasks (e.g. "Morning (1h 30m)"), and a small "···" overflow menu
-     (Rename / Move up / Move down / Duplicate group / — separator — /
-     Archive block group / Delete block group) — expand it again by tapping
+     (Rename / Move up / Move down / Duplicate / — separator — /
+     Archive / Delete) — expand it again by tapping
      the name. Archive is disabled on the last Home group and while
      that group is in a run. If this group is currently executing (§7.9),
      the collapsed row is highlighted (blue wash matching the Running
@@ -565,16 +567,16 @@ Top to bottom:
        right — positioned via a portal that flips above/below and clamps
        horizontally to stay on-screen, the same technique used by the
        block library picker — containing, when the group is enabled:
-       "Save as default"/"Update default blocks" (only shown while there's
+       "Update default" (only shown while there's
        no checkpoint yet or the blocks have drifted from it — see §4.6) /
        — separator — / Rename / a "Change color" swatch input / —
        separator — / Move up / Move down (either omitted if not
-       applicable) / Duplicate group / — separator — / Delete blocks from
-       calendar (disabled unless something's currently pushed for this
-       group+day) / — separator — / **Archive block group** (disabled if
+       applicable) / Duplicate / — separator — / **Archive** (disabled if
        it's the only remaining Home group, or while this group is in a
-       run) / Delete block group
-       (disabled if it's the only remaining group).
+       run) / Delete
+       (disabled if it's the only remaining group) / — separator — /
+       **Delete from calendar** (disabled unless something's currently
+       pushed for this group+day).
      - **Anchor row**: a two-state toggle button labeled "Starts" or "Ends"
        (tapping flips the anchor's `kind` and shifts `at` by the stack's
        total duration so the resolved blocks stay on the same calendar
@@ -623,8 +625,8 @@ Top to bottom:
        "soft-disabled" — clickable but styled inert — when the stack
        already exactly matches the last successful push) that opens the
        commit modal (§7.4).
-3. **"New group +"** and **"Archived plans"** at the bottom of the group
-   list, side by side. New group appends a fresh empty group (anchored to
+3. **"New plan +"** and **"Archived plans"** at the bottom of the group
+   list, side by side. New plan appends a fresh empty group (anchored to
    "ends at 9:00am today" by default). Archived plans opens the archive
    modal (§7.4) so restore is one tap from Home.
 
@@ -635,8 +637,8 @@ All modals share a common shell: a full-screen semi-transparent backdrop
 (title + "×" close button) and a body, rendered via a portal so they sit
 above everything else. Modals used:
 
-- **Name group** (opened via the group menu's "Rename" item) — one field
-  (group name); Cancel / Save.
+- **Rename plan** (opened via the plan menu's "Rename" item) — one field
+  (plan name); Cancel / Save.
 - **Commit to calendar** ("Add to calendar" / "Update calendar" /
   "Update calendars", titled based on whether this group+day has already
   been pushed and to how many calendars) — a multi-select
@@ -667,7 +669,7 @@ above everything else. Modals used:
   rather than being kept as "Untitled"). Deleting an already-saved block
   shows an "Undo" toast (§7.6), the same mechanism used for deleting a task
   from the plan.
-- **Archived plans** (opened from the sidebar footer next to "New group +"
+- **Archived plans** (opened from the sidebar footer next to "New plan +"
   or from the settings menu, under Block library) — a wider dialog
   patterned on Block library. Search at the top matches plan names and
   block titles; results flatten across folders with the folder name as a
@@ -767,7 +769,7 @@ duration, not the trailing icon buttons) reorders it within its list:
 
 ### 7.9 Execution mode
 
-Planning mode is for drafting multiple block groups. **Execution mode** is
+Planning mode is for drafting multiple plans. **Execution mode** is
 for running one group against the clock:
 
 1. **"Start"** (planning sidebar, to the right of the group's title
@@ -785,12 +787,12 @@ for running one group against the clock:
 3. **Execution modal** shows only that group's sidebar panel + the calendar
    filtered to that group. Starts is locked (no kind toggle). Stack-drag on
    the calendar is disabled; event click/select still works. Block
-   durations, order, add/delete, empty spacers, checkpoints (save/update
-   default blocks), library add, and calendar commit still work; the inline
+   durations, order, add/delete, empty spacers, checkpoints (Update
+   default), library add, and calendar commit still work; the inline
    **Revert** button is hidden. The group always renders **expanded**
    (never the collapsed row); the title row is hidden (no
    collapsing), and the "···" overflow sits on the Start / Intended End
-   row instead. **Delete block group** is omitted from the menu.
+   row instead. **Delete** is omitted from the menu.
    Start / Intended End / the end-status strip stay pinned at the top of the
    pane while the block list scrolls beneath. On open, the calendar scrolls
    so the group's blocks are in view. Calendar ‹ › are disabled when
@@ -856,8 +858,9 @@ Saving/updating a group's checkpoint and reverting to it show the same kind
 of "Undo" toast, restoring the exact previous checkpoint or task list,
 respectively (§4.6).
 
-Deleting a group requires a native `confirm()` dialog and is blocked (with
-an info toast) if it's the only group left. Duplicating a group inserts an
+Deleting a group requires a native `confirm()` dialog ("Delete this plan?")
+and is blocked (with an info toast: "Keep at least one plan.") if it's the
+only group left. Duplicating a group inserts an
 exact copy (fresh ids for the group and every task; tasks/anchor/name
 [unnamed]/color/enabled state/checkpoint are all copied) immediately after
 the source group. Reordering a group ("Move up"/"Move down" in its overflow

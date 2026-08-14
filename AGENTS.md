@@ -17,10 +17,10 @@ touching.
 Timeblock is a single-page **time-blocking** app: sign in with Google, see
 your real Google Calendar events overlaid on a day/week grid, and draft
 ordered lists of "blocks" (title + duration) in a sidebar. Each list
-("block group") is anchored to a single time — "**starts** at 9am" or
+("plan") is anchored to a single time — "**starts** at 9am" or
 "**ends** at 5pm" — and blocks lay out back-to-back from that anchor. You
 can drag a whole stack around the calendar, reorder/edit blocks, save a
-group's blocks as a reusable "default" checkpoint, keep a personal library
+plan's blocks as a reusable "default" checkpoint, keep a personal library
 of reusable blocks, archive whole plans off Home and stamp them back as
 fresh copies, and push ("Add"/"Update") the resolved blocks as real
 events onto a chosen Google Calendar. Everything syncs across devices via

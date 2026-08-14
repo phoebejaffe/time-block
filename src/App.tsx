@@ -304,10 +304,10 @@ export default function App() {
 
   function handleDeleteGroup(groupId: string) {
     if (plan.plan.groups.length <= 1) {
-      show('info', 'Keep at least one block group.')
+      show('info', 'Keep at least one plan.')
       return
     }
-    if (!window.confirm('Delete this block group?')) return
+    if (!window.confirm('Delete this plan?')) return
     if (executingGroupId === groupId) {
       setExecutingGroupId(null)
       setExecutionModalOpen(false)
@@ -330,7 +330,7 @@ export default function App() {
 
   function handleArchiveGroup(groupId: string) {
     if (plan.plan.groups.length <= 1) {
-      show('info', 'Keep at least one block group.')
+      show('info', 'Keep at least one plan.')
       return
     }
     if (executingGroupId === groupId) {
@@ -549,7 +549,7 @@ export default function App() {
         : calendarNames.map((name) => `“${name}”`).join(' and ')
     if (
       !window.confirm(
-        `Remove this group’s blocks from ${calendarLabel} for this day?`,
+        `Remove this plan’s blocks from ${calendarLabel} for this day?`,
       )
     ) {
       return

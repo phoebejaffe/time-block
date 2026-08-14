@@ -69,7 +69,7 @@ type ExecutionModalProps = {
 }
 
 /**
- * Full-screen execution UI for a single block group: editable stack (Starts
+ * Full-screen execution UI for a single plan: editable stack (Starts
  * locked) + calendar without stack-drag.
  */
 export function ExecutionModal({

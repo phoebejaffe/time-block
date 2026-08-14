@@ -446,7 +446,7 @@ export function TaskSidebar({
               onClick={onAddGroup}
               disabled={busy}
             >
-              New group +
+              New plan +
             </button>
             <button
               type="button"
@@ -532,7 +532,7 @@ export function TaskSidebar({
       )}
 
       {modal === 'name' && modalGroup && (
-        <Modal title="Name group" onClose={closeModal}>
+        <Modal title="Rename plan" onClose={closeModal}>
           <form className="modal-form" onSubmit={handleNameGroup}>
             <label>
               <span>Name</span>
@@ -638,7 +638,7 @@ function GroupColorMenuItem({
         type="color"
         value={value}
         disabled={disabled}
-        aria-label="Group color"
+        aria-label="Plan color"
         onChange={(e) => onChange(e.target.value)}
       />
     </label>
@@ -965,6 +965,7 @@ function BlockGroupPanel({
       let top = openUp
         ? triggerRect.top - dropdownHeight - gap
         : triggerRect.bottom + gap
+      top -= 4
       top = Math.max(pad, Math.min(top, window.innerHeight - pad - dropdownHeight))
       let left = triggerRect.right - dropdownWidth
       left = Math.max(pad, Math.min(left, window.innerWidth - dropdownWidth - pad))
@@ -1024,7 +1025,7 @@ function BlockGroupPanel({
                 onSaveCheckpoint()
               }}
             >
-              {group.checkpoint ? 'Update default blocks' : 'Save as default'}
+              Update default
             </button>
             <div className="calendar-menu-sep" role="separator" />
           </>
@@ -1091,28 +1092,11 @@ function BlockGroupPanel({
             onDuplicateGroup()
           }}
         >
-          Duplicate group
+          Duplicate
         </button>
-        <div className="calendar-menu-sep" role="separator" />
-        {enabled && (
-          <button
-            type="button"
-            role="menuitem"
-            className="calendar-menu-item"
-            disabled={busy || !onCalendar}
-            onClick={() => {
-              setListMenuOpen(false)
-              void onDeleteFromCalendar()
-            }}
-          >
-            Delete blocks from calendar
-          </button>
-        )}
         {mode !== 'execution' && (
           <>
-            {enabled && (
-              <div className="calendar-menu-sep" role="separator" />
-            )}
+            <div className="calendar-menu-sep" role="separator" />
             <button
               type="button"
               role="menuitem"
@@ -1122,7 +1106,7 @@ function BlockGroupPanel({
                 isExecutingPlan
                   ? 'End run first.'
                   : !canDeleteGroup
-                    ? 'Keep at least one block group.'
+                    ? 'Keep at least one plan.'
                     : undefined
               }
               onClick={() => {
@@ -1130,7 +1114,7 @@ function BlockGroupPanel({
                 onArchiveGroup()
               }}
             >
-              Archive block group
+              Archive
             </button>
             <button
               type="button"
@@ -1142,7 +1126,24 @@ function BlockGroupPanel({
                 onDeleteGroup()
               }}
             >
-              Delete block group
+              Delete
+            </button>
+          </>
+        )}
+        {enabled && (
+          <>
+            <div className="calendar-menu-sep" role="separator" />
+            <button
+              type="button"
+              role="menuitem"
+              className="calendar-menu-item"
+              disabled={busy || !onCalendar}
+              onClick={() => {
+                setListMenuOpen(false)
+                void onDeleteFromCalendar()
+              }}
+            >
+              Delete from calendar
             </button>
           </>
         )}
@@ -1158,7 +1159,7 @@ function BlockGroupPanel({
           type="button"
           ref={listMenuTriggerRef}
           className="btn btn-text btn-icon task-new-menu-btn"
-          aria-label="Block group options"
+          aria-label="Plan options"
           aria-expanded={listMenuOpen}
           aria-haspopup="true"
           disabled={busy}
@@ -1425,13 +1426,13 @@ function BlockGroupPanel({
             aria-expanded={false}
             aria-label={
               isExecutingPlan
-                ? 'Expand running group'
-                : 'Expand group'
+                ? 'Expand running plan'
+                : 'Expand plan'
             }
             title={
               isExecutingPlan
-                ? 'Expand running group'
-                : 'Expand group'
+                ? 'Expand running plan'
+                : 'Expand plan'
             }
           >
             <span className="block-group-collapsed-title">
@@ -1471,8 +1472,8 @@ function BlockGroupPanel({
               onClick={() => handlePowerChange(false)}
               disabled={busy}
               aria-expanded={true}
-              aria-label="Collapse group"
-              title="Collapse group"
+              aria-label="Collapse plan"
+              title="Collapse plan"
             >
               <span className="stack-anchor-name">{collapsedLabel}</span>
             </button>
@@ -1997,7 +1998,7 @@ function BlockGroupPanel({
               type="button"
               className="btn btn-ghost btn-sm task-new-revert"
               disabled={busy}
-              title="Restore this group's default blocks"
+              title="Restore this plan's default blocks"
               onClick={() => onRevertToCheckpoint()}
             >
               <RevertIcon />
