@@ -28,7 +28,7 @@ export function HowItWorksModal({ onClose }: HowItWorksModalProps) {
         aria-labelledby="how-it-works-title"
       >
         <div className="modal-header">
-          <h2 id="how-it-works-title">How Timeblock Works</h2>
+          <h2 id="how-it-works-title">How Timeblock works</h2>
           <button
             type="button"
             className="icon-btn"

@@ -598,6 +598,16 @@ export default function App() {
     (!import.meta.env.VITE_GOOGLE_CLIENT_ID ||
       String(import.meta.env.VITE_GOOGLE_CLIENT_ID).includes('your-client-id'))
   const missingFirebase = import.meta.env.DEV && !isFirebaseConfigured()
+  const buildTimeLabel = useMemo(() => {
+    const d = new Date(__BUILD_TIME__)
+    if (Number.isNaN(d.getTime())) return `Build time: ${__BUILD_TIME__}`
+    const date = `${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(-2)}`
+    const time = new Intl.DateTimeFormat(undefined, {
+      hour: 'numeric',
+      minute: '2-digit',
+    }).format(d)
+    return `Build time: ${date} at ${time}`
+  }, [])
 
   // After OAuth → app-body mounts; give flex layout a moment then the calendar
   // measures itself via ResizeObserver (pixel height, not percentage).
@@ -703,11 +713,15 @@ export default function App() {
                 Sign in with Google instead
               </button>
             )}
+          </div>
+          <div className="app-gate-footer">
+            <p className="app-gate-build">{buildTimeLabel}</p>
             <AuthSessionDiagnostics
               diagnostics={session.diagnostics}
               signedIn={session.signedIn}
               testBusy={session.testRefreshBusy}
               onTestRefresh={() => void session.testRefresh()}
+              compact
             />
           </div>
         </div>

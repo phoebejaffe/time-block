@@ -508,7 +508,9 @@ Three states, chosen by session/auth status:
    then **"Timeblock lets you draft plans that end when you need to leave, and
    compensate for delays as you go so you stay on time. Your plan syncs to
    your Google account, so sign in is required."**, and a single "Sign in with
-   Google" button. (A dev-only
+   Google" button. At the very bottom of the page (under the card, muted and
+   unboxed): build timestamp, then a low-key collapsible **"Session
+   diagnostics"** control (sentence case, no border/card chrome). (A dev-only
    banner appears above this if required env vars are missing, explaining
    which ones and to restart the dev server.)
 3. **Main app body** — a two-pane layout:
@@ -700,22 +702,24 @@ above everything else. Modals used:
   Empty archive: "Archive a plan from its ··· menu to tuck it off Home."
   Closed via header "×", click-outside, or Escape. Plans can be
   drag-reordered within a folder.
-- **How Timeblock Works** (help) — opens with why Timeblock exists (visualizing
+- **How Timeblock works** (help) — opens with why Timeblock exists (visualizing
   time for ADHD / time blindness), then a short narrative of planning and
   execution flows; opened from the settings menu.
 
 ### 7.5 Settings menu (sidebar header)
 
 An icon-button dropdown containing, top to bottom: "Block library" (opens
-that modal), "Archived plans" (opens the archive modal), "How Timeblock Works"
-(opens the help modal), "Share app" (copies `https://phoebejaffe.github.io/time-block/`
-to the clipboard and toasts "Link copied."), "Reload App" (clears
+that modal), "Archived plans" (opens the archive modal), — separator — /
+"How Timeblock works" (opens the help modal), "Share app" (copies
+`https://phoebejaffe.github.io/time-block/` to the clipboard and toasts
+"Link copied."), "Reload App" (clears
 Cache Storage / service workers if any, then navigates to the same URL with
 a cache-busting query so `index.html` and its hashed JS/CSS are fetched
 fresh — plain `location.reload()` is not enough on GitHub Pages / Safari),
-then either "Log out" or "Log in" depending on session state, and finally a
-small non-interactive line showing the app's build timestamp (for diagnosing
-which deployed version is running).
+then either "Log out" or "Log in" depending on session state, — separator — /
+a small non-interactive line showing the app's build timestamp (for diagnosing
+which deployed version is running), then the collapsible "Session diagnostics"
+panel.
 
 ### 7.6 Notices / toasts
 

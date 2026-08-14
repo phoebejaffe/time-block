@@ -127,6 +127,7 @@ export function SettingsMenu({
               Archived plans
             </button>
           )}
+          <div className="calendar-menu-sep" role="separator" />
           <button
             type="button"
             role="menuitem"
@@ -136,7 +137,7 @@ export function SettingsMenu({
               setHelpOpen(true)
             }}
           >
-            How Timeblock Works
+            How Timeblock works
           </button>
           <button
             type="button"
@@ -189,6 +190,8 @@ export function SettingsMenu({
                   Log in
                 </button>
               )}
+          <div className="calendar-menu-sep" role="separator" />
+          <p className="settings-menu-build">{buildTime}</p>
           {authDiagnostics && (
             <AuthSessionDiagnostics
               diagnostics={authDiagnostics}
@@ -198,7 +201,6 @@ export function SettingsMenu({
               compact
             />
           )}
-          <p className="settings-menu-build">{buildTime}</p>
         </div>
       )}
       {helpOpen && <HowItWorksModal onClose={() => setHelpOpen(false)} />}
