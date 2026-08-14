@@ -504,8 +504,11 @@ Three states, chosen by session/auth status:
 1. **Loading gate** — shown while the Google session is still restoring, or
    (once signed in) while the user's cross-device data is still loading
    from Firestore. Centered spinner + "Loading your plan…".
-2. **Signed-out gate** — centered card: app name/tagline, a short
-   description, and a single "Sign in with Google" button. (A dev-only
+2. **Signed-out gate** — centered card: heading **"Time blindness is real!"**,
+   then **"Timeblock lets you draft plans that end when you need to leave, and
+   compensate for delays as you go so you stay on time. Your plan syncs to
+   your Google account, so sign in is required."**, and a single "Sign in with
+   Google" button. (A dev-only
    banner appears above this if required env vars are missing, explaining
    which ones and to restart the dev server.)
 3. **Main app body** — a two-pane layout:
@@ -705,7 +708,8 @@ above everything else. Modals used:
 
 An icon-button dropdown containing, top to bottom: "Block library" (opens
 that modal), "Archived plans" (opens the archive modal), "How Timeblock Works"
-(opens the help modal), "Reload App" (clears
+(opens the help modal), "Share app" (copies `https://phoebejaffe.github.io/time-block/`
+to the clipboard and toasts "Link copied."), "Reload App" (clears
 Cache Storage / service workers if any, then navigates to the same URL with
 a cache-busting query so `index.html` and its hashed JS/CSS are fetched
 fresh — plain `location.reload()` is not enough on GitHub Pages / Safari),

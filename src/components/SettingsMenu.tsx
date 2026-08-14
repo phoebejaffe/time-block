@@ -23,6 +23,8 @@ type SettingsMenuProps = {
   onClearNotice?: () => void
 }
 
+const SHARE_APP_URL = 'https://phoebejaffe.github.io/time-block/'
+
 function formatBuildTime(iso: string): string {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return iso
@@ -54,6 +56,15 @@ export function SettingsMenu({
   const [libraryOpen, setLibraryOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const buildTime = useMemo(() => formatBuildTime(__BUILD_TIME__), [])
+
+  async function shareAppLink() {
+    try {
+      await navigator.clipboard.writeText(SHARE_APP_URL)
+      onShowNotice?.('Link copied.')
+    } catch {
+      onShowNotice?.("Couldn't copy the link.")
+    }
+  }
 
   useEffect(() => {
     if (!open) return
@@ -126,6 +137,17 @@ export function SettingsMenu({
             }}
           >
             How Timeblock Works
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="calendar-menu-item"
+            onClick={() => {
+              setOpen(false)
+              void shareAppLink()
+            }}
+          >
+            Share app
           </button>
           <button
             type="button"

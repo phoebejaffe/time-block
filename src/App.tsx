@@ -663,11 +663,11 @@ export default function App() {
       ) : !session.signedIn ? (
         <div className="app-gate">
           <div className="empty-state">
-            <h2>Your day, blocked out</h2>
+            <h2>Time blindness is real!</h2>
             <p>
               {session.diagnostics.canRecoverWithoutOauth
                 ? 'Silent sign-in failed after reopen (often a cold auth backend). Try Recover session below — you usually do not need the full Google consent popup.'
-                : 'Sign in with Google to overlay your calendars, then draft morning blocks that end when you need to leave. Your plan syncs to your Google account, so sign in is required to use it.'}
+                : 'Timeblock lets you draft plans that end when you need to leave, and compensate for delays as you go so you stay on time. Your plan syncs to your Google account, so sign in is required.'}
             </p>
             {session.diagnostics.canRecoverWithoutOauth ? (
               <button
