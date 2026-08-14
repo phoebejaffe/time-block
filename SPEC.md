@@ -48,9 +48,9 @@ the browser.
 - **No routing library** — the app is a single view; there is no client-side
   router.
 - **Installable (PWA icon):** the HTML shell links a web app manifest and
-  PNG icons derived from the favicon (green rounded square with a plus) so
-  Add to Home Screen / install uses that mark. There is no service worker
-  required for the icon itself.
+  PNG icons derived from the header brand mark (gradient green square with
+  faint vertical stripes) so Add to Home Screen / install uses that mark.
+  There is no service worker required for the icon itself.
 - **No app-level global state library** (no Redux/Zustand/etc.) — state is
   composed from several custom React hooks, wired together in one top-level
   component.
