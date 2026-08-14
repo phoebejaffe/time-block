@@ -15,6 +15,10 @@ import {
   type StackAnchor,
   type Task,
 } from '../lib/tasks'
+import {
+  blockGroupFromArchivedPlan,
+  type ArchivedPlan,
+} from '../lib/planArchive'
 
 function mapGroup(
   groups: BlockGroup[],
@@ -84,6 +88,31 @@ export function usePlan() {
         groups.splice(index + 1, 0, duplicate)
         return { groups }
       })
+    },
+    [updatePlan],
+  )
+
+  const insertGroupAt = useCallback(
+    (group: BlockGroup, index: number) => {
+      updatePlan((prev) => {
+        const groups = [...prev.groups]
+        const at = Math.max(0, Math.min(index, groups.length))
+        groups.splice(at, 0, group)
+        return { groups }
+      })
+    },
+    [updatePlan],
+  )
+
+  const addGroupFromArchived = useCallback(
+    (archived: ArchivedPlan) => {
+      let id = ''
+      updatePlan((prev) => {
+        const group = blockGroupFromArchivedPlan(archived)
+        id = group.id
+        return { groups: [...prev.groups, group] }
+      })
+      return id
     },
     [updatePlan],
   )
@@ -443,6 +472,8 @@ export function usePlan() {
     addGroup,
     removeGroup,
     duplicateGroup,
+    insertGroupAt,
+    addGroupFromArchived,
     moveGroup,
     addTask,
     addTasks,

@@ -58,6 +58,8 @@ import {
 } from './icons'
 import type { NoticeOptions } from '../lib/notice'
 import type { SessionDiagnostics } from '../lib/google'
+import type { ArchivedPlan, PlanArchive } from '../lib/planArchive'
+import { ArchivedPlansModal } from './ArchivedPlansModal'
 
 const timeFmt = new Intl.DateTimeFormat(undefined, {
   hour: 'numeric',
@@ -99,6 +101,7 @@ type TaskSidebarProps = {
   onAnchorChange: (groupId: string, anchor: StackAnchor) => void
   onDeleteGroup: (groupId: string) => void
   onDuplicateGroup: (groupId: string) => void
+  onArchiveGroup: (groupId: string) => void
   onMoveGroup: (groupId: string, direction: 'up' | 'down') => void
   onSaveCheckpoint: (groupId: string) => void
   onRevertToCheckpoint: (groupId: string) => void
@@ -139,6 +142,9 @@ type TaskSidebarProps = {
   pushSnapshots: PushSnapshot[]
   blockLibrary: BlockLibrary
   onReplaceBlockLibrary: (library: BlockLibrary) => void
+  planArchive: PlanArchive
+  onReplacePlanArchive: (archive: PlanArchive) => void
+  onAddArchivedToHome: (plan: ArchivedPlan) => string
   onShowNotice?: (text: string, options?: NoticeOptions) => void
   onClearNotice?: () => void
 }
@@ -155,6 +161,7 @@ export function TaskSidebar({
   onAnchorChange,
   onDeleteGroup,
   onDuplicateGroup,
+  onArchiveGroup,
   onMoveGroup,
   onSaveCheckpoint,
   onRevertToCheckpoint,
@@ -186,6 +193,9 @@ export function TaskSidebar({
   pushSnapshots,
   blockLibrary,
   onReplaceBlockLibrary,
+  planArchive,
+  onReplacePlanArchive,
+  onAddArchivedToHome,
   onShowNotice,
   onClearNotice,
 }: TaskSidebarProps) {
@@ -193,6 +203,9 @@ export function TaskSidebar({
   const [modal, setModal] = useState<ModalKind | null>(null)
   const [modalGroupId, setModalGroupId] = useState<string | null>(null)
   const [addingGroupId, setAddingGroupId] = useState<string | null>(null)
+  const [archivedPlansOpen, setArchivedPlansOpen] = useState(false)
+  const [scrollToGroupId, setScrollToGroupId] = useState<string | null>(null)
+  const blockGroupsRef = useRef<HTMLDivElement>(null)
   const [selectedCommitIds, setSelectedCommitIds] = useState<string[]>([])
   /** Snapshot of calendar order when the commit modal opens (selected first). */
   const [commitCalendarOrder, setCommitCalendarOrder] = useState<string[]>([])
@@ -230,6 +243,21 @@ export function TaskSidebar({
       onEditingIdChange(null)
     }
   }, [editingId, groups, onEditingIdChange])
+
+  useLayoutEffect(() => {
+    if (!scrollToGroupId) return
+    const el = blockGroupsRef.current?.querySelector(
+      `[data-group-id="${scrollToGroupId}"]`,
+    )
+    if (!el) return
+    el.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    setScrollToGroupId(null)
+  }, [scrollToGroupId, groups])
+
+  function handleAddFromArchive(archived: ArchivedPlan) {
+    const id = onAddArchivedToHome(archived)
+    setScrollToGroupId(id)
+  }
 
   function openModal(kind: ModalKind, groupId: string) {
     setModalGroupId(groupId)
@@ -337,6 +365,7 @@ export function TaskSidebar({
               onAuthTestRefresh={onAuthTestRefresh}
               blockLibrary={blockLibrary}
               onReplaceBlockLibrary={onReplaceBlockLibrary}
+              onOpenArchivedPlans={() => setArchivedPlansOpen(true)}
               onShowNotice={onShowNotice}
               onClearNotice={onClearNotice}
             />
@@ -344,7 +373,7 @@ export function TaskSidebar({
         </div>
       )}
 
-      <div className="block-groups">
+      <div className="block-groups" ref={blockGroupsRef}>
         {groups.map((group, index) => (
           <BlockGroupPanel
             key={group.id}
@@ -379,6 +408,7 @@ export function TaskSidebar({
             onAnchorChange={(anchor) => onAnchorChange(group.id, anchor)}
             onDeleteGroup={() => onDeleteGroup(group.id)}
             onDuplicateGroup={() => onDuplicateGroup(group.id)}
+            onArchiveGroup={() => onArchiveGroup(group.id)}
             onMoveGroupUp={() => onMoveGroup(group.id, 'up')}
             onMoveGroupDown={() => onMoveGroup(group.id, 'down')}
             onSaveCheckpoint={() => onSaveCheckpoint(group.id)}
@@ -409,14 +439,24 @@ export function TaskSidebar({
           />
         ))}
         {mode === 'planning' && (
-          <button
-            type="button"
-            className="task-new-group"
-            onClick={onAddGroup}
-            disabled={busy}
-          >
-            New group +
-          </button>
+          <div className="sidebar-group-actions">
+            <button
+              type="button"
+              className="task-new-group"
+              onClick={onAddGroup}
+              disabled={busy}
+            >
+              New group +
+            </button>
+            <button
+              type="button"
+              className="task-new-group"
+              onClick={() => setArchivedPlansOpen(true)}
+              disabled={busy}
+            >
+              Archived plans
+            </button>
+          </div>
         )}
       </div>
 
@@ -519,6 +559,17 @@ export function TaskSidebar({
         </Modal>
       )}
 
+      {archivedPlansOpen && (
+        <ArchivedPlansModal
+          archive={planArchive}
+          onChange={onReplacePlanArchive}
+          onAddToHome={handleAddFromArchive}
+          onClose={() => setArchivedPlansOpen(false)}
+          onShowNotice={onShowNotice}
+          onClearNotice={onClearNotice}
+        />
+      )}
+
     </aside>
   )
 }
@@ -545,6 +596,7 @@ type BlockGroupPanelProps = {
   onAnchorChange: (anchor: StackAnchor) => void
   onDeleteGroup: () => void
   onDuplicateGroup: () => void
+  onArchiveGroup: () => void
   onMoveGroupUp: () => void
   onMoveGroupDown: () => void
   onSaveCheckpoint: () => void
@@ -615,6 +667,7 @@ function BlockGroupPanel({
   onAnchorChange,
   onDeleteGroup,
   onDuplicateGroup,
+  onArchiveGroup,
   onMoveGroupUp,
   onMoveGroupDown,
   onSaveCheckpoint,
@@ -1056,18 +1109,39 @@ function BlockGroupPanel({
           </button>
         )}
         {mode !== 'execution' && (
-          <button
-            type="button"
-            role="menuitem"
-            className="calendar-menu-item"
-            disabled={busy || !canDeleteGroup}
-            onClick={() => {
-              setListMenuOpen(false)
-              onDeleteGroup()
-            }}
-          >
-            Delete block group
-          </button>
+          <>
+            <button
+              type="button"
+              role="menuitem"
+              className="calendar-menu-item"
+              disabled={busy || !canDeleteGroup || isExecutingPlan}
+              title={
+                isExecutingPlan
+                  ? 'End run first.'
+                  : !canDeleteGroup
+                    ? 'Keep at least one block group.'
+                    : undefined
+              }
+              onClick={() => {
+                setListMenuOpen(false)
+                onArchiveGroup()
+              }}
+            >
+              Archive
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="calendar-menu-item"
+              disabled={busy || !canDeleteGroup}
+              onClick={() => {
+                setListMenuOpen(false)
+                onDeleteGroup()
+              }}
+            >
+              Delete block group
+            </button>
+          </>
         )}
       </div>,
       document.body,
@@ -1316,6 +1390,7 @@ function BlockGroupPanel({
         ]
           .filter(Boolean)
           .join(' ')}
+        data-group-id={group.id}
         style={groupStyle}
       >
         <div className="block-group-collapsed-row">
@@ -1378,7 +1453,7 @@ function BlockGroupPanel({
   }
 
   return (
-    <section className="block-group" style={groupStyle}>
+    <section className="block-group" data-group-id={group.id} style={groupStyle}>
       <div className="stack-anchor">
         {mode !== 'execution' && (
           <div className="stack-anchor-name-row">

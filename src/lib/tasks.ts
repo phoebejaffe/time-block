@@ -212,7 +212,9 @@ export function isTaskDisabled(task: Pick<Task, 'disabled'>): boolean {
 }
 
 /** Sum of durations for blocks that still participate in the stack layout. */
-export function stackDurationMinutes(tasks: Task[]): number {
+export function stackDurationMinutes(
+  tasks: Array<Pick<Task, 'durationMinutes' | 'disabled'>>,
+): number {
   return tasks.reduce(
     (sum, task) =>
       isTaskDisabled(task) ? sum : sum + task.durationMinutes,

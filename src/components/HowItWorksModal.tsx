@@ -70,8 +70,9 @@ export function HowItWorksModal({ onClose }: HowItWorksModalProps) {
           <p>
             For groups of blocks, you can turn a group off with the power control
             when you don&apos;t want it on the calendar. The ··· menu covers
-            naming, color, saving a default list, revert, and clearing or deleting
-            a group.
+            naming, color, saving a default list, revert, archiving a plan off
+            Home, and clearing or deleting a group. Restore a fresh copy anytime
+            from <strong>Archived plans</strong>.
           </p>
           <p>
             When your block list is done, you can save it as a default so you can

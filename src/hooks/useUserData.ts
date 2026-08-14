@@ -22,6 +22,11 @@ import {
   type BlockLibrary,
   type Plan,
 } from '../lib/tasks'
+import {
+  defaultPlanArchive,
+  normalizePlanArchive,
+  type PlanArchive,
+} from '../lib/planArchive'
 
 /** Wait for a pause in edits before pushing — most edits arrive in bursts. */
 const PUSH_DEBOUNCE_MS = 2_000
@@ -36,10 +41,10 @@ type UseUserDataOptions = {
 
 /**
  * Owns everything that syncs across devices — the plan (via the caller's
- * `onRemotePlan`), block library, and the target-calendar choice — backed by
- * Firestore under `users/{uid}`. A real-time listener applies remote edits
- * instantly; local edits are debounced and written back with last-write-wins
- * on `updatedAt`.
+ * `onRemotePlan`), block library, archived plans, and the target-calendar
+ * choice — backed by Firestore under `users/{uid}`. A real-time listener
+ * applies remote edits instantly; local edits are debounced and written
+ * back with last-write-wins on `updatedAt`.
  *
  * Requires Firebase Auth (see `signInToFirebase` in lib/google.ts), which
  * runs after the Google OAuth exchange using the returned ID token.
@@ -47,6 +52,9 @@ type UseUserDataOptions = {
 export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions) {
   const [blockLibrary, setBlockLibrary] = useState<BlockLibrary>(() =>
     defaultBlockLibrary(),
+  )
+  const [planArchive, setPlanArchive] = useState<PlanArchive>(() =>
+    defaultPlanArchive(),
   )
   const [targetCalendarId, setTargetCalendarIdState] = useState('')
   const [pushedEvents, setPushedEvents] = useState<PushedEvent[]>([])
@@ -68,6 +76,7 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
   const stateRef = useRef({
     plan,
     blockLibrary,
+    planArchive,
     targetCalendarId,
     pushedEvents,
     pushSnapshots,
@@ -76,6 +85,7 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
   stateRef.current = {
     plan,
     blockLibrary,
+    planArchive,
     targetCalendarId,
     pushedEvents,
     pushSnapshots,
@@ -98,6 +108,7 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
       updatedAt: string
       plan: unknown
       blockLibrary: unknown
+      planArchive?: unknown
       targetCalendarId: unknown
       pushedEvents: unknown
       pushSnapshots: unknown
@@ -110,6 +121,11 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
         remote.blockLibrary != null
           ? normalizeBlockLibrary(remote.blockLibrary)
           : defaultBlockLibrary(),
+      )
+      setPlanArchive(
+        remote.planArchive != null
+          ? normalizePlanArchive(remote.planArchive)
+          : defaultPlanArchive(),
       )
       setTargetCalendarIdState(
         typeof remote.targetCalendarId === 'string' ? remote.targetCalendarId : '',
@@ -146,6 +162,7 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
     const {
       plan: p,
       blockLibrary: bl,
+      planArchive: pa,
       targetCalendarId: tc,
       pushedEvents: pe,
       pushSnapshots: ps,
@@ -156,6 +173,7 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
       updatedAt,
       plan: p,
       blockLibrary: bl,
+      planArchive: pa,
       targetCalendarId: tc,
       pushedEvents: pe,
       pushSnapshots: ps,
@@ -227,7 +245,7 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
     }
   }, [signedIn, firebaseUser, applyRemote, pushNow])
 
-  // Debounced push whenever the plan, block library, or target calendar change.
+  // Debounced push whenever synced user data changes.
   useEffect(() => {
     if (!signedIn || !firebaseUser || loading) return
     if (skipNextPushRef.current) {
@@ -254,10 +272,14 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
     return () => {
       if (pushTimerRef.current) clearTimeout(pushTimerRef.current)
     }
-  }, [plan, blockLibrary, targetCalendarId, pushedEvents, pushSnapshots, executingGroupId, signedIn, firebaseUser, loading, pushNow])
+  }, [plan, blockLibrary, planArchive, targetCalendarId, pushedEvents, pushSnapshots, executingGroupId, signedIn, firebaseUser, loading, pushNow])
 
   const replaceBlockLibrary = useCallback((next: BlockLibrary) => {
     setBlockLibrary(next)
+  }, [])
+
+  const replacePlanArchive = useCallback((next: PlanArchive) => {
+    setPlanArchive(next)
   }, [])
 
   const setTargetCalendarId = useCallback((id: string) => {
@@ -320,6 +342,7 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
     lastSyncedAtRef.current = null
     seededRef.current = false
     setBlockLibrary(defaultBlockLibrary())
+    setPlanArchive(defaultPlanArchive())
     setTargetCalendarIdState('')
     setPushedEvents([])
     setPushSnapshots([])
@@ -332,6 +355,7 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
 
   return {
     blockLibrary,
+    planArchive,
     targetCalendarId,
     pushedEvents,
     pushSnapshots,
@@ -341,6 +365,7 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
     status,
     syncError,
     replaceBlockLibrary,
+    replacePlanArchive,
     setTargetCalendarId,
     setExecutingGroupId,
     applyCalendarSync,

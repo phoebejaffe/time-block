@@ -7,6 +7,7 @@ import type {
   Task,
 } from '../lib/tasks'
 import { stackOccupiedLocalDays } from '../lib/tasks'
+import type { ArchivedPlan, PlanArchive } from '../lib/planArchive'
 import type { NoticeOptions } from '../lib/notice'
 import type { PushedEvent, PushSnapshot } from '../lib/pushedEvents'
 import { CalendarView } from './CalendarView'
@@ -55,6 +56,9 @@ type ExecutionModalProps = {
   pushSnapshots: PushSnapshot[]
   blockLibrary: BlockLibrary
   onReplaceBlockLibrary: (library: BlockLibrary) => void
+  planArchive: PlanArchive
+  onReplacePlanArchive: (archive: PlanArchive) => void
+  onAddArchivedToHome: (plan: ArchivedPlan) => string
   onShowNotice?: (text: string, options?: NoticeOptions) => void
   onClearNotice?: () => void
   onClose: () => void
@@ -104,6 +108,9 @@ export function ExecutionModal({
   pushSnapshots,
   blockLibrary,
   onReplaceBlockLibrary,
+  planArchive,
+  onReplacePlanArchive,
+  onAddArchivedToHome,
   onShowNotice,
   onClearNotice,
   onClose,
@@ -165,6 +172,7 @@ export function ExecutionModal({
           onAnchorChange={onAnchorChange}
           onDeleteGroup={() => {}}
           onDuplicateGroup={() => {}}
+          onArchiveGroup={() => {}}
           onMoveGroup={() => {}}
           onSaveCheckpoint={onSaveCheckpoint}
           onRevertToCheckpoint={onRevertToCheckpoint}
@@ -186,6 +194,9 @@ export function ExecutionModal({
           pushSnapshots={pushSnapshots}
           blockLibrary={blockLibrary}
           onReplaceBlockLibrary={onReplaceBlockLibrary}
+          planArchive={planArchive}
+          onReplacePlanArchive={onReplacePlanArchive}
+          onAddArchivedToHome={onAddArchivedToHome}
           onShowNotice={onShowNotice}
           onClearNotice={onClearNotice}
         />

@@ -6,6 +6,11 @@ import {
 } from 'firebase/firestore'
 import type { Plan, BlockLibrary } from './tasks'
 import { defaultBlockLibrary, normalizeBlockLibrary } from './tasks'
+import {
+  defaultPlanArchive,
+  normalizePlanArchive,
+  type PlanArchive,
+} from './planArchive'
 import type { PushSnapshot, PushedEvent } from './pushedEvents'
 import {
   normalizePushSnapshots,
@@ -22,6 +27,7 @@ export type SyncPayload = {
   updatedAt: string
   plan: Plan
   blockLibrary: BlockLibrary
+  planArchive: PlanArchive
   targetCalendarId: string
   pushedEvents: PushedEvent[]
   pushSnapshots: PushSnapshot[]
@@ -65,6 +71,10 @@ export function subscribeUserState(
           data.blockLibrary != null
             ? normalizeBlockLibrary(data.blockLibrary)
             : defaultBlockLibrary(),
+        planArchive:
+          data.planArchive != null
+            ? normalizePlanArchive(data.planArchive)
+            : defaultPlanArchive(),
         targetCalendarId:
           typeof data.targetCalendarId === 'string' ? data.targetCalendarId : '',
         pushedEvents: normalizePushedEvents(data.pushedEvents),

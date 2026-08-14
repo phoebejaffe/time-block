@@ -18,6 +18,7 @@ type SettingsMenuProps = {
   onAuthTestRefresh?: () => void
   blockLibrary: BlockLibrary
   onReplaceBlockLibrary: (library: BlockLibrary) => void
+  onOpenArchivedPlans?: () => void
   onShowNotice?: (text: string, options?: NoticeOptions) => void
   onClearNotice?: () => void
 }
@@ -44,6 +45,7 @@ export function SettingsMenu({
   onAuthTestRefresh,
   blockLibrary,
   onReplaceBlockLibrary,
+  onOpenArchivedPlans,
   onShowNotice,
   onClearNotice,
 }: SettingsMenuProps) {
@@ -101,6 +103,19 @@ export function SettingsMenu({
           >
             Block library
           </button>
+          {onOpenArchivedPlans && (
+            <button
+              type="button"
+              role="menuitem"
+              className="calendar-menu-item"
+              onClick={() => {
+                setOpen(false)
+                onOpenArchivedPlans()
+              }}
+            >
+              Archived plans
+            </button>
+          )}
           <button
             type="button"
             role="menuitem"

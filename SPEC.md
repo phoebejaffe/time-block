@@ -66,9 +66,9 @@ components (a sidebar and a calendar view):
   user is editing). This is *not* persisted directly; it's the local
   editing buffer that gets mirrored to/from the cross-device store.
 - `useUserData` — owns everything that must sync across devices: the Plan
-  (via a callback into `usePlan`), the block library, the chosen "target
-  calendar" for pushing, and calendar-push history. Uses a Firestore
-  real-time listener plus a debounced writer.
+  (via a callback into `usePlan`), the block library, archived plans, the
+  chosen "target calendar" for pushing, and calendar-push history. Uses a
+  Firestore real-time listener plus a debounced writer.
 - `useNotice` — small toast/snackbar state (success/error/info messages,
   optional "Undo" action button, optional auto-dismiss countdown).
 - `useSidebarWidth`, `useMobileSplit` — persist (to `localStorage`) and
@@ -82,9 +82,9 @@ Two data domains are kept deliberately separate:
 
 1. **Cross-device data** (synced via Firestore): the Plan (block groups,
    their tasks/anchors, and each group's optional saved checkpoint), the
-   block library, the chosen target calendar id, and the history of what's
-   been pushed to Google Calendar (so the app can tell "Add" from "Update"
-   and detect drift).
+   block library, archived plans, the chosen target calendar id, and the
+   history of what's been pushed to Google Calendar (so the app can tell
+   "Add" from "Update" and detect drift).
 2. **Device-local data** (kept in `localStorage`, never synced): whether the
    browser remembers the Google session, the sidebar width, and the
    mobile split percentage. A couple of legacy/local-only keys exist purely
@@ -166,8 +166,10 @@ type BlockGroup = {
 }
 ```
 
-A "Plan" is `{ groups: BlockGroup[] }`. There is always at least one group;
-the UI never allows deleting the last remaining group. Groups are edited
+A "Plan" is `{ groups: BlockGroup[] }` — the live **Home** stack. There is
+always at least one group; the UI never allows deleting or archiving the last
+remaining Home group. Archived whole-group templates live in a separate
+synced `planArchive` field (§4.9), not inside `groups`. Groups are edited
 independently — each has its own anchor, its own enabled state, its own
 checkpoint, and its own push history — and can be reordered top-to-bottom in
 the sidebar via explicit "Move up"/"Move down" menu actions (there is no
@@ -306,6 +308,57 @@ type PushSnapshot = {
   startISO, endISO], ...] })` for every non-empty resolved task, built from
   the *anchor* and the resolved tasks (so it changes if the anchor time,
   any title, or any duration/order changes).
+
+### 4.9 Archived plans (whole-group templates, off Home)
+
+Home stays a short stack of *live* groups. Everything else lives in an
+**Archived plans** library — whole-group templates, distinct from the block
+library (§4.7), which is for individual reusable blocks.
+
+```ts
+type ArchivedPlanTask = {
+  title: string
+  durationMinutes: number
+  empty?: boolean
+  delay?: boolean
+  disabled?: boolean
+}
+
+type ArchivedPlan = {
+  id: string
+  tasks: ArchivedPlanTask[]
+  anchor: StackAnchor          // kind + clock time; day is remapped on restore
+  archivedAt: string           // ISO
+  name?: string
+  color?: string
+  checkpoint?: BlockGroupCheckpoint
+}
+
+type ArchiveFolder = { id: string; name: string; plans: ArchivedPlan[] }
+
+type PlanArchive = { folders: ArchiveFolder[]; updatedAt: string }
+```
+
+- Stored as its own Firestore field (`users/{uid}.planArchive`), parallel to
+  `blockLibrary` — **not** inside `Plan.groups`.
+- Folders are a flat user-created list (no nesting). A built-in **Unfiled**
+  folder (id `unfiled`) always exists first and cannot be renamed or deleted;
+  user folders can be renamed, reordered (never above Unfiled), and deleted
+  (their plans move to Unfiled rather than vanishing).
+- **Archive** (group ··· menu) takes the live group off Home and writes a
+  snapshot into Unfiled: name, color, tasks (title/duration/empty/delay/
+  disabled — no live ids, no `done`), optional checkpoint, and anchor kind +
+  clock time. Google events already pushed for that group are left alone
+  (same as powering a group off). Disabled on the last remaining Home group
+  and while that group is in a run (toast: "End run first."). An Undo toast
+  restores the **same** group object (same ids, so push history still
+  matches) at its previous index and removes the archive snapshot.
+- **Add to Home** stamps a *new* enabled group (fresh ids) onto the end of
+  Home with copied tasks, name, color, and checkpoint. The archived original
+  stays put. Anchor clock time is kept and remapped onto today (same idea as
+  Duplicate group). Push history does not come along. After add, the new
+  group is scrolled into view and expanded. The archive modal stays open so
+  several plans can be restored in one sitting.
 
 ## 5. Authentication & authorization
 
@@ -495,10 +548,12 @@ Top to bottom:
      N" label) followed by its total duration in parens if it has any
      tasks (e.g. "Morning (1h 30m)"), and a small "···" overflow menu
      (Set name / Move up / Move down / Duplicate group / — separator — /
-     Delete block group) — expand it again via the power toggle or by
-     tapping the row. If this group is currently executing (§7.9), the
-     collapsed row is highlighted (blue wash matching the Running banner,
-     no grayscale) and keeps a **Running** button to reopen the run modal.
+     Archive / Delete block group) — expand it again via the power toggle or by
+     tapping the row. Archive is disabled on the last Home group and while
+     that group is in a run. If this group is currently executing (§7.9),
+     the collapsed row is highlighted (blue wash matching the Running
+     banner, no grayscale) and keeps a **Running** button to reopen the
+     run modal.
    - **Expanded** group:
      - **Name row**: a power toggle (turns the group off/collapses it) and
        the group's name (or its synthesized "Unnamed N" label), always
@@ -548,7 +603,9 @@ Top to bottom:
        Set name / a "Set color" swatch input / — separator — / Move up /
        Move down (either omitted if not applicable) / Duplicate group / —
        separator — / Delete blocks from calendar (disabled unless
-       something's currently pushed for this group+day) / Delete block
+       something's currently pushed for this group+day) / **Archive**
+       (disabled if it's the only remaining Home group, or while this
+       group is in a run) / Delete block
        group (disabled if it's the only remaining group). An inline
        **Revert** button appears next to the menu trigger whenever the
        group has drifted from its saved checkpoint (§4.6). Finally, an
@@ -564,8 +621,10 @@ Top to bottom:
        after end) — and no other group is already executing — an
        **"Start run"** button appears to the right of that group's
        title (§7.9).
-3. **"New group +"** button at the very bottom of the group list, appending
-   a fresh empty group (anchored to "ends at 9:00am today" by default).
+3. **"New group +"** and **"Archived plans"** at the bottom of the group
+   list, side by side. New group appends a fresh empty group (anchored to
+   "ends at 9:00am today" by default). Archived plans opens the archive
+   modal (§7.4) so restore is one tap from Home.
 
 ### 7.4 Modals
 
@@ -606,6 +665,24 @@ above everything else. Modals used:
   rather than being kept as "Untitled"). Deleting an already-saved block
   shows an "Undo" toast (§7.6), the same mechanism used for deleting a task
   from the plan.
+- **Archived plans** (opened from the sidebar footer next to "New group +"
+  or from the settings menu, under Block library) — a wider dialog
+  patterned on Block library. Search at the top matches plan names and
+  block titles; results flatten across folders with the folder name as a
+  quiet subtitle. Below that, named **folder** sections (flat, not nested;
+  Unfiled first; tapping a folder header collapses or expands it, with a
+  plan count when collapsed). Each row shows a left color bar, name, and muted
+  `N blocks · duration`; tapping the row expands it in place and shows the
+  archived blocks in a mini group panel (light grey wash, no heading/anchor
+  bar; white task-row list underneath). **Add to Home** in
+  the row ···
+  menu stamps a new copy onto Home and **leaves the modal open**. Row ···:
+  Add to Home / Rename / Move to folder… / Delete from archive (Undo toast).
+  Folder ··· (not on Unfiled): Rename / Move up/down / Delete folder (plans
+  go to Unfiled). **New folder +** opens a nested name dialog (Create).
+  Empty archive: "Archive a plan from its ··· menu to tuck it off Home."
+  Closed via header "×", click-outside, or Escape. Plans can be
+  drag-reordered within a folder.
 - **How Timeblock Works** (help) — opens with why Timeblock exists (visualizing
   time for ADHD / time blindness), then a short narrative of planning and
   execution flows; opened from the settings menu.
@@ -613,7 +690,8 @@ above everything else. Modals used:
 ### 7.5 Settings menu (sidebar header)
 
 An icon-button dropdown containing, top to bottom: "Block library" (opens
-that modal), "How Timeblock Works" (opens the help modal), "Reload App" (clears
+that modal), "Archived plans" (opens the archive modal), "How Timeblock Works"
+(opens the help modal), "Reload App" (clears
 Cache Storage / service workers if any, then navigates to the same URL with
 a cache-busting query so `index.html` and its hashed JS/CSS are fetched
 fresh — plain `location.reload()` is not enough on GitHub Pages / Safari),
@@ -868,6 +946,7 @@ whenever the calendar's visible date range changes.
 
 - One document per user at `users/{uid}` containing: `updatedAt` (ISO),
   `plan` (each group's checkpoint travels inline with it), `blockLibrary`,
+  `planArchive`,
   `targetCalendarId`, `pushedEvents`, `pushSnapshots`, `executingGroupId`
   (string or null — which group is in execution mode, if any).
 - **On sign-in**, subscribe to that document in real time:
@@ -881,7 +960,7 @@ whenever the calendar's visible date range changes.
     subscription's own initial write as one to *ignore* when it echoes
     back (to avoid re-processing your own write as if it were a remote
     change).
-- **On local edits** (to plan, block library, target calendar, push
+- **On local edits** (to plan, block library, archived plans, target calendar, push
   history, or executing group id), debounce ~2 seconds of inactivity, then
   overwrite the
   whole document with a fresh `updatedAt` — last-write-wins at the
@@ -1003,6 +1082,7 @@ in-app plan/tasks at all — it only removes calendar-side events.
 | --- | --- | --- |
 | Plan (groups/tasks/anchors/checkpoints/intendedEndAt) | Firestore `users/{uid}.plan` | Yes |
 | Block library | Firestore `users/{uid}.blockLibrary` | Yes |
+| Archived plans | Firestore `users/{uid}.planArchive` | Yes |
 | Target calendar id | Firestore `users/{uid}.targetCalendarId` | Yes |
 | Executing group id | Firestore `users/{uid}.executingGroupId` | Yes |
 | Calendar push history (events + snapshots) | Firestore `users/{uid}.pushedEvents` / `.pushSnapshots` | Yes |

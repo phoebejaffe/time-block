@@ -20,6 +20,12 @@ import { formatError } from './lib/errors'
 import { ensureWriteScope } from './lib/google'
 import { hasPushedGroupOnDay } from './lib/pushedEvents'
 import {
+  addArchivedPlan,
+  archivedPlanFromGroup,
+  removeArchivedPlan,
+  type ArchivedPlan,
+} from './lib/planArchive'
+import {
   anchorOnDay,
   applyTaskEditPreview,
   isTaskDelay,
@@ -286,6 +292,46 @@ export default function App() {
     plan.duplicateGroup(groupId)
     handleEditingIdChange(null)
     clear()
+  }
+
+  function handleArchiveGroup(groupId: string) {
+    if (plan.plan.groups.length <= 1) {
+      show('info', 'Keep at least one block group.')
+      return
+    }
+    if (executingGroupId === groupId) {
+      show('info', 'End run first.')
+      return
+    }
+    const index = plan.plan.groups.findIndex((g) => g.id === groupId)
+    const group = index >= 0 ? plan.plan.groups[index] : undefined
+    if (!group) return
+
+    const snapshot = archivedPlanFromGroup(group)
+    const nextArchive = addArchivedPlan(userData.planArchive, snapshot)
+    userData.replacePlanArchive(nextArchive)
+    plan.removeGroup(groupId)
+    handleEditingIdChange(null)
+
+    const label = group.name?.trim() || 'Untitled plan'
+    show('info', `"${label}" archived`, {
+      actionLabel: 'Undo',
+      progressMs: 5_000,
+      onAction: () => {
+        plan.insertGroupAt(group, index)
+        userData.replacePlanArchive(
+          removeArchivedPlan(nextArchive, snapshot.id).archive,
+        )
+        clear()
+      },
+    })
+  }
+
+  function handleAddArchivedToHome(archived: ArchivedPlan) {
+    const id = plan.addGroupFromArchived(archived)
+    handleEditingIdChange(null)
+    clear()
+    return id
   }
 
   function handleMoveGroup(groupId: string, direction: 'up' | 'down') {
@@ -648,6 +694,7 @@ export default function App() {
             }}
             onDeleteGroup={handleDeleteGroup}
             onDuplicateGroup={handleDuplicateGroup}
+            onArchiveGroup={handleArchiveGroup}
             onMoveGroup={handleMoveGroup}
             onSaveCheckpoint={handleSaveCheckpoint}
             onRevertToCheckpoint={handleRevertToCheckpoint}
@@ -677,6 +724,9 @@ export default function App() {
             pushSnapshots={userData.pushSnapshots}
             blockLibrary={userData.blockLibrary}
             onReplaceBlockLibrary={userData.replaceBlockLibrary}
+            planArchive={userData.planArchive}
+            onReplacePlanArchive={userData.replacePlanArchive}
+            onAddArchivedToHome={handleAddArchivedToHome}
             onShowNotice={(text, options) => show('info', text, options)}
             onClearNotice={clear}
           />
@@ -758,6 +808,9 @@ export default function App() {
             pushSnapshots={userData.pushSnapshots}
             blockLibrary={userData.blockLibrary}
             onReplaceBlockLibrary={userData.replaceBlockLibrary}
+            planArchive={userData.planArchive}
+            onReplacePlanArchive={userData.replacePlanArchive}
+            onAddArchivedToHome={handleAddArchivedToHome}
             onShowNotice={(text, options) => show('info', text, options)}
             onClearNotice={clear}
             onClose={() => setExecutionModalOpen(false)}
