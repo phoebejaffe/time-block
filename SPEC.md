@@ -560,8 +560,8 @@ Top to bottom:
        commit modal (§7.4). When wall-clock now is within one hour of the
        group's stack on today (from an hour before start through an hour
        after end) — and no other group is already executing — an
-       **"Execute this plan"** button appears at the bottom of that group's
-       block list (§7.9).
+       **"Execute this plan"** button appears to the right of that group's
+       title (§7.9).
 3. **"New group +"** button at the very bottom of the group list, appending
    a fresh empty group (anchored to "ends at 9:00am today" by default).
 
@@ -682,8 +682,8 @@ duration, not the trailing icon buttons) reorders it within its list:
 Planning mode is for drafting multiple block groups. **Execution mode** is
 for running one group against the clock:
 
-1. **"Execute this plan"** (planning sidebar, at the bottom of the group's
-   block list) appears on an enabled group when wall-clock now is within one
+1. **"Execute this plan"** (planning sidebar, to the right of the group's title
+   when expanded) appears on an enabled group when wall-clock now is within one
    hour of that group's stack on today (from an hour before start through an
    hour after end), and no other group is already executing. While **this**
    group is executing, the same button stays available (labeled **Executing

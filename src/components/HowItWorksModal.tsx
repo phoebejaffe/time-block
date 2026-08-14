@@ -95,7 +95,7 @@ export function HowItWorksModal({ onClose }: HowItWorksModalProps) {
           <p>
             When you&apos;re ready to execute your plan, enter{' '}
             <strong>execution mode</strong> to help you stay on track.{' '}
-            <strong>Execute this plan</strong> appears as an option when the
+            <strong>Execute this plan</strong> appears next to the group title when the
             current time is within an hour of the block group, so you can open a
             focused view of that one list beside the calendar.
           </p>

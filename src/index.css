@@ -378,6 +378,11 @@ body.is-sidebar-resizing .main-panel {
   min-width: 0;
 }
 
+.stack-anchor-name-row .block-group-header {
+  flex: 1;
+  width: auto;
+}
+
 .stack-anchor-name {
   min-width: 0;
   overflow: hidden;
@@ -2781,8 +2786,10 @@ body.is-task-reordering .task-sidebar {
 }
 
 .execution-start-btn {
-  margin-top: 0;
-  width: 100%;
+  flex: 0 0 auto;
+  width: auto;
+  margin: 0;
+  white-space: nowrap;
 }
 
 .execution-delayed-btn {

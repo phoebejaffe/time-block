@@ -1356,18 +1356,30 @@ function BlockGroupPanel({
     <section className="block-group" style={groupStyle}>
       <div className="stack-anchor">
         {mode !== 'execution' && (
-          <button
-            type="button"
-            className="block-group-header stack-anchor-name-row"
-            onClick={() => handlePowerChange(false)}
-            disabled={busy}
-            aria-expanded={true}
-            aria-label="Turn off and collapse group"
-            title="Turn off and collapse group"
-          >
-            <PowerIndicator enabled={enabled} />
-            <span className="stack-anchor-name">{collapsedLabel}</span>
-          </button>
+          <div className="stack-anchor-name-row">
+            <button
+              type="button"
+              className="block-group-header"
+              onClick={() => handlePowerChange(false)}
+              disabled={busy}
+              aria-expanded={true}
+              aria-label="Turn off and collapse group"
+              title="Turn off and collapse group"
+            >
+              <PowerIndicator enabled={enabled} />
+              <span className="stack-anchor-name">{collapsedLabel}</span>
+            </button>
+            {canExecutePlan && onExecutePlan && (
+              <button
+                type="button"
+                className="btn btn-primary btn-sm execution-start-btn"
+                disabled={busy}
+                onClick={onExecutePlan}
+              >
+                {isExecutingPlan ? 'Executing this plan' : 'Execute this plan'}
+              </button>
+            )}
+          </div>
         )}
         <div className="stack-anchor-row">
           {mode === 'execution' ? (
@@ -1905,16 +1917,6 @@ function BlockGroupPanel({
           )}
         </li>
       </ul>
-      {canExecutePlan && onExecutePlan && (
-        <button
-          type="button"
-          className="btn btn-primary btn-sm execution-start-btn"
-          disabled={busy}
-          onClick={onExecutePlan}
-        >
-          {isExecutingPlan ? 'Executing this plan' : 'Execute this plan'}
-        </button>
-      )}
     </section>
   )
 }
