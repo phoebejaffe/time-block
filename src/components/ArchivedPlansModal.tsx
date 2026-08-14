@@ -902,7 +902,7 @@ function ArchivedPlanRow({
       className={[
         'archived-plan-row',
         expanded ? 'is-expanded' : '',
-        dragIndex === index ? 'is-dragging' : '',
+        dragIndex != null && dragIndex === index ? 'is-dragging' : '',
         showLineBefore ? 'drop-line-before' : '',
       ]
         .filter(Boolean)
