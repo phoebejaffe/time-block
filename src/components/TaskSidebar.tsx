@@ -351,7 +351,7 @@ export function TaskSidebar({
         <div className="task-list-header">
           <div className="task-list-brand">
             <span className="brand-mark brand-mark-sm" aria-hidden />
-            <h3>Timeblock</h3>
+            <h3>Time Block</h3>
           </div>
           <div className="task-list-meta">
             <SettingsMenu

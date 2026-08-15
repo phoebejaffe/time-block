@@ -1,6 +1,6 @@
-# Timeblock — Application Specification
+# Time Block — Application Specification
 
-This document describes the "Timeblock" application in enough detail that it
+This document describes the "Time Block" application in enough detail that it
 could be rebuilt from scratch. It covers what the app does, its data model,
 architecture, external integrations, and UI/interaction behavior. It
 deliberately omits exact visual styling (colors, spacing, fonts) beyond
@@ -8,7 +8,7 @@ what's needed to understand structure and behavior.
 
 ## 1. Purpose / elevator pitch
 
-Timeblock is a single-page web app for **time-blocking your day**. A user
+Time Block is a single-page web app for **time-blocking your day**. A user
 signs in with Google, sees an overlay of their real Google Calendar events on
 a day/week grid, and drafts one or more ordered lists of "blocks" (tasks with
 a title and a duration) in a sidebar. Each list ("plan") is anchored
@@ -484,7 +484,7 @@ token is applied.
   user's plan — see §8) via `events.insert` / `events.patch` /
   `events.delete`. Every event created by this app carries a fixed
   description string identifying it as app-created (e.g. "Added via
-  Timeblock, with love ❤️"). Most accounts get a heart; a small Firebase
+  Time Block, with love ❤️"). Most accounts get a heart; a small Firebase
   Auth UID allowlist gets a weighted random love/seasonal emoji instead.
   Purely informational, not used for matching (matching is done via the
   tracked `PushedEvent` records instead, see §8).
@@ -505,10 +505,10 @@ Three states, chosen by session/auth status:
    (once signed in) while the user's cross-device data is still loading
    from Firestore. Centered spinner + "Loading your plan…".
 2. **Signed-out gate** — centered card: heading **"Time blindness is real!"**,
-   then **"Timeblock lets you draft plans that end when you need to leave, and
+   then **"Time Block lets you draft plans that end when you need to leave, and
    compensate for delays as you go so you stay on time. Your plan syncs to
-   your Google account, so sign in is required."**, and a single "Sign in with
-   Google" button. At the very bottom of the page (under the card, muted and
+   your Google account."**, and a single "Sign in with
+   Google" button. Anchored to the bottom-right of the viewport (muted and
    unboxed): build timestamp, then a low-key collapsible **"Session
    diagnostics"** control (sentence case, no border/card chrome). (A dev-only
    banner appears above this if required env vars are missing, explaining
@@ -702,7 +702,7 @@ above everything else. Modals used:
   Empty archive: "Archive a plan from its ··· menu to tuck it off Home."
   Closed via header "×", click-outside, or Escape. Plans can be
   drag-reordered within a folder.
-- **How Timeblock works** (help) — opens with why Timeblock exists (visualizing
+- **How Time Block works** (help) — opens with why Time Block exists (visualizing
   time for ADHD / time blindness), then a short narrative of planning and
   execution flows; opened from the settings menu.
 
@@ -710,7 +710,7 @@ above everything else. Modals used:
 
 An icon-button dropdown containing, top to bottom: "Block library" (opens
 that modal), "Archived plans" (opens the archive modal), — separator — /
-"How Timeblock works" (opens the help modal), "Share app" (copies
+"How Time Block works" (opens the help modal), "Share app" (copies
 `https://phoebejaffe.github.io/time-block/` to the clipboard and toasts
 "Link copied."), "Reload App" (clears
 Cache Storage / service workers if any, then navigates to the same URL with

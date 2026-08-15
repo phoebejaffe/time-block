@@ -1,4 +1,4 @@
-# Timeblock
+# Time Block
 
 A Vite + React SPA that signs in with Google, shows your calendars, and lets you draft local time-block tasks that start or end at a chosen time — then clear them or push them onto a real Google Calendar.
 

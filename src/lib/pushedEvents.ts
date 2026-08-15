@@ -35,11 +35,11 @@ export function pickLoveEmoji(uid: string | null | undefined): string {
   return pool[index]!
 }
 
-/** Description stamped on Google Calendar events created by Timeblock. */
+/** Description stamped on Google Calendar events created by Time Block. */
 export function timeblockEventDescription(
   uid: string | null | undefined,
 ): string {
-  return `Added via Timeblock, with love ${pickLoveEmoji(uid)}`
+  return `Added via Time Block, with love ${pickLoveEmoji(uid)}`
 }
 
 export type PushedEvent = {

@@ -28,7 +28,7 @@ export function HowItWorksModal({ onClose }: HowItWorksModalProps) {
         aria-labelledby="how-it-works-title"
       >
         <div className="modal-header">
-          <h2 id="how-it-works-title">How Timeblock works</h2>
+          <h2 id="how-it-works-title">How Time Block works</h2>
           <button
             type="button"
             className="icon-btn"
@@ -41,7 +41,7 @@ export function HowItWorksModal({ onClose }: HowItWorksModalProps) {
         <div className="modal-body help-modal-body">
           <p>
             For users with ADHD and time blindness, it can be hard to plan a day
-            and stay on time without being able to visualize time. Timeblock lets
+            and stay on time without being able to visualize time. Time Block lets
             you plan out your day, see it visually, make adjustments against
             constraints (like having to catch a bus at a certain time), and
             execute your plan.
@@ -119,7 +119,7 @@ export function HowItWorksModal({ onClose }: HowItWorksModalProps) {
 
           <h3>Calendar</h3>
           <p>
-            Your Timeblock events sit on the grid with your other Google Calendar
+            Your Time Block events sit on the grid with your other Google Calendar
             events. While you&apos;re planning, drag any block in a stack to slide
             the whole list earlier or later on the same day. Pinch or ⌘/Ctrl-scroll
             to zoom. Use ‹ › to change days, <strong>Today</strong> to jump home,

@@ -175,10 +175,10 @@ describe('pushedEvents', () => {
 
   it('stamps calendar events with a default love emoji for most users', () => {
     expect(timeblockEventDescription(null)).toBe(
-      'Added via Timeblock, with love ❤️',
+      'Added via Time Block, with love ❤️',
     )
     expect(timeblockEventDescription('some-other-uid')).toBe(
-      'Added via Timeblock, with love ❤️',
+      'Added via Time Block, with love ❤️',
     )
     expect(pickLoveEmoji(undefined)).toBe('❤️')
   })
@@ -192,7 +192,7 @@ describe('pushedEvents', () => {
         pool,
       ),
     ].map((s) => s.segment)
-    const prefix = 'Added via Timeblock, with love '
+    const prefix = 'Added via Time Block, with love '
     const seen = new Set<string>()
     for (let i = 0; i < 300; i++) {
       const desc = timeblockEventDescription(uid)

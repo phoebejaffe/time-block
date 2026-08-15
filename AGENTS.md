@@ -1,7 +1,7 @@
 # AGENTS.md — working in this repo
 
 This file orients an AI agent (or a new human contributor) working in the
-Timeblock codebase. For the full, exhaustive specification of every data
+Time Block codebase. For the full, exhaustive specification of every data
 type, interaction, and flow, see **[`SPEC.md`](./SPEC.md)** — it's detailed
 enough to rebuild the app from scratch. This file is the shorter "how do I
 find my way around and not break things" companion.
@@ -14,7 +14,7 @@ touching.
 
 ## What this app is
 
-Timeblock is a single-page **time-blocking** app: sign in with Google, see
+Time Block is a single-page **time-blocking** app: sign in with Google, see
 your real Google Calendar events overlaid on a day/week grid, and draft
 ordered lists of "blocks" (title + duration) in a sidebar. Each list
 ("plan") is anchored to a single time — "**starts** at 9am" or

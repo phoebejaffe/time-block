@@ -1,6 +1,6 @@
 {
-  "name": "Timeblock",
-  "short_name": "Timeblock",
+  "name": "Time Block",
+  "short_name": "Time Block",
   "description": "Time-block your day against Google Calendar.",
   "start_url": "./",
   "scope": "./",

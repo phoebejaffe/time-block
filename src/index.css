@@ -2692,6 +2692,7 @@ body.is-task-reordering .task-sidebar {
 }
 
 .app-gate {
+  position: relative;
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -2700,27 +2701,30 @@ body.is-task-reordering .task-sidebar {
 }
 
 .app-gate-footer {
-  flex-shrink: 0;
-  width: 100%;
-  max-width: 26rem;
-  margin: 0 auto;
-  padding: 0.5rem 1rem 0.85rem;
-  text-align: left;
+  position: absolute;
+  right: 0.85rem;
+  bottom: 0.65rem;
+  z-index: 1;
+  width: auto;
+  max-width: min(22rem, calc(100vw - 1.7rem));
+  margin: 0;
+  padding: 0;
+  text-align: right;
 }
 
 .app-gate-build {
   margin: 0;
-  padding: 0 0.15rem;
+  padding: 0;
   font-size: 0.7rem;
   line-height: 1.3;
   color: color-mix(in srgb, var(--ink-muted) 70%, transparent);
 }
 
 .app-gate-footer .auth-diagnostics {
-  width: 100%;
+  width: auto;
   max-width: none;
   margin: 0;
-  padding: 0.05rem 0.15rem 0.15rem;
+  padding: 0.05rem 0 0.15rem;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -2730,7 +2734,7 @@ body.is-task-reordering .task-sidebar {
 .app-gate-footer .auth-diagnostics-recoverable {
   border: 0;
   background: transparent;
-  padding: 0.05rem 0.15rem 0.35rem;
+  padding: 0.05rem 0 0.35rem;
 }
 
 .app-gate-footer .auth-diagnostics-title {
@@ -2743,12 +2747,15 @@ body.is-task-reordering .task-sidebar {
 
 .app-gate-footer .auth-diagnostics-toggle {
   padding: 0.05rem 0;
+  justify-content: flex-end;
+  gap: 0.35rem;
 }
 
 .app-gate-footer .auth-diagnostics-body {
   margin-top: 0.3rem;
   padding-top: 0.3rem;
   border-top-color: rgba(26, 31, 28, 0.08);
+  text-align: left;
 }
 
 .empty-state {

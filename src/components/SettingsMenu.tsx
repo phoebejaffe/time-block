@@ -137,7 +137,7 @@ export function SettingsMenu({
               setHelpOpen(true)
             }}
           >
-            How Timeblock works
+            How Time Block works
           </button>
           <button
             type="button"

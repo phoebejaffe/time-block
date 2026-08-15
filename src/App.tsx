@@ -677,7 +677,7 @@ export default function App() {
             <p>
               {session.diagnostics.canRecoverWithoutOauth
                 ? 'Silent sign-in failed after reopen (often a cold auth backend). Try Recover session below — you usually do not need the full Google consent popup.'
-                : 'Timeblock lets you draft plans that end when you need to leave, and compensate for delays as you go so you stay on time. Your plan syncs to your Google account, so sign in is required.'}
+                : 'Time Block lets you draft plans that end when you need to leave, and compensate for delays as you go so you stay on time. Your plan syncs to your Google account.'}
             </p>
             {session.diagnostics.canRecoverWithoutOauth ? (
               <button
