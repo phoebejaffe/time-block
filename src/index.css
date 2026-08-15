@@ -1761,9 +1761,9 @@ body.is-datetime-scrubbing .task-form-duration input {
 }
 
 .block-group-collapsed.block-group-running {
-  background: color-mix(in srgb, #3a7ab0 18%, var(--group));
-  border-color: color-mix(in srgb, #3a7ab0 42%, var(--line));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, #3a7ab0 22%, transparent);
+  background: color-mix(in srgb, var(--accent) 14%, var(--group));
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--line));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 20%, transparent);
 }
 
 .block-group-collapsed-row {
@@ -3053,22 +3053,31 @@ body.is-task-reordering .task-sidebar {
 }
 
 /* —— Execution mode —— */
-.banner-execution {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
+.banner-execution,
+.execution-modal-toolbar {
+  display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding-block: 0.35rem;
-  background: #3a7ab0;
-  color: #f4f9fc;
-  border-bottom: 1px solid rgba(20, 50, 80, 0.22);
+  padding-block: 0.55rem;
+  padding-inline: 0.75rem;
+  font-size: 0.92rem;
+}
+
+.banner-execution {
+  padding-inline: 1rem;
+  background: #e8e8e6;
+  color: var(--ink);
+  border-bottom: 1px solid var(--line);
   position: sticky;
   top: 0;
   z-index: 40;
 }
 
-.execution-banner-spacer {
-  min-width: 0;
+.execution-modal-toolbar {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 75%, #000);
+  flex-shrink: 0;
 }
 
 .execution-banner-open {
@@ -3078,35 +3087,53 @@ body.is-task-reordering .task-sidebar {
   color: inherit;
   font: inherit;
   font-weight: 600;
-  text-align: center;
+  text-align: left;
   cursor: pointer;
   padding: 0;
+  margin: 0;
+  flex: 1 1 auto;
   min-width: 0;
-  justify-self: center;
-  grid-column: 2;
+  white-space: nowrap;
 }
 
 .execution-banner-open:hover {
   text-decoration: underline;
 }
 
-.execution-banner-dismiss {
+.execution-modal-toolbar-title {
   appearance: none;
   border: 0;
   background: transparent;
   color: inherit;
-  font-size: 1.35rem;
-  line-height: 1;
-  cursor: pointer;
-  padding: 0.15rem 0.35rem;
-  border-radius: 6px;
-  justify-self: end;
-  grid-column: 3;
-  opacity: 0.75;
+  font: inherit;
+  font-weight: 600;
+  text-align: center;
+  cursor: default;
+  padding: 0;
+  margin: 0;
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
-.execution-banner-dismiss:hover {
-  background: color-mix(in srgb, #f4f9fc 14%, transparent);
+.execution-chrome-action {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 500;
+  line-height: 1.2;
+  cursor: pointer;
+  padding: 0;
+  margin: 0;
+  white-space: nowrap;
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.execution-chrome-action:hover {
+  text-decoration: underline;
   opacity: 1;
 }
 
@@ -3119,51 +3146,25 @@ body.is-task-reordering .task-sidebar {
   background: var(--paper);
 }
 
-.execution-modal-toolbar {
+.execution-modal-toolbar-rail {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 0.35rem 1rem;
-  border-bottom: 1px solid rgba(20, 50, 80, 0.22);
-  background: #3a7ab0;
-  color: #f4f9fc;
-  flex-shrink: 0;
-}
-
-.execution-modal-toolbar-title {
-  display: flex;
-  align-items: baseline;
-  gap: 0.55rem;
+  flex: 1 1 0;
   min-width: 0;
 }
 
+.execution-modal-toolbar-rail-start {
+  justify-content: flex-start;
+  min-width: min-content;
+}
+
+.execution-modal-toolbar-rail-end {
+  justify-content: flex-end;
+  min-width: min-content;
+}
+
 .execution-modal-toolbar-title .muted {
-  color: color-mix(in srgb, #f4f9fc 70%, transparent);
-}
-
-.execution-modal-toolbar-title strong {
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.execution-modal-toolbar-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  flex-shrink: 0;
-}
-
-.execution-modal-toolbar-actions .btn {
-  color: inherit;
-}
-
-.execution-modal-close {
-  font-size: 1.35rem;
-  line-height: 1;
-  padding-inline: 0.45rem;
+  color: color-mix(in srgb, var(--accent-ink) 70%, transparent);
 }
 
 .execution-modal-body {

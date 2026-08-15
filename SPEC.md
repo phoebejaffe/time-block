@@ -564,8 +564,8 @@ Top to bottom:
      Archive / Delete) — expand it again by tapping
      the name. Archive is disabled on the last Home group and while
      that group is in a run. If this group is currently executing (§7.9),
-     the collapsed row is highlighted (blue wash matching the Running
-     banner, no grayscale) and keeps a **Running** button; clicking it
+     the collapsed row is highlighted (green wash, no grayscale) and keeps
+     a **Running** button; clicking it
      expands the group (`enabled: true`) and reopens the run modal.
    - **Expanded** group:
      - **Name row**: the group's name (or its synthesized "Unnamed N"
@@ -796,10 +796,13 @@ for running one group against the clock:
    set for this run; turn the group on (`enabled: true`) if it was collapsed;
    open a full-screen **execution modal**. Reopening a run (Running button
    or the top banner) also expands the group.
-3. **Execution modal** shows only that group's sidebar panel + the calendar
-   filtered to that group. Starts is locked (no kind toggle). Stack-drag on
-   the calendar is disabled; event click/select still works. Block
-   durations, order, add/delete, empty spacers, checkpoints (Update
+3. **Execution modal** shows a centered toolbar title `Running "…"` between
+   equal flex rails: plain-text **← Plan mode** flush left (closes the modal,
+   same as Escape) and plain-text **End run** flush right. Only that group's
+   sidebar panel + the calendar filtered to that group. Starts is locked (no
+   kind toggle).
+   Stack-drag on the calendar is disabled; event click/select still works.
+   Block durations, order, add/delete, empty spacers, checkpoints (Update
    default), library add, and calendar commit still work; the inline
    **Revert** button is hidden. The group always renders **expanded**
    (never the collapsed row); the title row is hidden (no
@@ -834,10 +837,11 @@ for running one group against the clock:
    time at …**, green **✨ Ending early at … (Xm early)**, or red
    **Ending late at … (Xm late)** — switching **Ending** → **Ended** once
    wall-clock now is at or past the stack's actual end.
-7. Closing the modal (× / Escape) leaves `executingGroupId` set and shows a
-   **top banner** ("Running …") to reopen the modal; the banner's ×
-   (or "End run" in the modal) clears `executingGroupId` and that
-   group's `intendedEndAt` and any task `done` flags. After ending execution,
+7. **← Plan mode** / Escape leaves `executingGroupId` set and shows a
+   light-grey **top banner** with left-aligned `Running "…"` (click to
+   reopen the modal) and plain-text **End run** flush right. **End run**
+   (banner or modal) clears `executingGroupId` and that group's
+   `intendedEndAt` and any task `done` flags. After ending execution,
    the user may flip the group back to Ends in planning if they want. Only
    one group may execute at a time. Collapsing the executing group in the
    planning sidebar still leaves the run active: the collapsed

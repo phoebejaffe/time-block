@@ -644,21 +644,19 @@ export default function App() {
 
       {executingGroup && !executionModalOpen && (
         <div className="banner banner-execution" role="status">
-          <span className="execution-banner-spacer" aria-hidden />
           <button
             type="button"
             className="execution-banner-open"
             onClick={() => handleBeginExecution(executingGroup.id)}
           >
-            Running {executingGroup.name?.trim() || 'Untitled plan'}
+            Running “{executingGroup.name?.trim() || 'Untitled plan'}”
           </button>
           <button
             type="button"
-            className="execution-banner-dismiss"
-            aria-label="End run"
+            className="execution-chrome-action"
             onClick={handleEndExecution}
           >
-            ×
+            End run
           </button>
         </div>
       )}

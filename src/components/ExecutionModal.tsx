@@ -129,32 +129,32 @@ export function ExecutionModal({
   }, [onClose])
 
   const label = group.name?.trim() || 'Untitled plan'
+  const titleText = `Running “${label}”`
   const navDayBounds = useMemo(
     () => stackOccupiedLocalDays(group),
     [group],
   )
 
   return (
-    <div className="execution-modal" role="dialog" aria-modal="true" aria-label={`Running ${label}`}>
+    <div className="execution-modal" role="dialog" aria-modal="true" aria-label={titleText}>
       <div className="execution-modal-toolbar">
-        <div className="execution-modal-toolbar-title">
-          <strong>{label}</strong>
-        </div>
-        <div className="execution-modal-toolbar-actions">
+        <div className="execution-modal-toolbar-rail execution-modal-toolbar-rail-start">
           <button
             type="button"
-            className="btn btn-ghost btn-sm"
+            className="execution-chrome-action"
+            onClick={onClose}
+          >
+            ← Plan mode
+          </button>
+        </div>
+        <div className="execution-modal-toolbar-title">{titleText}</div>
+        <div className="execution-modal-toolbar-rail execution-modal-toolbar-rail-end">
+          <button
+            type="button"
+            className="execution-chrome-action"
             onClick={onEndExecution}
           >
             End run
-          </button>
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm execution-modal-close"
-            aria-label="Close run view"
-            onClick={onClose}
-          >
-            ×
           </button>
         </div>
       </div>
