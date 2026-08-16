@@ -27,6 +27,7 @@ import {
   isTaskDelay,
   isTaskDisabled,
   isTaskEmpty,
+  isTaskInBlockLibrary,
   localDateKey,
   groupMatchesCheckpoint,
   resolveSavedBlocksFromKeys,
@@ -1933,6 +1934,21 @@ function BlockGroupPanel({
                     </span>
                   </div>
                   <div className="task-card-icons">
+                    {!isTaskDelay(task) &&
+                      !isTaskInBlockLibrary(blockLibrary, task) && (
+                        <button
+                          type="button"
+                          className="icon-btn"
+                          aria-label={`Add ${task.title} to block library`}
+                          title="Add to library"
+                          onClick={() => {
+                            if (suppressClickRef.current) return
+                            onAddToLibrary(task)
+                          }}
+                        >
+                          <LibraryPlusIcon />
+                        </button>
+                      )}
                     <button
                       type="button"
                       className="icon-btn"
@@ -1945,20 +1961,6 @@ function BlockGroupPanel({
                     >
                       <EditIcon />
                     </button>
-                    {!isTaskDelay(task) && (
-                      <button
-                        type="button"
-                        className="icon-btn"
-                        aria-label={`Add ${task.title} to block library`}
-                        title="Add to library"
-                        onClick={() => {
-                          if (suppressClickRef.current) return
-                          onAddToLibrary(task)
-                        }}
-                      >
-                        <LibraryPlusIcon />
-                      </button>
-                    )}
                     <button
                       type="button"
                       className="icon-btn"

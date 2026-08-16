@@ -91,25 +91,41 @@ export function LibraryIcon() {
   )
 }
 
-/** Library mark with a plus — add a block to the library. */
+/** Same library mark as LibraryIcon, with a + in the top-right corner. */
 export function LibraryPlusIcon() {
   return (
     <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
+      width="13"
+      height="13"
+      viewBox="0 0 30 30"
+      fill="currentColor"
       aria-hidden
     >
-      <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5A2.5 2.5 0 0 1 4 19.5z" />
-      <path d="M8 7h6" />
-      <path d="M8 11h8" />
-      <path d="M16 16v4" />
-      <path d="M14 18h4" />
+      <rect x="3" y="3" width="4" height="24" rx="2" ry="2" />
+      <rect x="9" y="3" width="4" height="24" rx="2" ry="2" />
+      <rect
+        x="18"
+        y="3"
+        width="4"
+        height="24"
+        rx="2"
+        ry="2"
+        transform="rotate(-20 20 15)"
+      />
+      <path
+        d="M24 1v9M19.5 5.5h9"
+        fill="none"
+        stroke="#fff"
+        strokeWidth="4.5"
+        strokeLinecap="round"
+      />
+      <path
+        d="M24 1v9M19.5 5.5h9"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.75"
+        strokeLinecap="round"
+      />
     </svg>
   )
 }

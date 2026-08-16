@@ -1277,6 +1277,27 @@ export function tasksFromSavedBlocks(blocks: SavedBlock[]): Task[] {
   )
 }
 
+/** True if any library block matches title/duration/empty (ids ignored). */
+export function isTaskInBlockLibrary(
+  library: BlockLibrary,
+  task: Pick<Task, 'title' | 'durationMinutes' | 'empty'>,
+): boolean {
+  const title = task.title.trim()
+  const empty = task.empty === true
+  for (const category of library.categories) {
+    for (const block of category.blocks) {
+      if (
+        block.title.trim() === title &&
+        block.durationMinutes === task.durationMinutes &&
+        (block.empty === true) === empty
+      ) {
+        return true
+      }
+    }
+  }
+  return false
+}
+
 export function touchBlockLibrary(
   categories: BlockLibraryCategory[],
 ): BlockLibrary {

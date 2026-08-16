@@ -605,13 +605,14 @@ Top to bottom:
        then, if the task is currently reflected on Google Calendar for the
        day in view, a small icon — a checkmark if it exactly matches what
        was last pushed, or a "calendar" glyph if it's out of sync since
-       the last push; then edit, **add to library** (library+; omitted on
-       delay spacers), disable, and delete icon-buttons (always
+       the last push; then **add to library** (library mark with +; omitted
+       on delay spacers and when an identical title/duration/`empty` block
+       already exists in the library), edit, disable, and delete
+       icon-buttons (always
        reserved space so long titles can't crowd them out). **Add to
        library** opens a small modal to pick a target category (or create
        one if the library is empty), with **Add** and **Add and open
-       library**; saves title/duration/`empty` into that category (delays
-       are not offered). The disable
+       library**; saves title/duration/`empty` into that category. The disable
        control (bell-with-X) toggles `disabled` —
        strikethrough title, omitted from stack layout/calendar/push (§4.1);
        disabled (non-interactive) on delay spacers.
