@@ -1189,6 +1189,7 @@ function BlockGroupPanel({
     // wrap :00→:55 in the DOM before our scrub activates.
     const originIso = getBaseIso()
     timePointerActiveRef.current = true
+    window.getSelection()?.removeAllRanges()
 
     function isoForTick(tick: number): string {
       return stepLocalTime(originIso, field, tick)
@@ -1207,6 +1208,7 @@ function BlockGroupPanel({
         active = true
         field = anchorFieldFromSelection(readSelectionStart(input))
         document.body.classList.add('is-datetime-scrubbing')
+        window.getSelection()?.removeAllRanges()
         input.blur()
         try {
           input.setPointerCapture(pointerId)
@@ -1215,6 +1217,7 @@ function BlockGroupPanel({
         }
       }
       ev.preventDefault()
+      window.getSelection()?.removeAllRanges()
       const tick = Math.trunc(-dy / ANCHOR_SCRUB_PX)
       if (tick === lastTick) return
       lastTick = tick

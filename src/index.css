@@ -689,6 +689,8 @@ body.is-sidebar-resizing .main-panel {
   border-radius: 999px;
   cursor: ns-resize;
   touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .stack-anchor .stack-anchor-time input::-webkit-calendar-picker-indicator {
@@ -720,6 +722,8 @@ body.is-datetime-scrubbing .help-modal-body {
 
 body.is-datetime-scrubbing .stack-anchor-time input {
   cursor: ns-resize;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .task-form-duration input {
