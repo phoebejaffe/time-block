@@ -222,21 +222,30 @@ function eventResource(
   }
 }
 
-/** Returns true when the event exists and is not cancelled/trashed. */
-async function isActiveCalendarEvent(
+/** Returns the event if it exists and is not cancelled/trashed. */
+async function getActiveCalendarEvent(
   calendarId: string,
   eventId: string,
-): Promise<boolean> {
+): Promise<gapi.client.calendar.Event | null> {
   try {
     const res = await gapi.client.calendar.events.get({
       calendarId,
       eventId,
     })
-    return Boolean(res.result.id) && res.result.status !== 'cancelled'
+    if (!res.result.id || res.result.status === 'cancelled') return null
+    return res.result
   } catch (err) {
-    if (isNotFoundError(err)) return false
+    if (isNotFoundError(err)) return null
     throw err
   }
+}
+
+/** Returns true when the event exists and is not cancelled/trashed. */
+async function isActiveCalendarEvent(
+  calendarId: string,
+  eventId: string,
+): Promise<boolean> {
+  return Boolean(await getActiveCalendarEvent(calendarId, eventId))
 }
 
 export type SyncTaskFailure = {
@@ -528,17 +537,22 @@ export async function syncTasksToCalendar(
         const { match, resource, taskId, title } = op
         if (match) {
           try {
-            const stillThere = await isActiveCalendarEvent(
+            const existing = await getActiveCalendarEvent(
               calendarId,
               match.eventId,
             )
-            if (stillThere) {
+            if (existing) {
               try {
-                await gapi.client.calendar.events.patch({
+                // update replaces attendees; patch can leave removed guests.
+                await gapi.client.calendar.events.update({
                   calendarId,
                   eventId: match.eventId,
                   sendUpdates: 'none',
-                  resource,
+                  resource: {
+                    ...existing,
+                    ...resource,
+                    attendees: resource.attendees ?? [],
+                  },
                 })
                 return {
                   kind: 'updated',

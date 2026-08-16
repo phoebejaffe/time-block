@@ -337,8 +337,14 @@ export function TaskSidebar({
     setCommitLastGuestsByCalendar({})
   }
 
+  const modalDayKey = modalGroup ? localDateKey(modalGroup.anchor.at) : ''
+  const modalIsUpdate =
+    Boolean(modalGroupId) &&
+    hasPushedGroupOnDay(pushedEvents, modalGroupId || '', modalDayKey)
+
   async function handleCommit() {
-    if (selectedCommitIds.length === 0 || !modalGroupId) return
+    if (selectedCommitIds.length === 0 && !modalIsUpdate) return
+    if (!modalGroupId) return
     const ok = await onCommit(modalGroupId, selectedCommitIds, commitGuestsByCalendar)
     if (ok) {
       if (selectedCommitIds[0]) {
@@ -355,10 +361,6 @@ export function TaskSidebar({
     closeModal()
   }
 
-  const modalDayKey = modalGroup ? localDateKey(modalGroup.anchor.at) : ''
-  const modalIsUpdate =
-    Boolean(modalGroupId) &&
-    hasPushedGroupOnDay(pushedEvents, modalGroupId || '', modalDayKey)
   const modalPushedCalendarCount = modalGroupId
     ? pushedCalendarIdsForGroupDay(pushedEvents, modalGroupId, modalDayKey)
         .length
@@ -593,7 +595,7 @@ export function TaskSidebar({
                 disabled={
                   busy ||
                   (!modalIsUpdate && modalGroup.tasks.length === 0) ||
-                  selectedCommitIds.length === 0
+                  (!modalIsUpdate && selectedCommitIds.length === 0)
                 }
               >
                 {busy

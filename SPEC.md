@@ -494,7 +494,7 @@ token is applied.
 - Google events loaded this way are rendered read-only (never editable,
   draggable, or resizable) — they exist purely as visual overlay context.
 - **Create/update/delete events** (write path, used only when pushing the
-  user's plan — see §8) via `events.insert` / `events.patch` /
+  user's plan — see §8) via `events.insert` / `events.update` /
   `events.delete`. Every event created by this app carries a fixed
   description string identifying it as app-created (e.g. "Added via
   Time Block, with love ❤️"). Most accounts get a heart; a small Firebase
@@ -696,7 +696,9 @@ library, etc.) sit above those; toasts sit above nested dialogs. Modals used:
   and Cancel + the matching commit label pinned at the bottom. The primary
   action is
   disabled while busy, while there are no tasks on a fresh Add, or while
-  no calendar is selected.
+  no calendar is selected on a fresh Add. On Update, committing with none
+  selected is allowed: it removes this group's events from every calendar
+  they were on for that day.
 - **Settings** (opened from the app menu) — a wider dialog, the home for
   app preferences. Body is stacked sections. First section, **Saved users**:
   a list of name + email with remove, and an add form (name, email; rejects
@@ -1099,7 +1101,9 @@ Given a group id and a target calendar id (from the commit modal):
    the commit modal shows stepped status text and a determinate progress
    bar (e.g. "Updating 2 of 5…", "Adding 1 of 3…", "Removing 1 of 2…")
    driven by each create/update/remove attempt across the selected
-   calendars (and any calendars being deselected). The primary button
+   calendars (and any calendars being deselected — including when none
+   remain selected on Update, which removes the group's events from every
+   calendar they were on). The primary button
    label stays **"Adding to calendar(s)"** / **"Updating calendar(s)"**
    (plural when more than one calendar is selected), not the step text.
 5. Merge the returned updated push-tracking rows into the synced store,
@@ -1142,9 +1146,11 @@ are also updated in parallel.
      task id; otherwise take any other not-yet-reused one from that pool
      (so if blocks were reordered/renamed, existing events get relabeled
      rather than orphaned). If a candidate exists and it still actually
-     exists on Google, `patch` it with the new title/start/end/`attendees`
+     exists on Google, `update` it with the new title/start/end/`attendees`
      (`sendUpdates: 'none'`) and re-tag
-     it as tracking this task id (counts as an "update"). If a candidate
+     it as tracking this task id (counts as an "update"). The attendees
+     list replaces the previous guests, so removing a chip uninvites that
+     person (still without a Google email). If a candidate
      existed in tracking but was deleted on the Google side, forget it and
      fall through to creating a new one. If no candidate exists, `insert`
      a new event (title = task title, start/end = resolved times, fixed

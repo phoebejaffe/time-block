@@ -18,7 +18,7 @@ function mockGapiCalendar() {
   const store = new Map<string, FakeEvent>()
   let nextId = 1
   const calls: Array<{
-    method: 'insert' | 'patch' | 'delete'
+    method: 'insert' | 'update' | 'delete'
     sendUpdates?: string
     attendees?: { email: string; displayName?: string }[]
   }> = []
@@ -30,9 +30,18 @@ function mockGapiCalendar() {
         const err = { status: 404 }
         throw err
       }
-      return { result: { id: event.id, status: 'confirmed' } }
+      return {
+        result: {
+          id: event.id,
+          status: 'confirmed',
+          summary: event.summary,
+          start: { dateTime: event.start },
+          end: { dateTime: event.end },
+          attendees: event.attendees,
+        },
+      }
     },
-    patch: async ({
+    update: async ({
       eventId,
       sendUpdates,
       resource,
@@ -50,7 +59,7 @@ function mockGapiCalendar() {
       const event = store.get(eventId)
       if (!event) throw { status: 404 }
       calls.push({
-        method: 'patch',
+        method: 'update',
         sendUpdates,
         attendees: resource.attendees,
       })
@@ -343,6 +352,29 @@ describe('syncGroupToCalendars — multi-calendar', () => {
     )
   })
 
+  it('deletes from every calendar when the selection is empty', async () => {
+    const first = await syncGroupToCalendars(
+      ['cal-a', 'cal-b'],
+      'group-1',
+      tasks,
+      anchor,
+      [],
+    )
+    const second = await syncGroupToCalendars(
+      [],
+      'group-1',
+      tasks,
+      anchor,
+      first.pushedEvents,
+    )
+
+    expect(second.removed).toBe(2)
+    expect(second.created).toBe(0)
+    expect(second.updated).toBe(0)
+    expect(new Set(second.removedCalendarIds)).toEqual(new Set(['cal-a', 'cal-b']))
+    expect(second.pushedEvents).toEqual([])
+  })
+
   it('reports stepped progress for each sync attempt', async () => {
     const progress: { current: number; total: number; label: string }[] = []
     await syncGroupToCalendars(
@@ -438,9 +470,9 @@ describe('syncTasksToCalendar — attendees', () => {
       undefined,
       guests,
     )
-    expect(calls.filter((c) => c.method === 'patch')).toEqual([
+    expect(calls.filter((c) => c.method === 'update')).toEqual([
       {
-        method: 'patch',
+        method: 'update',
         sendUpdates: 'none',
         attendees: [{ email: 'ada@example.com', displayName: 'Ada' }],
       },
@@ -454,6 +486,69 @@ describe('syncTasksToCalendar — attendees', () => {
     expect(calls.filter((c) => c.method === 'delete')).toEqual([
       { method: 'delete', sendUpdates: 'none' },
     ])
+  })
+
+  it('replaces attendees on update so removed guests are uninvited', async () => {
+    const { calls, store } = mockGapiCalendar()
+    const anchor = {
+      kind: 'start' as const,
+      at: new Date('2026-07-23T15:00:00.000Z').toISOString(),
+    }
+    const tasks = [{ id: 't1', title: 'Focus', durationMinutes: 60 }]
+    const first = await syncTasksToCalendar(
+      'cal-a',
+      'group-1',
+      tasks,
+      anchor,
+      [],
+      null,
+      undefined,
+      undefined,
+      [
+        { email: 'ada@example.com', name: 'Ada' },
+        { email: 'bob@example.com', name: 'Bob' },
+      ],
+    )
+
+    await syncTasksToCalendar(
+      'cal-a',
+      'group-1',
+      tasks,
+      anchor,
+      first.pushedEvents,
+      null,
+      undefined,
+      undefined,
+      [{ email: 'bob@example.com', name: 'Bob' }],
+    )
+    expect(calls.filter((c) => c.method === 'update')).toEqual([
+      {
+        method: 'update',
+        sendUpdates: 'none',
+        attendees: [{ email: 'bob@example.com', displayName: 'Bob' }],
+      },
+    ])
+    expect(store.get(first.pushedEvents[0]!.eventId)?.attendees).toEqual([
+      { email: 'bob@example.com', displayName: 'Bob' },
+    ])
+
+    await syncTasksToCalendar(
+      'cal-a',
+      'group-1',
+      tasks,
+      anchor,
+      first.pushedEvents,
+      null,
+      undefined,
+      undefined,
+      [],
+    )
+    expect(calls.filter((c) => c.method === 'update').at(-1)).toEqual({
+      method: 'update',
+      sendUpdates: 'none',
+      attendees: [],
+    })
+    expect(store.get(first.pushedEvents[0]!.eventId)?.attendees).toEqual([])
   })
 })
 

@@ -468,7 +468,7 @@ export default function App() {
     const anchor = anchorOnDay(group.anchor, viewDate)
     const dayKey = localDateKey(anchor.at)
     const isUpdate = hasPushedGroupOnDay(userData.pushedEvents, groupId, dayKey)
-    if (calendarIds.length === 0) {
+    if (calendarIds.length === 0 && !isUpdate) {
       show('info', 'Choose at least one calendar.')
       return false
     }
