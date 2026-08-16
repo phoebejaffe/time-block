@@ -14,6 +14,7 @@ import { TaskFieldsForm } from './TaskFieldsForm'
 import { EditIcon, TrashIcon } from './icons'
 import type { NoticeOptions } from '../lib/notice'
 import { UNDO_MS, UNDO_MS_LONG } from '../lib/notice'
+import { subscribeMenuOutsideClose } from '../lib/menuDismiss'
 
 const DRAG_ACTIVATE_PX = 5
 
@@ -376,24 +377,10 @@ function CategorySection({
 
   useEffect(() => {
     if (!menuOpen) return
-
-    function handlePointerDown(event: MouseEvent) {
-      const target = event.target
-      if (!(target instanceof Node)) return
-      if (menuRef.current?.contains(target)) return
-      setMenuOpen(false)
-    }
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') setMenuOpen(false)
-    }
-
-    document.addEventListener('mousedown', handlePointerDown)
-    document.addEventListener('keydown', handleKeyDown)
-    return () => {
-      document.removeEventListener('mousedown', handlePointerDown)
-      document.removeEventListener('keydown', handleKeyDown)
-    }
+    return subscribeMenuOutsideClose(
+      (target) => Boolean(menuRef.current?.contains(target)),
+      () => setMenuOpen(false),
+    )
   }, [menuOpen])
 
   function blockKey(blockId: string) {

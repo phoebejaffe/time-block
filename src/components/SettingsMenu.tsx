@@ -6,6 +6,7 @@ import type { BlockLibrary } from '../lib/tasks'
 import type { NoticeOptions } from '../lib/notice'
 import type { SessionDiagnostics } from '../lib/google'
 import { hardReloadApp } from '../lib/hardReload'
+import { subscribeMenuOutsideClose } from '../lib/menuDismiss'
 
 type SettingsMenuProps = {
   busy?: boolean
@@ -68,24 +69,10 @@ export function SettingsMenu({
 
   useEffect(() => {
     if (!open) return
-
-    function handlePointerDown(event: MouseEvent) {
-      const target = event.target as Node
-      if (menuRef.current && !menuRef.current.contains(target)) {
-        setOpen(false)
-      }
-    }
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') setOpen(false)
-    }
-
-    document.addEventListener('mousedown', handlePointerDown)
-    document.addEventListener('keydown', handleKeyDown)
-    return () => {
-      document.removeEventListener('mousedown', handlePointerDown)
-      document.removeEventListener('keydown', handleKeyDown)
-    }
+    return subscribeMenuOutsideClose(
+      (target) => Boolean(menuRef.current?.contains(target)),
+      () => setOpen(false),
+    )
   }, [open])
 
   return (

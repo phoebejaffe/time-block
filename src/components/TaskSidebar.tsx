@@ -46,6 +46,7 @@ import {
   type PushedEvent,
   type PushSnapshot,
 } from '../lib/pushedEvents'
+import { subscribeMenuOutsideClose } from '../lib/menuDismiss'
 import { SettingsMenu } from './SettingsMenu'
 import { BlockLibraryModal } from './BlockLibraryModal'
 import { TaskFieldsForm } from './TaskFieldsForm'
@@ -904,56 +905,26 @@ function BlockGroupPanel({
 
   useEffect(() => {
     if (!listMenuOpen) return
-
-    function handlePointerDown(event: MouseEvent) {
-      const target = event.target
-      if (!(target instanceof Node)) return
-      if (
-        listMenuRef.current?.contains(target) ||
-        listMenuDropdownRef.current?.contains(target)
-      ) {
-        return
-      }
-      setListMenuOpen(false)
-    }
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') setListMenuOpen(false)
-    }
-
-    document.addEventListener('mousedown', handlePointerDown)
-    document.addEventListener('keydown', handleKeyDown)
-    return () => {
-      document.removeEventListener('mousedown', handlePointerDown)
-      document.removeEventListener('keydown', handleKeyDown)
-    }
+    return subscribeMenuOutsideClose(
+      (target) =>
+        Boolean(
+          listMenuRef.current?.contains(target) ||
+            listMenuDropdownRef.current?.contains(target),
+        ),
+      () => setListMenuOpen(false),
+    )
   }, [listMenuOpen])
 
   useEffect(() => {
     if (!libraryOpen) return
-
-    function handlePointerDown(event: MouseEvent) {
-      const target = event.target
-      if (!(target instanceof Node)) return
-      if (
-        libraryMenuRef.current?.contains(target) ||
-        libraryDropdownRef.current?.contains(target)
-      ) {
-        return
-      }
-      setLibraryOpen(false)
-    }
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') setLibraryOpen(false)
-    }
-
-    document.addEventListener('mousedown', handlePointerDown)
-    document.addEventListener('keydown', handleKeyDown)
-    return () => {
-      document.removeEventListener('mousedown', handlePointerDown)
-      document.removeEventListener('keydown', handleKeyDown)
-    }
+    return subscribeMenuOutsideClose(
+      (target) =>
+        Boolean(
+          libraryMenuRef.current?.contains(target) ||
+            libraryDropdownRef.current?.contains(target),
+        ),
+      () => setLibraryOpen(false),
+    )
   }, [libraryOpen])
 
   useLayoutEffect(() => {

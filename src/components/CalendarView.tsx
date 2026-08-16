@@ -34,6 +34,7 @@ import {
   CalendarToolbar,
   type CalendarViewType,
 } from './CalendarToolbar'
+import { subscribeMenuOutsideClose } from '../lib/menuDismiss'
 
 const NARROW_BREAKPOINT = 560
 /** Touch: hold before stack drag so vertical swipes scroll the calendar. */
@@ -637,33 +638,19 @@ export function CalendarView({
   useEffect(() => {
     if (!menuOpen && !calendarsOpen) return
 
-    function handlePointerDown(event: MouseEvent) {
-      const target = event.target
-      if (!(target instanceof Node)) return
-      if (menuOpen && menuRef.current && !menuRef.current.contains(target)) {
-        setMenuOpen(false)
-      }
-      if (
-        calendarsOpen &&
-        calendarsMenuRef.current &&
-        !calendarsMenuRef.current.contains(target)
-      ) {
-        setCalendarsOpen(false)
-      }
+    function isInsideMenus(target: Node) {
+      return Boolean(
+        (menuOpen && menuRef.current?.contains(target)) ||
+          (calendarsOpen && calendarsMenuRef.current?.contains(target)),
+      )
     }
 
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key !== 'Escape') return
+    function closeOutside() {
       setMenuOpen(false)
       setCalendarsOpen(false)
     }
 
-    document.addEventListener('mousedown', handlePointerDown)
-    document.addEventListener('keydown', handleKeyDown)
-    return () => {
-      document.removeEventListener('mousedown', handlePointerDown)
-      document.removeEventListener('keydown', handleKeyDown)
-    }
+    return subscribeMenuOutsideClose(isInsideMenus, closeOutside)
   }, [menuOpen, calendarsOpen])
 
   // FullCalendar can keep stale start/end on existing task ids after reorder or

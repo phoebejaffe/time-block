@@ -29,6 +29,7 @@ import {
 } from '../lib/tasks'
 import type { NoticeOptions } from '../lib/notice'
 import { UNDO_MS_LONG } from '../lib/notice'
+import { subscribeMenuOutsideClose } from '../lib/menuDismiss'
 
 const DRAG_ACTIVATE_PX = 5
 
@@ -602,21 +603,10 @@ function FolderSection({
 
   useEffect(() => {
     if (!menuOpen) return
-    function handlePointerDown(event: MouseEvent) {
-      const target = event.target
-      if (!(target instanceof Node)) return
-      if (menuRef.current?.contains(target)) return
-      setMenuOpen(false)
-    }
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') setMenuOpen(false)
-    }
-    document.addEventListener('mousedown', handlePointerDown)
-    document.addEventListener('keydown', handleKeyDown)
-    return () => {
-      document.removeEventListener('mousedown', handlePointerDown)
-      document.removeEventListener('keydown', handleKeyDown)
-    }
+    return subscribeMenuOutsideClose(
+      (target) => Boolean(menuRef.current?.contains(target)),
+      () => setMenuOpen(false),
+    )
   }, [menuOpen])
 
   function lineIndexFromY(clientY: number): number {
@@ -904,26 +894,14 @@ function ArchivedPlanRow({
 
   useEffect(() => {
     if (!menuOpen) return
-    function handlePointerDown(event: MouseEvent) {
-      const target = event.target
-      if (!(target instanceof Node)) return
-      if (
-        menuRef.current?.contains(target) ||
-        menuDropdownRef.current?.contains(target)
-      ) {
-        return
-      }
-      setMenuOpen(false)
-    }
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') setMenuOpen(false)
-    }
-    document.addEventListener('mousedown', handlePointerDown)
-    document.addEventListener('keydown', handleKeyDown)
-    return () => {
-      document.removeEventListener('mousedown', handlePointerDown)
-      document.removeEventListener('keydown', handleKeyDown)
-    }
+    return subscribeMenuOutsideClose(
+      (target) =>
+        Boolean(
+          menuRef.current?.contains(target) ||
+            menuDropdownRef.current?.contains(target),
+        ),
+      () => setMenuOpen(false),
+    )
   }, [menuOpen])
 
   useLayoutEffect(() => {

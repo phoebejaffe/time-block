@@ -732,6 +732,11 @@ a small non-interactive line showing the app's build timestamp (for diagnosing
 which deployed version is running), then the collapsible "Session diagnostics"
 panel.
 
+Dropdowns and overflow menus (plan ···, block library picker, settings,
+calendar menus, archive/library category menus) close on Escape or on an
+outside `mousedown` in the capture phase; that outside press is cancelled
+so it does not activate the control underneath.
+
 ### 7.6 Notices / toasts
 
 A single-slot (only one at a time) toast anchored to the bottom of the
