@@ -2919,7 +2919,9 @@ body.is-task-reordering .task-sidebar {
 }
 
 .settings-menu-dropdown .auth-diagnostics.is-expanded {
-  padding: 0.1rem 0.65rem 0.4rem;
+  border-radius: 8px;
+  background: var(--paper-2);
+  padding: 0.35rem 0.55rem 0.45rem;
 }
 
 .settings-menu-dropdown .auth-diagnostics-title {
