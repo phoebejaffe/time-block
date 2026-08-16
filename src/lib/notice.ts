@@ -26,6 +26,12 @@ export type NoticeOptions = {
   progress?: NoticeProgress
 }
 
+/** Default undo window for small edits (block delete, delay, etc.). */
+export const UNDO_MS = 5_000
+
+/** Longer undo window for checkpoints and big deletes. */
+export const UNDO_MS_LONG = 10_000
+
 export function notice(
   kind: NoticeKind,
   text: string,

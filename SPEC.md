@@ -728,8 +728,9 @@ A single-slot (only one at a time) toast anchored to the bottom of the
 screen, styled per kind (`success` | `error` | `info`), optionally with an
 action button (used for "Undo" after deleting a task) and/or a shrinking
 progress bar indicating time-to-auto-dismiss. Success and info notices
-auto-dismiss after a default delay (~5s, or a custom delay if specified,
-e.g. the longer Undo window); error notices persist until the user causes
+auto-dismiss after a default delay (~5s, or a custom delay if specified —
+~10s for larger undos such as deleting a plan, archive folder, library
+category, or saving/reverting defaults); error notices persist until the user causes
 another notice or the current action completes/clears it, since they must
 not be missed.
 
@@ -874,12 +875,13 @@ optimistic/instant in the UI; there is no separate "save" step for editing
 Deleting a task shows an "Undo" toast (progress bar over ~5s) that, if
 clicked, re-inserts the exact same task object back at its original index.
 Saving/updating a group's checkpoint and reverting to it show the same kind
-of "Undo" toast, restoring the exact previous checkpoint or task list,
+of "Undo" toast (~10s), restoring the exact previous checkpoint or task list,
 respectively (§4.6).
 
 Deleting a group requires a native `confirm()` dialog ("Delete this plan?")
 and is blocked (with an info toast: "Keep at least one plan.") if it's the
-only group left. Duplicating a group inserts an
+only group left; otherwise an Undo toast (~10s) can restore the plan at its
+prior index. Duplicating a group inserts an
 exact copy (fresh ids for the group and every task; tasks/anchor/name
 [unnamed]/color/enabled state/checkpoint are all copied) immediately after
 the source group. Reordering a group ("Move up"/"Move down" in its overflow

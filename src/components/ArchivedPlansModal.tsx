@@ -27,6 +27,7 @@ import {
   stackDurationMinutes,
 } from '../lib/tasks'
 import type { NoticeOptions } from '../lib/notice'
+import { UNDO_MS_LONG } from '../lib/notice'
 
 const DRAG_ACTIVATE_PX = 5
 
@@ -160,7 +161,17 @@ export function ArchivedPlansModal({
     const folder = archive.folders.find((f) => f.id === folderId)
     if (!folder || folder.id === UNFILED_FOLDER_ID) return
     if (folder.plans.length === 0) {
+      const previous = archive
+      const label = folder.name.trim() || 'Untitled'
       onChange(removeArchiveFolder(archive, folderId))
+      onShowNotice?.(`“${label}” folder deleted`, {
+        actionLabel: 'Undo',
+        progressMs: UNDO_MS_LONG,
+        onAction: () => {
+          onChange(previous)
+          onClearNotice?.()
+        },
+      })
       return
     }
     setDeletingFolderId(folderId)
@@ -174,7 +185,7 @@ export function ArchivedPlansModal({
     if (expandedPlanId === plan.id) setExpandedPlanId(null)
     onShowNotice?.(`“${label}” deleted from archive`, {
       actionLabel: 'Undo',
-      progressMs: 5_000,
+      progressMs: UNDO_MS_LONG,
       onAction: () => {
         onChange(addArchivedPlan(next, removed, folder.id))
         onClearNotice?.()
@@ -358,10 +369,20 @@ export function ArchivedPlansModal({
           hint={`Move ${deletingFolder.plans.length === 1 ? '1 plan' : `${deletingFolder.plans.length} plans`} from “${deletingFolder.name.trim() || 'Untitled'}” to:`}
           folders={archive.folders.filter((f) => f.id !== deletingFolder.id)}
           onPick={(folderId) => {
+            const previous = archive
+            const label = deletingFolder.name.trim() || 'Untitled'
             onChange(
               removeArchiveFolder(archive, deletingFolder.id, folderId),
             )
             closeNested()
+            onShowNotice?.(`“${label}” folder deleted`, {
+              actionLabel: 'Undo',
+              progressMs: UNDO_MS_LONG,
+              onAction: () => {
+                onChange(previous)
+                onClearNotice?.()
+              },
+            })
           }}
           onCancel={closeNested}
         />

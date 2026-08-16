@@ -17,6 +17,7 @@ import { useUserData } from './hooks/useUserData'
 import { calendarNamesForPushedGroupDay, deleteGroupFromCalendar, syncGroupToCalendars, type SyncProgress } from './lib/calendarApi'
 import { isFirebaseConfigured } from './lib/firebase'
 import { formatError } from './lib/errors'
+import { UNDO_MS, UNDO_MS_LONG } from './lib/notice'
 import { ensureWriteScope } from './lib/google'
 import { hasPushedGroupOnDay } from './lib/pushedEvents'
 import {
@@ -201,7 +202,7 @@ export default function App() {
     if (!plan.insertGotDelayed(groupId)) return
     show('info', 'Added a delay block.', {
       actionLabel: 'Undo',
-      progressMs: 5_000,
+      progressMs: UNDO_MS,
       onAction: () => {
         plan.replaceTasks(groupId, previousTasks)
         clear()
@@ -223,7 +224,7 @@ export default function App() {
     if (delayDurationChanged && previousTasks) {
       show('info', 'Delay updated.', {
         actionLabel: 'Undo',
-        progressMs: 5_000,
+        progressMs: UNDO_MS,
         onAction: () => {
           plan.replaceTasks(groupId, previousTasks)
           clear()
@@ -295,7 +296,7 @@ export default function App() {
 
     show('info', `"${task.title}" deleted`, {
       actionLabel: 'Undo',
-      progressMs: 5_000,
+      progressMs: UNDO_MS,
       onAction: () => {
         plan.insertTaskAt(groupId, task, index)
         clear()
@@ -309,13 +310,26 @@ export default function App() {
       return
     }
     if (!window.confirm('Delete this plan?')) return
+    const index = plan.plan.groups.findIndex((g) => g.id === groupId)
+    const group = index >= 0 ? plan.plan.groups[index] : undefined
+    if (!group || index < 0) return
+
     if (executingGroupId === groupId) {
       setExecutingGroupId(null)
       setExecutionModalOpen(false)
     }
     plan.removeGroup(groupId)
     handleEditingIdChange(null)
-    clear()
+
+    const label = group.name?.trim() || 'Untitled plan'
+    show('info', `“${label}” deleted`, {
+      actionLabel: 'Undo',
+      progressMs: UNDO_MS_LONG,
+      onAction: () => {
+        plan.insertGroupAt(group, index)
+        clear()
+      },
+    })
   }
 
   function handleAddGroup() {
@@ -351,7 +365,7 @@ export default function App() {
     const label = group.name?.trim() || 'Untitled plan'
     show('info', `"${label}" archived`, {
       actionLabel: 'Undo',
-      progressMs: 5_000,
+      progressMs: UNDO_MS,
       onAction: () => {
         plan.insertGroupAt(group, index)
         userData.replacePlanArchive(
@@ -390,7 +404,7 @@ export default function App() {
     plan.setAnchor(groupId, next)
     show('info', 'Blocks moved.', {
       actionLabel: 'Undo',
-      progressMs: 5_000,
+      progressMs: UNDO_MS,
       onAction: () => {
         plan.setAnchor(groupId, previousAnchor)
         clear()
@@ -414,7 +428,7 @@ export default function App() {
 
     show('info', 'Saved as default blocks.', {
       actionLabel: 'Undo',
-      progressMs: 5_000,
+      progressMs: UNDO_MS_LONG,
       onAction: () => {
         plan.setCheckpoint(groupId, previousCheckpoint)
         clear()
@@ -433,7 +447,7 @@ export default function App() {
 
     show('info', 'Reverted to default blocks.', {
       actionLabel: 'Undo',
-      progressMs: 5_000,
+      progressMs: UNDO_MS_LONG,
       onAction: () => {
         plan.replaceTasks(groupId, previousTasks)
         plan.setAnchor(groupId, previousAnchor)

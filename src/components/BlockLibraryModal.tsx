@@ -13,6 +13,7 @@ import {
 import { TaskFieldsForm } from './TaskFieldsForm'
 import { EditIcon, TrashIcon } from './icons'
 import type { NoticeOptions } from '../lib/notice'
+import { UNDO_MS, UNDO_MS_LONG } from '../lib/notice'
 
 const DRAG_ACTIVATE_PX = 5
 
@@ -68,12 +69,22 @@ export function BlockLibraryModal({
   }
 
   function removeCategory(categoryId: string) {
-    const category = library.categories.find((c) => c.id === categoryId)
-    if (!category) return
+    const index = library.categories.findIndex((c) => c.id === categoryId)
+    const category = index >= 0 ? library.categories[index] : undefined
+    if (!category || index < 0) return
     const label = category.name.trim() || 'Untitled'
     if (!window.confirm(`Delete "${label}" and all its blocks?`)) return
-    commitCategories(library.categories.filter((c) => c.id !== categoryId))
+    const previousCategories = library.categories
+    commitCategories(previousCategories.filter((c) => c.id !== categoryId))
     if (editingKey?.startsWith(`${categoryId}:`)) setEditingKey(null)
+    onShowNotice?.(`“${label}” category deleted`, {
+      actionLabel: 'Undo',
+      progressMs: UNDO_MS_LONG,
+      onAction: () => {
+        commitCategories(previousCategories)
+        onClearNotice?.()
+      },
+    })
   }
 
   function moveCategory(categoryId: string, direction: -1 | 1) {
@@ -141,7 +152,7 @@ export function BlockLibraryModal({
       : `"${block.title.trim() || 'Untitled'}"`
     onShowNotice?.(`${label} deleted`, {
       actionLabel: 'Undo',
-      progressMs: 5_000,
+      progressMs: UNDO_MS,
       onAction: () => {
         updateCategory(categoryId, (c) => {
           const blocks = [...c.blocks]
