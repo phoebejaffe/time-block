@@ -1526,8 +1526,8 @@ body.is-datetime-scrubbing .task-form-duration input {
   border: 0;
   border-bottom: 1px solid var(--line);
   border-radius: 0;
-  /* Room for up to four trailing icon-btns (library+, edit, disable, remove). */
-  padding: calc(0.35rem + 4px) calc(0.15rem + 4 * 1.45rem + 3 * 0.05rem)
+  /* Room for disable icon + block ··· menu. */
+  padding: calc(0.35rem + 4px) calc(0.15rem + 1.45rem + 0.05rem + 1.5rem)
     calc(0.35rem + 4px) 0.5rem;
   background: transparent;
   display: flex;
@@ -2586,6 +2586,7 @@ body.is-task-reordering .task-sidebar {
   right: 0.15rem;
   transform: translateY(-50%);
   display: flex;
+  align-items: center;
   gap: 0.05rem;
 }
 

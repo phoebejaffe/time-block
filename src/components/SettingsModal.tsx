@@ -22,7 +22,11 @@ import {
 } from '../lib/planArchive'
 import type { SessionDiagnostics } from '../lib/google'
 import type { UserSettings } from '../lib/userSettings'
-import { normalizeUserSettings } from '../lib/userSettings'
+import {
+  normalizeUserSettings,
+  TIME_STEP_MINUTES_OPTIONS,
+  type TimeStepMinutes,
+} from '../lib/userSettings'
 import { TimeScrubInput } from './TimeScrubInput'
 
 type SettingsSectionId =
@@ -523,15 +527,18 @@ export function SettingsModal({
                   <span className="sr-only">Step size</span>
                   <select
                     value={settings.timeStepMinutes}
-                    onChange={(e) =>
-                      patch({
-                        timeStepMinutes: Number(e.target.value) === 15 ? 15 : 5,
-                      })
-                    }
+                    onChange={(e) => {
+                      const n = Number(e.target.value) as TimeStepMinutes
+                      if (!TIME_STEP_MINUTES_OPTIONS.includes(n)) return
+                      patch({ timeStepMinutes: n })
+                    }}
                     aria-label="Time and duration step"
                   >
-                    <option value={5}>5 minutes</option>
-                    <option value={15}>15 minutes</option>
+                    {TIME_STEP_MINUTES_OPTIONS.map((mins) => (
+                      <option key={mins} value={mins}>
+                        {mins === 1 ? '1 minute' : `${mins} minutes`}
+                      </option>
+                    ))}
                   </select>
                 </label>
 

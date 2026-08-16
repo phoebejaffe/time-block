@@ -117,7 +117,7 @@ export function TaskFieldsForm({
   } | null) => void
   onSubmit: (task: Omit<Task, 'id'>) => void
   onCancel: () => void
-  /** Scrub / spinner grid in minutes (5 or 15). */
+  /** Scrub / spinner grid in minutes (1, 2, 5, or 15). */
   stepMinutes?: number
 }) {
   const step = Math.max(1, Math.round(stepMinutes) || 5)

@@ -1,5 +1,9 @@
 import type { StackAnchor } from './tasks'
 
+/** Allowed scrub / spinner / time-input grids (minutes). */
+export const TIME_STEP_MINUTES_OPTIONS = [1, 2, 5, 15] as const
+export type TimeStepMinutes = (typeof TIME_STEP_MINUTES_OPTIONS)[number]
+
 /** Synced user preferences (Firestore `users/{uid}.settings`). */
 export type UserSettings = {
   /** New plan Starts vs Ends. */
@@ -9,7 +13,7 @@ export type UserSettings = {
   /** Default duration when adding a Custom block. */
   defaultBlockMinutes: number
   /** Scrub / spinner / time-input grid (minutes). */
-  timeStepMinutes: 5 | 15
+  timeStepMinutes: TimeStepMinutes
   /**
    * Everyday undo window in seconds (block delete, delay, archive, …).
    * `0` hides Undo on those toasts.
@@ -65,10 +69,11 @@ export function normalizeUserSettings(raw: unknown): UserSettings {
       ? s.defaultAnchorKind
       : d.defaultAnchorKind
 
-  const step =
-    s.timeStepMinutes === 15 || s.timeStepMinutes === 5
-      ? s.timeStepMinutes
-      : d.timeStepMinutes
+  const step = TIME_STEP_MINUTES_OPTIONS.includes(
+    s.timeStepMinutes as TimeStepMinutes,
+  )
+    ? (s.timeStepMinutes as TimeStepMinutes)
+    : d.timeStepMinutes
 
   const hidden = Array.isArray(s.hiddenCalendarIds)
     ? [

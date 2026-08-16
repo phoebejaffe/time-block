@@ -134,7 +134,7 @@ type Task = {
   (and in checkpoints) but consumes no stack time — later blocks close the
   gap. It is crossed out in the sidebar, omitted from the in-app calendar
   overlay, and skipped/removed on Google Calendar sync like an empty
-  spacer. Toggle via the disable icon between Edit and Delete (§7.3).
+  spacer. Toggle via the disable icon on the block row (§7.3).
 - **`done`** marks a block finished during execution (§7.9). It starts unset
   (pending). It is not part of checkpoints and does not affect calendar push.
   Ending execution clears `done` on that group's tasks.
@@ -283,7 +283,7 @@ group you're editing, one or many at a time, rather than replacing/
 restoring the whole list). Users create categories, add/edit/delete/
 reorder blocks within a category via drag, and rename/reorder/delete whole
 categories, from a dedicated "Block library" modal (opened from the app
-menu). A plan-row **add to library** control can also append the
+menu). A plan-row **Add to library** menu item can also append the
 current block (title/duration/`empty`) into a chosen category. When adding
 blocks from the library into a group, the user multi-selects blocks (in the
 picker they're numbered in selection order) and they get appended to the
@@ -615,23 +615,22 @@ Top to bottom:
        then, if the task is currently reflected on Google Calendar for the
        day in view, a small icon — a checkmark if it exactly matches what
        was last pushed, or a "calendar" glyph if it's out of sync since
-       the last push; then **add to library** (library mark with +; omitted
-       on delay spacers and when an identical title/duration/`empty` block
-       already exists in the library), edit, disable, and delete
-       icon-buttons (always
-       reserved space so long titles can't crowd them out). **Add to
-       library** opens a small modal to pick a target category (or create
-       one if the library is empty), with **Add** and **Add and open
-       library**; saves title/duration/`empty` into that category. **Add and
-       open library** then opens the block library modal scrolled to the
-       new block, which is highlighted in green for 4 seconds then fades
-       over 2 seconds. The disable
-       control (bell-with-X) toggles `disabled` —
+       the last push; then a **disable** icon-button and a "···" overflow
+       menu (always reserved space so long titles can't crowd them out).
+       The menu has **Edit** / **Add to library** (omitted on delay spacers
+       and when an identical title/duration/`empty` block already exists in
+       the library) / — separator — / **Delete**. **Add to library** opens
+       a small modal to pick a target category (or create one if the library
+       is empty), with **Add** and **Add and open library**; saves
+       title/duration/`empty` into that category. **Add and open library**
+       then opens the block library modal scrolled to the new block, which
+       is highlighted in green for 4 seconds then fades over 2 seconds. The
+       disable control (bell-with-X) toggles `disabled` —
        strikethrough title, omitted from stack layout/calendar/push (§4.1);
        disabled (non-interactive) on delay spacers.
        Tasks with `empty: true` render in a visually muted/reduced style
        when not being edited. Clicking anywhere on a row's main area
-       (other than the trailing icon buttons) opens that task for inline
+       (other than the trailing controls) opens that task for inline
        editing.
      - **Inline task editor** (replaces a row, or appears as a fresh row at
        the bottom when adding): a text input for the title, separate hours
@@ -711,7 +710,7 @@ library, etc.) sit above those; toasts sit above nested dialogs. Modals used:
     only here — not overwritten by a successful push); **Hide calendars**
     (applies across the entire app; unchecked = hidden; a lock marks
     read-only calendars).
-  - **Interface**: time & duration step (5 or 15 minutes for scrubbing /
+  - **Interface**: time & duration step (1, 2, 5, or 15 minutes for scrubbing /
     inputs); **Quick undo** and **Major undo** windows in seconds (`0s`
     disables undo).
   - **Running Plans**: auto-end a run N hours after the last active block
@@ -780,7 +779,7 @@ a small non-interactive line showing the app's build timestamp (for diagnosing
 which deployed version is running). Session diagnostics live under
 Settings → App.
 
-Dropdowns and overflow menus (plan ···, block library picker, app menu,
+Dropdowns and overflow menus (plan ···, block ···, block library picker, app menu,
 calendar menus, archive/library category menus) all portal to
 `document.body` so they are not clipped by sidebar or modal overflow; they
 flip above/below the trigger (6px gap) and clamp to the viewport. Compact
@@ -820,7 +819,7 @@ of their normal click-to-type behavior, tuned for both mouse and touch:
   native time picker mid-drag would be disruptive).
 - Once active: dragging up increases the value, dragging down decreases it,
   in fixed-size ticks per some number of pixels moved:
-  - Duration **minutes** field: step-minute increments (5 or 15 from
+  - Duration **minutes** field: step-minute increments (1, 2, 5, or 15 from
     Settings) off the nearest multiple of the step (total duration minimum
     1 minute).
   - Duration **hours** field: 1-hour increments (minutes preserved).
@@ -838,7 +837,7 @@ of their normal click-to-type behavior, tuned for both mouse and touch:
 library category)
 
 Pressing and dragging on a task/block row's main content area (title +
-duration, not the trailing icon buttons) reorders it within its list:
+duration, not the trailing controls) reorders it within its list:
 
 - A small movement threshold must be exceeded before a drag "activates"
   (so a simple click still opens the inline editor, not a reorder).

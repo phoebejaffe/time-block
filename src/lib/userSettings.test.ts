@@ -31,6 +31,12 @@ describe('normalizeUserSettings', () => {
     expect(next.executionAutoEndHours).toBe(3)
     expect(next.hiddenCalendarIds).toEqual(['a'])
   })
+
+  it('accepts 1- and 2-minute time steps', () => {
+    expect(normalizeUserSettings({ timeStepMinutes: 1 }).timeStepMinutes).toBe(1)
+    expect(normalizeUserSettings({ timeStepMinutes: 2 }).timeStepMinutes).toBe(2)
+    expect(normalizeUserSettings({ timeStepMinutes: 7 }).timeStepMinutes).toBe(5)
+  })
 })
 
 describe('defaultAnchorFromSettings', () => {

@@ -60,12 +60,9 @@ import {
   BlockIcon,
   DelayedIcon,
   DisableBlockIcon,
-  EditIcon,
   FinishedCheckIcon,
   LibraryIcon,
-  LibraryPlusIcon,
   PendingIcon,
-  TrashIcon,
 } from './icons'
 import type { NoticeOptions } from '../lib/notice'
 import type { SessionDiagnostics } from '../lib/google'
@@ -1872,33 +1869,6 @@ function BlockGroupPanel({
                     </span>
                   </div>
                   <div className="task-card-icons">
-                    {!isTaskDelay(task) &&
-                      !isTaskInBlockLibrary(blockLibrary, task) && (
-                        <button
-                          type="button"
-                          className="icon-btn"
-                          aria-label={`Add ${task.title} to block library`}
-                          title="Add to library"
-                          onClick={() => {
-                            if (suppressClickRef.current) return
-                            onAddToLibrary(task)
-                          }}
-                        >
-                          <LibraryPlusIcon />
-                        </button>
-                      )}
-                    <button
-                      type="button"
-                      className="icon-btn"
-                      aria-label={`Edit ${task.title}`}
-                      title="Edit"
-                      onClick={() => {
-                        if (suppressClickRef.current) return
-                        onEditingIdChange(task.id)
-                      }}
-                    >
-                      <EditIcon />
-                    </button>
                     <button
                       type="button"
                       className="icon-btn"
@@ -1928,18 +1898,21 @@ function BlockGroupPanel({
                     >
                       <DisableBlockIcon crossedOut={isTaskDisabled(task)} />
                     </button>
-                    <button
-                      type="button"
-                      className="icon-btn"
-                      aria-label={`Remove ${task.title}`}
-                      title="Remove"
-                      onClick={() => {
-                        if (suppressClickRef.current) return
-                        onRemove(task.id)
+                    <TaskBlockMenu
+                      task={task}
+                      showAddToLibrary={
+                        !isTaskDelay(task) &&
+                        !isTaskInBlockLibrary(blockLibrary, task)
+                      }
+                      onEdit={() => onEditingIdChange(task.id)}
+                      onAddToLibrary={() => onAddToLibrary(task)}
+                      onRemove={() => onRemove(task.id)}
+                      onOpen={() => {
+                        setListMenuOpen(false)
+                        setLibraryOpen(false)
                       }}
-                    >
-                      <TrashIcon />
-                    </button>
+                      suppressClickRef={suppressClickRef}
+                    />
                   </div>
                 </>
               )}
@@ -2168,6 +2141,100 @@ function Modal({
         </div>
         <div className="modal-body">{children}</div>
       </div>
+    </div>
+  )
+}
+
+function TaskBlockMenu({
+  task,
+  showAddToLibrary,
+  onEdit,
+  onAddToLibrary,
+  onRemove,
+  onOpen,
+  suppressClickRef,
+}: {
+  task: Task
+  showAddToLibrary: boolean
+  onEdit: () => void
+  onAddToLibrary: () => void
+  onRemove: () => void
+  onOpen?: () => void
+  suppressClickRef: { current: boolean }
+}) {
+  const menuRef = useRef<HTMLDivElement>(null)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menu = useFixedMenu({
+    open: menuOpen,
+    align: 'end',
+    onClose: () => setMenuOpen(false),
+  })
+  const label = task.title.trim() || 'Untitled'
+
+  return (
+    <div className="task-new-menu" ref={menuRef}>
+      <button
+        ref={menu.triggerRef}
+        type="button"
+        className="btn btn-text btn-icon task-new-menu-btn"
+        aria-label={`${label} options`}
+        aria-expanded={menuOpen}
+        aria-haspopup="true"
+        title="Block options"
+        onClick={() => {
+          if (suppressClickRef.current) return
+          setMenuOpen((open) => {
+            const next = !open
+            if (next) onOpen?.()
+            return next
+          })
+        }}
+      >
+        ···
+      </button>
+      <FixedMenuPortal
+        open={menuOpen}
+        dropdownRef={menu.dropdownRef}
+        style={menu.style}
+        className="task-new-menu-dropdown"
+      >
+        <button
+          type="button"
+          role="menuitem"
+          className="calendar-menu-item"
+          onClick={() => {
+            setMenuOpen(false)
+            onEdit()
+          }}
+        >
+          Edit
+        </button>
+        {showAddToLibrary && (
+          <button
+            type="button"
+            role="menuitem"
+            className="calendar-menu-item"
+            onClick={() => {
+              setMenuOpen(false)
+              onAddToLibrary()
+            }}
+          >
+            Add to library
+          </button>
+        )}
+        <div className="calendar-menu-sep" role="separator" />
+        <button
+          type="button"
+          role="menuitem"
+          className="calendar-menu-item"
+          onClick={() => {
+            setMenuOpen(false)
+            onRemove()
+          }}
+        >
+          Delete
+        </button>
+      </FixedMenuPortal>
     </div>
   )
 }
