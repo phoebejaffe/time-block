@@ -1041,9 +1041,13 @@ export async function deleteGroupFromCalendar(
   }
 }
 
+export function isCalendarWritable(
+  calendar: Pick<GoogleCalendar, 'accessRole'>,
+): boolean {
+  const role = (calendar.accessRole || '').toLowerCase()
+  return role === 'owner' || role === 'writer'
+}
+
 export function calendarsWritable(calendars: GoogleCalendar[]): GoogleCalendar[] {
-  return calendars.filter((c) => {
-    const role = (c.accessRole || '').toLowerCase()
-    return role === 'owner' || role === 'writer'
-  })
+  return calendars.filter(isCalendarWritable)
 }

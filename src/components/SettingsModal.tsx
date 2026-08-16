@@ -1,12 +1,15 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { AuthSessionDiagnostics } from './AuthSessionDiagnostics'
-import { TrashIcon } from './icons'
+import { ReadOnlyIcon, TrashIcon } from './icons'
 import {
   guestEmailKey,
   isValidEmail,
   type SavedCalendarUser,
 } from '../lib/savedCalendarUsers'
-import type { GoogleCalendar } from '../lib/calendarApi'
+import {
+  isCalendarWritable,
+  type GoogleCalendar,
+} from '../lib/calendarApi'
 import type { BlockLibrary, Plan } from '../lib/tasks'
 import {
   migratePlan,
@@ -463,7 +466,8 @@ export function SettingsModal({
                   Hide calendars
                 </h3>
                 <p className="muted settings-section-hint">
-                  Applies across the entire app.
+                  Applies across the entire app. A lock marks read-only
+                  calendars.
                 </p>
                 {calendars.length === 0 ? (
                   <p className="muted settings-section-empty">
@@ -492,6 +496,15 @@ export function SettingsModal({
                               <span className="muted"> · primary</span>
                             ) : null}
                           </span>
+                          {!isCalendarWritable(cal) ? (
+                            <span
+                              className="settings-calendar-access"
+                              title="Read-only"
+                              aria-hidden
+                            >
+                              <ReadOnlyIcon />
+                            </span>
+                          ) : null}
                         </label>
                       </li>
                     ))}

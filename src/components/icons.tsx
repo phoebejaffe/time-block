@@ -17,6 +17,26 @@ export function EditIcon() {
   )
 }
 
+/** Lock outline — read-only calendar access. */
+export function ReadOnlyIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <rect x="5" y="11" width="14" height="11" rx="2" />
+      <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+    </svg>
+  )
+}
+
 /** Bell outline with dismiss X — disable / omit a block from the stack. */
 export function DisableBlockIcon({ crossedOut = false }: { crossedOut?: boolean }) {
   return (

@@ -709,7 +709,8 @@ library, etc.) sit above those; toasts sit above nested dialogs. Modals used:
   - **Calendars**: **Saved users** (name + email on one line; add form
     behind **Add user**); **Default target calendar** for Add/Update (set
     only here — not overwritten by a successful push); **Hide calendars**
-    (applies across the entire app; unchecked = hidden).
+    (applies across the entire app; unchecked = hidden; a lock marks
+    read-only calendars).
   - **Interface**: time & duration step (5 or 15 minutes for scrubbing /
     inputs); **Quick undo** and **Major undo** windows in seconds (`0s`
     disables undo).
@@ -864,10 +865,12 @@ for running one group against the clock:
    even if the group is collapsed, to expand it and reopen the run modal.
 2. Entering execution: persist `executingGroupId` on the user sync document;
    flip the group to `anchor.kind: 'start'` via `toggleAnchorPreservingStack`
-   if needed; set `intendedEndAt` from the resolved stack end if not already
-   set for this run; turn the group on (`enabled: true`) if it was collapsed;
-   open a full-screen **execution modal**. Reopening a run (Running button
-   or the top banner) also expands the group.
+   if needed; place the stored anchor on today's local day (same clock time)
+   so auto-end matches the stack Start was eligible against; set
+   `intendedEndAt` from the resolved stack end if not already set for this
+   run; turn the group on (`enabled: true`) if it was collapsed; open a
+   full-screen **execution modal**. Reopening a run (Running button or the
+   top banner) also expands the group.
 3. **Execution modal** shows a centered toolbar title `Running "…"` between
    equal flex rails: plain-text **← Plan mode** flush left (closes the modal,
    same as Escape) and plain-text **End run** flush right. Only that group's

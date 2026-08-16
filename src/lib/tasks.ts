@@ -997,22 +997,30 @@ export function getStackDelayOverrun(
 }
 
 /**
- * Flip a group to start-anchored (preserving stack position) and capture
- * `intendedEndAt` from the resolved end when not already set.
+ * Flip a group to start-anchored (preserving stack position), place the
+ * stored anchor on `now`'s local day (so Start eligibility and auto-end
+ * agree), and capture `intendedEndAt` from the resolved end when not
+ * already set.
  */
 export function prepareGroupForExecution(
   group: BlockGroup,
   now: Date = new Date(),
 ): BlockGroup {
   const totalMinutes = stackDurationMinutes(group.tasks)
-  const anchor =
+  const flipped =
     group.anchor.kind === 'start'
       ? group.anchor
       : toggleAnchorPreservingStack(group.anchor, totalMinutes)
+  // Start plan is eligible against today's remapped stack; without writing
+  // that day into the stored anchor, auto-end (which uses stored times)
+  // immediately ends runs whose clock time is from an earlier calendar day.
+  const anchor = anchorOnDay(flipped, now)
   if (group.intendedEndAt) {
-    return group.anchor.kind === 'start' ? group : { ...group, anchor }
+    return group.anchor.kind === 'start' && group.anchor.at === anchor.at
+      ? group
+      : { ...group, anchor }
   }
-  const resolved = resolveStack(group.tasks, anchorOnDay(anchor, now)).filter(
+  const resolved = resolveStack(group.tasks, anchor).filter(
     (task) => !isTaskDisabled(task),
   )
   const end = resolved[resolved.length - 1]?.end

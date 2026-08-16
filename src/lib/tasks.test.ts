@@ -885,6 +885,25 @@ describe('execution helpers', () => {
     expect(next.intendedEndAt).toBe('2026-07-18T10:30:00.000Z')
   })
 
+  it('prepareGroupForExecution places a stale-day anchor onto today', () => {
+    // Eligibility uses today; auto-end uses stored times — without remapping,
+    // Start would immediately auto-end.
+    const now = new Date(2026, 6, 18, 9, 15, 0)
+    const stale: StackAnchor = {
+      kind: 'start',
+      at: new Date(2026, 6, 10, 9, 0, 0).toISOString(),
+    }
+    const next = prepareGroupForExecution({ id: 'g', tasks, anchor: stale }, now)
+    expect(next.anchor).toEqual({
+      kind: 'start',
+      at: new Date(2026, 6, 18, 9, 0, 0).toISOString(),
+    })
+    expect(next.intendedEndAt).toBe(
+      new Date(2026, 6, 18, 10, 30, 0).toISOString(),
+    )
+    expect(shouldAutoEndExecution(next, now)).toBe(false)
+  })
+
   it('prepareGroupForExecution keeps an existing intendedEndAt', () => {
     const next = prepareGroupForExecution(
       {
