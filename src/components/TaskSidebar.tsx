@@ -1683,16 +1683,27 @@ function BlockGroupPanel({
           </div>
         )}
         {mode === 'execution' && (
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm execution-delayed-btn"
-            disabled={busy}
-            title="Insert an empty delay so later blocks shift later"
-            onClick={onGotDelayed}
-          >
-            I’m delayed
-            <DelayedIcon />
-          </button>
+          <div className="execution-action-row">
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm execution-delayed-btn"
+              disabled={busy}
+              title="Insert an empty delay so later blocks shift later"
+              onClick={onGotDelayed}
+            >
+              I’m delayed
+              <DelayedIcon />
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm task-new-commit"
+              onClick={onOpenCommit}
+              disabled={busy || (!isUpdate && tasks.length === 0)}
+            >
+              {commitLabel}
+              <CalendarIcon />
+            </button>
+          </div>
         )}
       </div>
 
@@ -2024,31 +2035,33 @@ function BlockGroupPanel({
           )}
         </li>
       </ul>
-      <div className="block-group-footer">
-        <div className="task-new-list-actions">
-          {mode !== 'execution' && hasCheckpointDrift && (
+      {mode !== 'execution' && (
+        <div className="block-group-footer">
+          <div className="task-new-list-actions">
+            {hasCheckpointDrift && (
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm task-new-revert"
+                disabled={busy}
+                title="Restore this plan's default blocks"
+                onClick={() => onRevertToCheckpoint()}
+              >
+                <RevertIcon />
+                Revert
+              </button>
+            )}
             <button
               type="button"
-              className="btn btn-ghost btn-sm task-new-revert"
-              disabled={busy}
-              title="Restore this plan's default blocks"
-              onClick={() => onRevertToCheckpoint()}
+              className="btn btn-ghost btn-sm task-new-commit"
+              onClick={onOpenCommit}
+              disabled={busy || (!isUpdate && tasks.length === 0)}
             >
-              <RevertIcon />
-              Revert
+              {commitLabel}
+              <CalendarIcon />
             </button>
-          )}
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm task-new-commit"
-            onClick={onOpenCommit}
-            disabled={busy || (!isUpdate && tasks.length === 0)}
-          >
-            {commitLabel}
-            <CalendarIcon />
-          </button>
+          </div>
         </div>
-      </div>
+      )}
     </section>
   )
 }

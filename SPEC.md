@@ -623,17 +623,18 @@ Top to bottom:
        library has no categories yet) and **"Custom"** opens the inline
        task editor directly for a one-off task.
      - **Group footer** (below the task list, on the group's grey outer
-       surface, right-aligned): an inline **Revert** button whenever the
-       group has drifted from its saved checkpoint (§4.6), except in
-       execution mode where it is hidden; then an
-       **"Add to calendar"** / **"Update calendar"** /
+       surface, right-aligned; planning mode only): an inline **Revert**
+       button whenever the group has drifted from its saved checkpoint
+       (§4.6); then an **"Add to calendar"** / **"Update calendar"** /
        **"Update calendars"** button (label swaps to Update once anything
        has been pushed for this group on the viewed day; plural when that
        group+day was pushed to more than one calendar; disabled while
        nothing has ever been pushed and the group has zero tasks; visually
        "soft-disabled" — clickable but styled inert — when the stack
        already exactly matches the last successful push) that opens the
-       commit modal (§7.4).
+       commit modal (§7.4). In execution mode the same commit button sits
+       beside **I’m delayed** under the Start / Intended End controls
+       instead, and the group footer is omitted.
 3. **"New plan +"** and **"Archived plans"** at the bottom of the group
    list, side by side. New plan appends a fresh empty group (anchored to
    "ends at 9:00am today" by default). Archived plans opens the archive
@@ -804,7 +805,9 @@ for running one group against the clock:
    Stack-drag on the calendar is disabled; event click/select still works.
    Block durations, order, add/delete, empty spacers, checkpoints (Update
    default), library add, and calendar commit still work; the inline
-   **Revert** button is hidden. The group always renders **expanded**
+   **Revert** button is hidden and the commit button sits beside
+   **I’m delayed** (group footer omitted). The group always renders
+   **expanded**
    (never the collapsed row); the title row is hidden (no
    collapsing), and the "···" overflow sits on the Start / Intended End
    row instead. **Delete** is omitted from the menu.

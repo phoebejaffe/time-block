@@ -301,8 +301,12 @@ body.is-sidebar-resizing .main-panel {
   padding: 0.3rem 0.55rem;
 }
 
-.task-sidebar-execution .block-group .execution-delayed-btn {
+.task-sidebar-execution .block-group .execution-action-row {
   margin-top: 0.15rem;
+}
+
+.task-sidebar-execution .block-group .execution-delayed-btn {
+  margin-top: 0;
 }
 
 .task-sidebar-execution .block-group .task-list {
@@ -3268,12 +3272,25 @@ body.is-task-reordering .task-sidebar {
 }
 
 .execution-delayed-btn {
-  margin-top: 0.55rem;
-  width: 100%;
+  margin-top: 0;
+  width: auto;
+  flex: 1 1 auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.4rem;
+}
+
+.execution-action-row {
+  margin-top: 0.55rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.execution-action-row .task-new-commit {
+  flex: 0 0 auto;
 }
 
 @media (max-width: 719px) {
