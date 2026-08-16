@@ -516,15 +516,24 @@ export default function App() {
       }
 
       const parts: string[] = []
-      if (updated) parts.push(`updated ${updated}`)
-      if (created) parts.push(`added ${created}`)
-      if (removed) parts.push(`removed ${removed}`)
-      show(
-        'success',
-        parts.length > 0
-          ? `Calendar sync: ${parts.join(', ')}.`
-          : 'Calendar already up to date.',
-      )
+      if (updated) parts.push(parts.length ? `updated ${updated}` : `Updated ${updated}`)
+      if (created) parts.push(parts.length ? `added ${created}` : `Added ${created}`)
+      if (removed) parts.push(parts.length ? `removed ${removed}` : `Removed ${removed}`)
+      let syncMessage = 'Calendar already up to date.'
+      if (parts.length > 0) {
+        const joined =
+          parts.length === 1
+            ? parts[0]!
+            : parts.length === 2
+              ? `${parts[0]} and ${parts[1]}`
+              : `${parts.slice(0, -1).join(', ')}, and ${parts.at(-1)}`
+        syncMessage = `${joined} events on Google Calendar`
+        if (calendarIds.length > 1) {
+          syncMessage += ` across ${calendarIds.length} Google Calendars`
+        }
+        syncMessage += '.'
+      }
+      show('success', syncMessage)
       return true
     } catch (err) {
       show('error', `Couldn't sync calendar: ${formatError(err)}`)

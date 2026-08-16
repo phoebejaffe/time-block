@@ -1046,8 +1046,10 @@ Given a group id and a target calendar id (from the commit modal):
 5. Merge the returned updated push-tracking rows into the synced store,
    refresh the visible Google events from the API (so the newly
    created/updated/removed events are reflected), and show a toast
-   summarizing what happened (e.g. "Calendar sync: updated 2, added 1." /
-   "Calendar already up to date." / a partial-failure message naming each
+   summarizing what happened (e.g. "Updated 2 and added 1 events on Google
+   Calendar." / "Updated 6 events on Google Calendar across 2 Google
+   Calendars." / "Calendar already up to date." / a partial-failure message
+   naming each
    failed block and why, while still reporting whatever *did* succeed).
 6. The commit modal closes only on full success; on partial/total failure
    it stays open so the user can retry. Cancel is disabled while the sync
