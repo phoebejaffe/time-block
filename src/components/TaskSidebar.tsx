@@ -546,8 +546,13 @@ export function TaskSidebar({
                 }
               >
                 {busy
-                  ? commitProgress?.label ??
-                    (modalIsUpdate ? 'Updating…' : 'Adding…')
+                  ? modalIsUpdate
+                    ? selectedCommitIds.length > 1
+                      ? 'Updating calendars'
+                      : 'Updating calendar'
+                    : selectedCommitIds.length > 1
+                      ? 'Adding to calendars'
+                      : 'Adding to calendar'
                   : calendarCommitLabel(
                       modalIsUpdate,
                       selectedCommitIds.length > 1

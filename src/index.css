@@ -3274,7 +3274,7 @@ body.is-task-reordering .task-sidebar {
 .execution-delayed-btn {
   margin-top: 0;
   width: auto;
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3286,11 +3286,22 @@ body.is-task-reordering .task-sidebar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.4rem;
+  justify-content: flex-start;
+  gap: 0.45rem;
+}
+
+.execution-action-row .btn {
+  flex: 0 0 auto;
+  width: auto;
+  height: auto;
+  font-size: 0.75rem;
+  line-height: 1.2;
+  padding: 0.3rem 0.55rem;
 }
 
 .execution-action-row .task-new-commit {
-  flex: 0 0 auto;
+  font-size: 0.75rem;
+  padding: 0.3rem 0.55rem;
 }
 
 @media (max-width: 719px) {
