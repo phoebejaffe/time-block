@@ -1045,7 +1045,7 @@ function ArchivedPlanRow({
                     onAddToHome()
                   }}
                 >
-                  Add copy to home
+                  Duplicate plan
                 </button>
                 <button
                   type="button"

@@ -132,7 +132,7 @@ testing.
 - **Firestore sync is last-write-wins at the whole-document level** (one doc
   per user at `users/{uid}`, no field-level merge). Local edits debounce
   ~2s before writing. Archived plans live in `planArchive` on that doc,
-  not inside `Plan.groups` — Home stays the live stack; Add copy to home clones
+  not inside `Plan.groups` — Home stays the live stack; Duplicate plan clones
   with new ids (push history does not come along).
 - **No comments that narrate the obvious.** Existing code favors short
   comments only where intent/trade-offs aren't obvious from the code itself

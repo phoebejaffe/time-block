@@ -361,7 +361,7 @@ type PlanArchive = { folders: ArchiveFolder[]; updatedAt: string }
   and while that group is in a run (toast: "End run first."). An Undo toast
   restores the **same** group object (same ids, so push history still
   matches) at its previous index and removes the archive snapshot.
-- **Add copy to home** stamps a *new* enabled group (fresh ids) onto the end of
+- **Duplicate plan** stamps a *new* enabled group (fresh ids) onto the end of
   Home with copied tasks, name, color, and checkpoint. The archived original
   stays put. Anchor clock time is kept and remapped onto today (same idea as
   Duplicate). Push history does not come along. After add, the new
@@ -689,10 +689,10 @@ above everything else. Modals used:
   plan count when collapsed). Each row shows a left color bar, name, and muted
   `N blocks · duration · archived date`; tapping the row expands it in place and shows the
   archived blocks in a mini group panel (light grey wash, no heading/anchor
-  bar; white task-row list underneath). **Add copy to home** in
+  bar; white task-row list underneath). **Duplicate plan** in
   the row ···
   menu stamps a new copy onto Home and **leaves the modal open**. Row ···:
-  Add copy to home / Rename / Change color / Move to folder / Delete from
+  Duplicate plan / Rename / Change color / Move to folder / Delete from
   archive (Undo toast). Name and color edits apply to the archived snapshot.
   Folder ···: Move up / Move down (omitted at the ends). Named folders
   also have Rename and Delete folder (a nested picker asks which other
