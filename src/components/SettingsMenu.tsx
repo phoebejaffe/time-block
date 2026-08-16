@@ -150,7 +150,7 @@ export function SettingsMenu({
               void hardReloadApp()
             }}
           >
-            Reload App
+            Reload app
           </button>
           {signedIn
             ? onSignOut && (

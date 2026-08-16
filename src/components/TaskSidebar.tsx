@@ -1922,8 +1922,8 @@ function BlockGroupPanel({
                         <div className="block-library-picker-list">
                           {blockLibrary.categories.length === 0 ? (
                             <p className="muted block-library-picker-empty">
-                              No saved blocks yet. Add some in Settings → Block
-                              library.
+                              No saved blocks yet. Add some from the menu →
+                              Block library.
                             </p>
                           ) : (
                             blockLibrary.categories.map((category) => (

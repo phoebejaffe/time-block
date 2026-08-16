@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
 
-// Drop the cache-bust param from "Reload App" so it doesn't linger in the URL.
+// Drop the cache-bust param from "Reload app" so it doesn't linger in the URL.
 const bootUrl = new URL(window.location.href)
 if (bootUrl.searchParams.has('_reload')) {
   bootUrl.searchParams.delete('_reload')

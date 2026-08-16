@@ -273,8 +273,8 @@ from a group's checkpoint, §4.6 — a library block gets appended to whatever
 group you're editing, one or many at a time, rather than replacing/
 restoring the whole list). Users create categories, add/edit/delete/
 reorder blocks within a category via drag, and rename/reorder/delete whole
-categories, from a dedicated "Block library" modal (opened from the app's
-settings menu). A plan-row **add to library** control can also append the
+categories, from a dedicated "Block library" modal (opened from the app
+menu). A plan-row **add to library** control can also append the
 current block (title/duration/`empty`) into a chosen category. When adding
 blocks from the library into a group, the user multi-selects blocks (in the
 picker they're numbered in selection order) and they get appended to the
@@ -554,8 +554,8 @@ per-element sizing.
 
 Top to bottom:
 
-1. **Header row** — app name/logo mark, plus a settings menu button on the
-   far side (an icon-only "hamburger"-style trigger opening a dropdown; see
+1. **Header row** — app name/logo mark, plus a Menu button on the
+   far side (an icon-only hamburger-style trigger opening a dropdown; see
    §7.5 for its menu contents).
 2. **A vertical list of "plan" panels**, one per group in the plan,
    each independently either **expanded** or **collapsed**:
@@ -629,7 +629,7 @@ Top to bottom:
        **block library picker** dropdown (grouped by category, each block
        showing its title + duration, multi-selectable with a running numeric
        selection order, plus an "Add N block(s)" confirm button; shows an
-       empty-state message pointing at Settings → Block library if the
+       empty-state message pointing at the header menu → Block library if the
        library has no categories yet) and **"Custom"** opens the inline
        task editor directly for a one-off task.
      - **Group footer** (below the task list, on the group's grey outer
@@ -673,7 +673,7 @@ library, etc.) sit above those; toasts sit above nested dialogs. Modals used:
   action is
   disabled while busy, while there are no tasks on a fresh Add, or while
   no calendar is selected.
-- **Block library** (opened from the settings menu, not from a group) — a
+- **Block library** (opened from the app menu, not from a group) — a
   wider dialog listing every category, each with a name heading, a small
   "···" overflow menu (Rename — opens a nested "Rename category" modal
   stacked on top of this one, one field + Cancel/Save — / — separator —
@@ -691,7 +691,7 @@ library, etc.) sit above those; toasts sit above nested dialogs. Modals used:
   shows an "Undo" toast (§7.6), the same mechanism used for deleting a task
   from the plan.
 - **Archived plans** (opened from the sidebar footer next to "New plan +"
-  or from the settings menu, under Block library) — a wider dialog
+  or from the app menu, under Block library) — a wider dialog
   patterned on Block library. Search at the top matches plan names and
   block titles; results flatten across folders with the folder name as a
   quiet subtitle. Below that, named **folder** sections (flat, not nested;
@@ -716,15 +716,16 @@ library, etc.) sit above those; toasts sit above nested dialogs. Modals used:
   drag-reordered within a folder.
 - **How Time Block works** (help) — opens with why Time Block exists (visualizing
   time for ADHD / time blindness), then a short narrative of planning and
-  execution flows; opened from the settings menu.
+  execution flows; opened from the app menu.
 
-### 7.5 Settings menu (sidebar header)
+### 7.5 App menu (sidebar header)
 
-An icon-button dropdown containing, top to bottom: "Block library" (opens
+An icon-button dropdown (hamburger, labeled "Menu" — there is no separate
+Settings window) containing, top to bottom: "Block library" (opens
 that modal), "Archived plans" (opens the archive modal), — separator — /
 "How Time Block works" (opens the help modal), "Share app" (copies
 `https://phoebejaffe.github.io/time-block/` to the clipboard and toasts
-"Link copied."), "Reload App" (clears
+"Link copied."), "Reload app" (clears
 Cache Storage / service workers if any, then navigates to the same URL with
 a cache-busting query so `index.html` and its hashed JS/CSS are fetched
 fresh — plain `location.reload()` is not enough on GitHub Pages / Safari),
@@ -733,7 +734,7 @@ a small non-interactive line showing the app's build timestamp (for diagnosing
 which deployed version is running), then the collapsible "Session diagnostics"
 panel.
 
-Dropdowns and overflow menus (plan ···, block library picker, settings,
+Dropdowns and overflow menus (plan ···, block library picker, app menu,
 calendar menus, archive/library category menus) all portal to
 `document.body` so they are not clipped by sidebar or modal overflow; they
 flip above/below the trigger and clamp to the viewport. They close on
