@@ -2765,11 +2765,13 @@ body.is-task-reordering .task-sidebar {
   background: transparent;
 }
 
-.app-gate-footer .auth-diagnostics.is-expanded,
-.app-gate-footer .auth-diagnostics-recoverable {
+.app-gate-footer .auth-diagnostics.is-expanded {
   border: 0;
   border-radius: 8px;
   background: var(--paper-2);
+  box-shadow:
+    0 1px 2px rgba(26, 31, 28, 0.08),
+    0 6px 18px rgba(26, 31, 28, 0.12);
   padding: 0.35rem 0.55rem 0.45rem;
 }
 
@@ -2954,9 +2956,7 @@ body.is-task-reordering .task-sidebar {
 }
 
 .settings-menu-dropdown .auth-diagnostics.is-expanded {
-  border-radius: 8px;
-  background: var(--paper-2);
-  padding: 0.35rem 0.55rem 0.45rem;
+  padding: 0.1rem 0.65rem 0.4rem;
 }
 
 .settings-menu-dropdown .auth-diagnostics-title {
