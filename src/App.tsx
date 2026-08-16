@@ -575,11 +575,13 @@ export default function App() {
             progress.current === 0
               ? 'Starting…'
               : `Removing ${progress.current} of ${progress.total}`
-          show(
-            'info',
-            `Removing events from ${calendarWord}: ${step}`,
-            { persist: true },
-          )
+          show('info', `Removing events from ${calendarWord}: ${step}`, {
+            persist: true,
+            progress: {
+              current: progress.current,
+              total: Math.max(progress.total, 1),
+            },
+          })
         },
       )
       userData.applyCalendarDelete(pushedEvents, groupId, dayKey)

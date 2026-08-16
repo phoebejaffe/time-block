@@ -587,7 +587,7 @@ body.is-sidebar-resizing .main-panel {
   height: 100%;
   border-radius: inherit;
   background: var(--accent);
-  transition: width 120ms ease-out;
+  transition: width 0.3s ease-in;
 }
 
 .modal-dialog-wide {
@@ -2109,6 +2109,14 @@ body.is-task-reordering .task-sidebar {
   --toast-accent: var(--accent);
 }
 
+.notice-toast-busy {
+  max-width: min(28rem, calc(100vw - 2rem));
+}
+
+.notice-toast-busy .notice-toast-text {
+  white-space: nowrap;
+}
+
 .notice-toast-body {
   display: flex;
   align-items: center;
@@ -2172,6 +2180,26 @@ body.is-task-reordering .task-sidebar {
   animation-name: notice-progress-drain;
   animation-timing-function: linear;
   animation-fill-mode: forwards;
+}
+
+.notice-toast-progress-track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: color-mix(in srgb, var(--toast-accent) 16%, transparent);
+  overflow: hidden;
+}
+
+.notice-toast-progress-fill {
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--toast-accent) 55%, #c4a574),
+    var(--toast-accent)
+  );
+  transition: width 0.3s ease-in;
 }
 
 @keyframes notice-toast-enter {

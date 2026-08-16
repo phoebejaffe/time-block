@@ -32,7 +32,14 @@ export function useNotice() {
     (kind: NoticeKind, text: string, options?: NoticeOptions) => {
       clearTimer()
       const next = makeNotice(kind, text, options)
-      setNotice(next)
+      setNotice((prev) => {
+        // Keep the same toast instance while updating determinate progress
+        // so the bar can transition instead of remounting.
+        if (options?.persist && options.progress && prev?.progress) {
+          return { ...next, id: prev.id }
+        }
+        return next
+      })
       if (kind !== 'error' && !options?.persist) {
         const ms = options?.progressMs ?? AUTO_CLEAR_MS
         timerRef.current = setTimeout(() => {

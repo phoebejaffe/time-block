@@ -1,5 +1,10 @@
 export type NoticeKind = 'success' | 'error' | 'info'
 
+export type NoticeProgress = {
+  current: number
+  total: number
+}
+
 export type Notice = {
   id: string
   kind: NoticeKind
@@ -8,6 +13,8 @@ export type Notice = {
   onAction?: () => void
   /** When set, show a draining progress bar for this many ms. */
   progressMs?: number
+  /** Determinate in-progress bar along the toast bottom edge. */
+  progress?: NoticeProgress
 }
 
 export type NoticeOptions = {
@@ -16,6 +23,7 @@ export type NoticeOptions = {
   progressMs?: number
   /** When true, do not auto-dismiss (useful for in-progress status). */
   persist?: boolean
+  progress?: NoticeProgress
 }
 
 export function notice(
@@ -30,5 +38,6 @@ export function notice(
     actionLabel: options?.actionLabel,
     onAction: options?.onAction,
     progressMs: options?.progressMs,
+    progress: options?.progress,
   }
 }

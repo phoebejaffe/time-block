@@ -1111,9 +1111,10 @@ whichever calendar(s) they're actually on (tolerating already-deleted
 events; deletes run concurrently with a bounded pool), untrack them,
 clear that group+day's push snapshot, refresh the visible Google events,
 and toast the result. While deletions run, an info toast shows stepped
-progress (`Removing events from calendar: Removing 2 of 7`, pluralizing
-"calendar" when more than one is involved). This does not touch the
-in-app plan/tasks at all — it only removes calendar-side events.
+progress (`Removing events from calendar: Removing 2 of 7` on one line,
+pluralizing "calendar" when more than one is involved) with a determinate
+bar along the toast’s bottom edge that eases between steps. This does not
+touch the in-app plan/tasks at all — it only removes calendar-side events.
 
 ## 9. Error handling conventions
 
