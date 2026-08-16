@@ -261,34 +261,38 @@ export function combineDurationMinutes(
   return Math.max(1, h * 60 + m)
 }
 
-/** Step total duration by 5 minutes (spinner / arrow keys). */
+/** Step total duration by `stepMinutes` (spinner / arrow keys). */
 export function stepDurationMinutes(
   totalMinutes: number,
   direction: 'up' | 'down',
+  stepMinutes = 5,
 ): number {
+  const step = Math.max(1, Math.round(stepMinutes) || 5)
   const value = Math.max(1, Math.round(totalMinutes))
   if (direction === 'up') {
-    if (value % 5 === 0) return value + 5
-    return Math.ceil(value / 5) * 5
+    if (value % step === 0) return value + step
+    return Math.ceil(value / step) * step
   }
-  if (value % 5 === 0) return Math.max(1, value - 5)
-  return Math.max(1, Math.floor(value / 5) * 5)
+  if (value % step === 0) return Math.max(1, value - step)
+  return Math.max(1, Math.floor(value / step) * step)
 }
 
-/** Correct native number spinners that nudge by 1 (or mis-step by 5). */
+/** Correct native number spinners that nudge by 1 (or mis-step by the grid). */
 export function applyDurationSpinnerStep(
   prevTotal: number,
   nextTotal: number,
+  stepMinutes = 5,
 ): number {
+  const step = Math.max(1, Math.round(stepMinutes) || 5)
   const prev = Math.max(1, Math.round(prevTotal))
   const next = Math.max(1, Math.round(nextTotal))
   const delta = next - prev
   if (delta === 0) return prev
   if (
     Math.abs(delta) === 1 ||
-    (Math.abs(delta) === 5 && prev % 5 !== 0)
+    (Math.abs(delta) === step && prev % step !== 0)
   ) {
-    return stepDurationMinutes(prev, delta > 0 ? 'up' : 'down')
+    return stepDurationMinutes(prev, delta > 0 ? 'up' : 'down', step)
   }
   return next
 }
@@ -626,17 +630,18 @@ export function fromLocalTimeValue(value: string, baseIso: string): string {
 export type ClockTimeField = 'hour' | 'minute'
 
 /**
- * Step a local wall-clock time by whole hours or 5-minute ticks.
- * Minute steps snap to the 5-minute grid in the step direction, then move
- * by `steps * 5` minutes — rolling the hour/day when crossing :00 (so
- * 10:00 stepped down once becomes 9:55, never 10:55).
+ * Step a local wall-clock time by whole hours or `stepMinutes` ticks.
+ * Minute steps snap to the step grid in the step direction, then move
+ * by `steps * stepMinutes` minutes — rolling the hour/day when crossing :00.
  */
 export function stepLocalTime(
   iso: string,
   field: ClockTimeField,
   steps: number,
+  stepMinutes = 5,
 ): string {
   if (steps === 0) return iso
+  const step = Math.max(1, Math.round(stepMinutes) || 5)
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return iso
   if (field === 'hour') {
@@ -645,9 +650,9 @@ export function stepLocalTime(
   }
   const m = d.getMinutes()
   const snapped =
-    steps > 0 ? Math.floor(m / 5) * 5 : Math.ceil(m / 5) * 5
+    steps > 0 ? Math.floor(m / step) * step : Math.ceil(m / step) * step
   d.setMinutes(snapped, 0, 0)
-  d.setTime(d.getTime() + steps * 5 * 60_000)
+  d.setTime(d.getTime() + steps * step * 60_000)
   return d.toISOString()
 }
 
@@ -774,8 +779,14 @@ export function shiftAnchor(anchor: StackAnchor, deltaMs: number): StackAnchor {
 
 /** Round a minute count to the nearest multiple of 5 (0, 5, 10, …). */
 export function roundMinutesToNearestFive(minutes: number): number {
+  return roundMinutesToStep(minutes, 5)
+}
+
+/** Round a minute count to the nearest multiple of `step` (0, step, …). */
+export function roundMinutesToStep(minutes: number, step = 5): number {
   if (!Number.isFinite(minutes)) return 0
-  return Math.max(0, Math.round(minutes / 5) * 5)
+  const s = Math.max(1, Math.round(step) || 5)
+  return Math.max(0, Math.round(minutes / s) * s)
 }
 
 export type GotDelayedPlan = {
@@ -881,30 +892,32 @@ export function isGroupExecutableNow(
   return t >= stackStart - hourMs && t <= stackEnd + hourMs
 }
 
-/** How long after the last active block a forgotten run is ended. */
+/** How long after the last active block a forgotten run is ended (default). */
 export const EXECUTION_AUTO_END_AFTER_MS = 2 * 60 * 60 * 1000
 
 /**
- * Instant at which a run should auto-end: 2 hours after the last
+ * Instant at which a run should auto-end: `afterMs` after the last
  * non-disabled resolved block (stored anchor, not remapped onto today).
  * `null` when the stack has no active blocks.
  */
 export function executionAutoEndAt(
   group: Pick<BlockGroup, 'tasks' | 'anchor'>,
+  afterMs: number = EXECUTION_AUTO_END_AFTER_MS,
 ): number | null {
   const resolved = resolveStack(group.tasks, group.anchor).filter(
     (task) => !isTaskDisabled(task),
   )
   const last = resolved.at(-1)
   if (!last) return null
-  return last.end.getTime() + EXECUTION_AUTO_END_AFTER_MS
+  return last.end.getTime() + afterMs
 }
 
 export function shouldAutoEndExecution(
   group: Pick<BlockGroup, 'tasks' | 'anchor'>,
   now: Date = new Date(),
+  afterMs: number = EXECUTION_AUTO_END_AFTER_MS,
 ): boolean {
-  const at = executionAutoEndAt(group)
+  const at = executionAutoEndAt(group, afterMs)
   return at != null && now.getTime() >= at
 }
 

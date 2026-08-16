@@ -32,6 +32,22 @@ export const UNDO_MS = 5_000
 /** Longer undo window for checkpoints and big deletes. */
 export const UNDO_MS_LONG = 10_000
 
+/**
+ * Undo toast options from a duration in seconds.
+ * `0` (or less) omits the Undo action entirely.
+ */
+export function undoNoticeOptions(
+  seconds: number,
+  onAction: () => void,
+): NoticeOptions {
+  if (seconds <= 0) return {}
+  return {
+    actionLabel: 'Undo',
+    progressMs: Math.round(seconds * 1000),
+    onAction,
+  }
+}
+
 export function notice(
   kind: NoticeKind,
   text: string,

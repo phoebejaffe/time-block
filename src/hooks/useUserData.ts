@@ -31,6 +31,11 @@ import {
   normalizeSavedCalendarUsers,
   type SavedCalendarUser,
 } from '../lib/savedCalendarUsers'
+import {
+  defaultUserSettings,
+  normalizeUserSettings,
+  type UserSettings,
+} from '../lib/userSettings'
 
 /** Wait for a pause in edits before pushing — most edits arrive in bursts. */
 const PUSH_DEBOUNCE_MS = 2_000
@@ -70,6 +75,9 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
   const [savedCalendarUsers, setSavedCalendarUsers] = useState<
     SavedCalendarUser[]
   >([])
+  const [settings, setSettings] = useState<UserSettings>(() =>
+    defaultUserSettings(),
+  )
   const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState<SyncStatus>('idle')
   const [syncError, setSyncError] = useState<string | null>(null)
@@ -90,6 +98,7 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
     pushSnapshots,
     executingGroupId,
     savedCalendarUsers,
+    settings,
   })
   stateRef.current = {
     plan,
@@ -100,6 +109,7 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
     pushSnapshots,
     executingGroupId,
     savedCalendarUsers,
+    settings,
   }
 
   const onRemotePlanRef = useRef(onRemotePlan)
@@ -124,6 +134,7 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
       pushSnapshots: unknown
       executingGroupId?: unknown
       savedCalendarUsers?: unknown
+      settings?: unknown
     }) => {
       skipNextPushRef.current = true
       const migrated = migratePlan(remote.plan)
@@ -164,6 +175,11 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
       setSavedCalendarUsers(
         normalizeSavedCalendarUsers(remote.savedCalendarUsers),
       )
+      setSettings(
+        remote.settings != null
+          ? normalizeUserSettings(remote.settings)
+          : defaultUserSettings(),
+      )
       if (legacyEvents.length > 0 || legacySnapshots.length > 0) {
         skipNextPushRef.current = false
       }
@@ -182,6 +198,7 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
       pushSnapshots: ps,
       executingGroupId: eg,
       savedCalendarUsers: su,
+      settings: st,
     } = stateRef.current
     const updatedAt = new Date().toISOString()
     await saveUserState(uid, {
@@ -194,6 +211,7 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
       pushSnapshots: ps,
       executingGroupId: eg,
       savedCalendarUsers: su,
+      settings: st,
     })
     lastSyncedAtRef.current = updatedAt
   }, [])
@@ -288,7 +306,7 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
     return () => {
       if (pushTimerRef.current) clearTimeout(pushTimerRef.current)
     }
-  }, [plan, blockLibrary, planArchive, targetCalendarId, pushedEvents, pushSnapshots, executingGroupId, savedCalendarUsers, signedIn, firebaseUser, loading, pushNow])
+  }, [plan, blockLibrary, planArchive, targetCalendarId, pushedEvents, pushSnapshots, executingGroupId, savedCalendarUsers, settings, signedIn, firebaseUser, loading, pushNow])
 
   const replaceBlockLibrary = useCallback((next: BlockLibrary) => {
     setBlockLibrary(next)
@@ -308,6 +326,14 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
 
   const replaceSavedCalendarUsers = useCallback((next: SavedCalendarUser[]) => {
     setSavedCalendarUsers(normalizeSavedCalendarUsers(next))
+  }, [])
+
+  const replaceSettings = useCallback((next: UserSettings) => {
+    setSettings(normalizeUserSettings(next))
+  }, [])
+
+  const patchSettings = useCallback((patch: Partial<UserSettings>) => {
+    setSettings((prev) => normalizeUserSettings({ ...prev, ...patch }))
   }, [])
 
   const applyCalendarSync = useCallback(
@@ -368,6 +394,7 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
     setPushSnapshots([])
     setExecutingGroupIdState(null)
     setSavedCalendarUsers([])
+    setSettings(defaultUserSettings())
     setStatus('idle')
     setSyncError(null)
     setLoading(false)
@@ -382,6 +409,7 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
     pushSnapshots,
     executingGroupId,
     savedCalendarUsers,
+    settings,
     firebaseUser,
     loading: loading || (signedIn && !firebaseUser && isFirebaseConfigured()),
     status,
@@ -391,6 +419,8 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
     setTargetCalendarId,
     setExecutingGroupId,
     replaceSavedCalendarUsers,
+    replaceSettings,
+    patchSettings,
     applyCalendarSync,
     applyCalendarDelete,
     reset,

@@ -99,6 +99,7 @@ export function TaskFieldsForm({
   onTaskEditPreview,
   onSubmit,
   onCancel,
+  stepMinutes = 5,
 }: {
   initialTitle: string
   initialDuration: number
@@ -116,7 +117,10 @@ export function TaskFieldsForm({
   } | null) => void
   onSubmit: (task: Omit<Task, 'id'>) => void
   onCancel: () => void
+  /** Scrub / spinner grid in minutes (5 or 15). */
+  stepMinutes?: number
 }) {
+  const step = Math.max(1, Math.round(stepMinutes) || 5)
   const initialSplit = splitDurationMinutes(initialDuration)
   const [title, setTitle] = useState(initialTitle)
   const [hours, setHours] = useState<number | ''>(initialSplit.hours)
@@ -204,7 +208,7 @@ export function TaskFieldsForm({
     if (next !== prev) {
       const isSpinner =
         Math.abs(delta) === 1 ||
-        (Math.abs(delta) === 5 && prev % 5 !== 0)
+        (Math.abs(delta) === step && prev % step !== 0)
       if (isSpinner) {
         const prevTotal = combineDurationMinutes(hoursVal, prev)
         const nextTotal = combineDurationMinutes(hoursVal, next)
@@ -212,6 +216,7 @@ export function TaskFieldsForm({
           stepDurationMinutes(
             prevTotal,
             nextTotal > prevTotal ? 'up' : 'down',
+            step,
           ),
         )
         return
@@ -238,18 +243,18 @@ export function TaskFieldsForm({
         return
       }
       if (tick > 0) {
-        const floor = Math.floor(origin / 5) * 5
-        setTotalDuration(Math.max(1, floor + tick * 5))
+        const floor = Math.floor(origin / step) * step
+        setTotalDuration(Math.max(1, floor + tick * step))
         return
       }
-      const ceil = Math.ceil(origin / 5) * 5
-      setTotalDuration(Math.max(1, ceil + tick * 5))
+      const ceil = Math.ceil(origin / step) * step
+      setTotalDuration(Math.max(1, ceil + tick * step))
     })
   }
 
   function nudgeTotalDuration(direction: 'up' | 'down') {
     setTotalDuration(
-      stepDurationMinutes(resolveTotalMinutes(hours, minutes), direction),
+      stepDurationMinutes(resolveTotalMinutes(hours, minutes), direction, step),
     )
   }
 
@@ -321,7 +326,7 @@ export function TaskFieldsForm({
             type="number"
             inputMode="numeric"
             min={0}
-            step={5}
+            step={step}
             className="task-form-duration-mins"
             value={minutes}
             onChange={(e) => handleMinutesChange(e.target.value)}

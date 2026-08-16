@@ -27,7 +27,7 @@ import {
   stackDurationMinutes,
 } from '../lib/tasks'
 import type { NoticeOptions } from '../lib/notice'
-import { UNDO_MS_LONG } from '../lib/notice'
+import { undoNoticeOptions } from '../lib/notice'
 import { useFixedMenu } from '../hooks/useFixedMenu'
 import { FixedMenuPortal } from './FixedMenuPortal'
 
@@ -40,6 +40,7 @@ type ArchivedPlansModalProps = {
   onClose: () => void
   onShowNotice?: (text: string, options?: NoticeOptions) => void
   onClearNotice?: () => void
+  majorUndoSeconds?: number
 }
 
 export function ArchivedPlansModal({
@@ -49,6 +50,7 @@ export function ArchivedPlansModal({
   onClose,
   onShowNotice,
   onClearNotice,
+  majorUndoSeconds = 10,
 }: ArchivedPlansModalProps) {
   const [query, setQuery] = useState('')
   const [expandedPlanId, setExpandedPlanId] = useState<string | null>(null)
@@ -167,12 +169,10 @@ export function ArchivedPlansModal({
       const label = folder.name.trim() || 'Untitled'
       onChange(removeArchiveFolder(archive, folderId))
       onShowNotice?.(`“${label}” folder deleted`, {
-        actionLabel: 'Undo',
-        progressMs: UNDO_MS_LONG,
-        onAction: () => {
+        ...undoNoticeOptions(majorUndoSeconds, () => {
           onChange(previous)
           onClearNotice?.()
-        },
+        }),
       })
       return
     }
@@ -186,12 +186,10 @@ export function ArchivedPlansModal({
     onChange(next)
     if (expandedPlanId === plan.id) setExpandedPlanId(null)
     onShowNotice?.(`“${label}” deleted from archive`, {
-      actionLabel: 'Undo',
-      progressMs: UNDO_MS_LONG,
-      onAction: () => {
+      ...undoNoticeOptions(majorUndoSeconds, () => {
         onChange(addArchivedPlan(next, removed, folder.id))
         onClearNotice?.()
-      },
+      }),
     })
   }
 
@@ -378,12 +376,10 @@ export function ArchivedPlansModal({
             )
             closeNested()
             onShowNotice?.(`“${label}” folder deleted`, {
-              actionLabel: 'Undo',
-              progressMs: UNDO_MS_LONG,
-              onAction: () => {
+              ...undoNoticeOptions(majorUndoSeconds, () => {
                 onChange(previous)
                 onClearNotice?.()
-              },
+              }),
             })
           }}
           onCancel={closeNested}

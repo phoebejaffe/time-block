@@ -220,7 +220,8 @@ date only changes for real when the user actually edits the time (or drags
 the stack on the calendar) while viewing that day. In other words: the
 calendar view always shows "if this group's tasks happened today [or
 whatever day is in view], here's when," and only committing an edit persists
-that day. Default: a new group anchors "ends at 9:00am today."
+that day. Default: a new group uses the Settings default anchor (Starts/Ends
++ time; factory default is "ends at 9:00am today").
 
 ### 4.6 Block-group checkpoint (save/revert a group's "default" blocks)
 
@@ -605,7 +606,7 @@ Top to bottom:
        total duration so the resolved blocks stay on the same calendar
        times — start→end moves `at` forward by the duration; end→start
        moves it backward); the word "at"; a native time input showing the
-       anchor's local time (`HH:mm`, 5-minute step); and, if the group has
+       anchor's local time (`HH:mm`, step from Settings); and, if the group has
        any tasks, a read-only summary of the whole stack's start–end time
        range.
      - **Task list**: one row per task, each showing (in order): the task's
@@ -660,7 +661,7 @@ Top to bottom:
        instead, and the group footer is omitted.
 3. **"New plan +"** and **"Archived plans"** at the bottom of the group
    list, side by side. New plan appends a fresh empty group (anchored to
-   "ends at 9:00am today" by default). Archived plans opens the archive
+   "ends at" the Settings default time by default). Archived plans opens the archive
    modal (§7.4) so restore is one tap from Home.
 
 ### 7.4 Modals
@@ -699,11 +700,24 @@ library, etc.) sit above those; toasts sit above nested dialogs. Modals used:
   no calendar is selected on a fresh Add. On Update, committing with none
   selected is allowed: it removes this group's events from every calendar
   they were on for that day.
-- **Settings** (opened from the app menu) — a wider dialog, the home for
-  app preferences. Body is stacked sections. First section, **Saved users**:
-  a list of name + email with remove, and an add form (name, email; rejects
-  invalid or duplicate emails). Closed via header "×", click-outside, or
-  Escape. Further settings land in this same modal later.
+- **Settings** (opened from the app menu) — a wider dialog with a side nav
+  (Planning / Calendars / Interface / Running Plans / App) and
+  stacked preference sections. Synced across devices in Firestore
+  `users/{uid}.settings` (plus existing top-level `targetCalendarId`).
+  - **Planning**: default new-plan anchor (Starts/Ends + scrubbable time);
+    default Custom block duration in minutes.
+  - **Calendars**: **Saved users** (name + email on one line; add form
+    behind **Add user**); **Default target calendar** for Add/Update (set
+    only here — not overwritten by a successful push); **Hide calendars**
+    (applies across the entire app; unchecked = hidden).
+  - **Interface**: time & duration step (5 or 15 minutes for scrubbing /
+    inputs); **Quick undo** and **Major undo** windows in seconds (`0s`
+    disables undo).
+  - **Running Plans**: auto-end a run N hours after the last active block
+    (default 2).
+  - **App**: export/import JSON for the block library and for Home plans
+    + archived plans (import confirms replace); session diagnostics.
+  Closed via header "×", click-outside, or Escape.
 - **Block library** (opened from the app menu, not from a group) — a
   wider dialog listing every category, each with a name heading, a small
   "···" overflow menu (Rename — opens a nested "Rename category" modal
@@ -762,8 +776,8 @@ a cache-busting query so `index.html` and its hashed JS/CSS are fetched
 fresh — plain `location.reload()` is not enough on GitHub Pages / Safari),
 then either "Log out" or "Log in" depending on session state, — separator — /
 a small non-interactive line showing the app's build timestamp (for diagnosing
-which deployed version is running), then the collapsible "Session diagnostics"
-panel.
+which deployed version is running). Session diagnostics live under
+Settings → App.
 
 Dropdowns and overflow menus (plan ···, block library picker, app menu,
 calendar menus, archive/library category menus) all portal to
@@ -785,8 +799,8 @@ screen (above nested dialogs), styled per kind (`success` | `error` | `info`), o
 action button (used for "Undo" after deleting a task) and/or a shrinking
 progress bar indicating time-to-auto-dismiss. Success and info notices
 auto-dismiss after a default delay (~5s, or a custom delay if specified —
-~10s for larger undos such as deleting a plan, archive folder, library
-category, or saving/reverting defaults); error notices persist until the user causes
+Quick undo / Major undo seconds from Settings; `0s` disables undo);
+error notices persist until the user causes
 another notice or the current action completes/clears it, since they must
 not be missed.
 
@@ -805,12 +819,12 @@ of their normal click-to-type behavior, tuned for both mouse and touch:
   native time picker mid-drag would be disruptive).
 - Once active: dragging up increases the value, dragging down decreases it,
   in fixed-size ticks per some number of pixels moved:
-  - Duration **minutes** field: 5-minute increments off the nearest
-    multiple of 5 (total duration minimum 1 minute).
+  - Duration **minutes** field: step-minute increments (5 or 15 from
+    Settings) off the nearest multiple of the step (total duration minimum
+    1 minute).
   - Duration **hours** field: 1-hour increments (minutes preserved).
-  - Anchor / intended-end time: 5-minute increments for minutes (rolling the
-    hour when crossing `:00` / `:55`, so 10:00 down becomes 9:55 — never a
-    same-hour wrap to 10:55), or whole-hour increments if the drag started
+  - Anchor / intended-end time: step-minute increments for minutes (rolling the
+    hour when crossing a step boundary), or whole-hour increments if the drag started
     with the cursor/caret over the hour portion of the `HH:mm` text. Arrow
     keys use the same stepping (native minute-segment wrap is overridden).
   - Duration minutes can also be nudged by 5 minutes (hours by 1 hour) via
@@ -908,8 +922,9 @@ for running one group against the clock:
    row is highlighted and its **Running** button expands the group and
    reopens the modal. Execution mode itself never shows a collapsed group.
 8. **Auto-end**: a run ends on its own (same as **End run**) once wall-clock
-   now is 2 hours or more after the last non-disabled block in the executing
-   group, using the stored anchor times (not remapped onto today). If the
+   now is N hours or more after the last non-disabled block in the executing
+   group (N from Settings, default 2), using the stored anchor times (not
+   remapped onto today). If the
    stack has no active blocks, it does not auto-end. Delays that push the
    stack later also push this deadline. A leftover run from a previous day
    ends on the next load or when the tab becomes visible again.
@@ -1052,7 +1067,10 @@ whenever the calendar's visible date range changes.
   `targetCalendarId`, `pushedEvents`, `pushSnapshots`, `executingGroupId`
   (string or null — which group is in execution mode, if any),
   `savedCalendarUsers` (address book of `{ id, name, email }` for calendar
-  invites; unique by lowercased email).
+  invites; unique by lowercased email),
+  `settings` (user preferences: default new-plan anchor, default Custom
+  block minutes, time step, Quick/Major undo seconds (`0s` disables undo),
+  execution auto-end hours, hidden calendar ids — see §7.4).
 - **On sign-in**, subscribe to that document in real time:
   - If it exists and its `updatedAt` is newer than the last value this tab
     itself wrote, replace all local state with the remote values
@@ -1214,13 +1232,14 @@ touch the in-app plan/tasks at all — it only removes calendar-side events.
 | Block library | Firestore `users/{uid}.blockLibrary` | Yes |
 | Archived plans | Firestore `users/{uid}.planArchive` | Yes |
 | Saved calendar users | Firestore `users/{uid}.savedCalendarUsers` | Yes |
+| User settings (prefs) | Firestore `users/{uid}.settings` | Yes |
 | Target calendar id | Firestore `users/{uid}.targetCalendarId` | Yes |
 | Executing group id | Firestore `users/{uid}.executingGroupId` | Yes |
 | Calendar push history (events + snapshots) | Firestore `users/{uid}.pushedEvents` / `.pushSnapshots` | Yes |
 | Google OAuth session (access/refresh token, granted scopes) | `localStorage` (device) | No |
 | Sidebar width (desktop) | `localStorage` (device) | No |
 | Mobile split percentage | `localStorage` (device) | No |
-| Which calendars are toggled visible | in-memory only | No (resets on reload) |
+| Which calendars are toggled visible | in-memory only (hidden calendars from Settings are also omitted from the picker) | No (visibility toggles reset on reload; hide list syncs) |
 | Live edit/drag previews | in-memory only | No |
 
 The app deliberately never persists "which day you're looking at" — every

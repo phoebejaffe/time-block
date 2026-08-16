@@ -10,10 +10,13 @@ import type {
   BlockGroup,
   BlockLibrary,
   CalendarGuest,
+  Plan,
   StackAnchor,
   Task,
 } from '../lib/tasks'
 import type { SavedCalendarUser } from '../lib/savedCalendarUsers'
+import type { UserSettings } from '../lib/userSettings'
+import { defaultUserSettings } from '../lib/userSettings'
 import {
   blockLibraryKey,
   DEFAULT_GROUP_COLOR,
@@ -162,6 +165,12 @@ type TaskSidebarProps = {
   onClearNotice?: () => void
   savedCalendarUsers: SavedCalendarUser[]
   onReplaceSavedCalendarUsers: (users: SavedCalendarUser[]) => void
+  /** Required in planning mode (Settings). */
+  settings?: UserSettings
+  onReplaceSettings?: (settings: UserSettings) => void
+  allCalendars?: GoogleCalendar[]
+  plan?: Plan
+  onReplacePlan?: (plan: Plan) => void
 }
 
 export function TaskSidebar({
@@ -216,6 +225,11 @@ export function TaskSidebar({
   onClearNotice,
   savedCalendarUsers,
   onReplaceSavedCalendarUsers,
+  settings = defaultUserSettings(),
+  onReplaceSettings,
+  allCalendars = [],
+  plan = { groups: [] },
+  onReplacePlan,
 }: TaskSidebarProps) {
   const [groupNameInput, setGroupNameInput] = useState('')
   const [modal, setModal] = useState<ModalKind | null>(null)
@@ -347,9 +361,6 @@ export function TaskSidebar({
     if (!modalGroupId) return
     const ok = await onCommit(modalGroupId, selectedCommitIds, commitGuestsByCalendar)
     if (ok) {
-      if (selectedCommitIds[0]) {
-        onTargetCalendarChange(selectedCommitIds[0])
-      }
       closeModal()
     }
   }
@@ -401,11 +412,21 @@ export function TaskSidebar({
               onAuthTestRefresh={onAuthTestRefresh}
               blockLibrary={blockLibrary}
               onReplaceBlockLibrary={onReplaceBlockLibrary}
+              plan={plan}
+              onReplacePlan={onReplacePlan ?? (() => {})}
+              planArchive={planArchive}
+              onReplacePlanArchive={onReplacePlanArchive}
               onOpenArchivedPlans={() => setArchivedPlansOpen(true)}
               onShowNotice={onShowNotice}
               onClearNotice={onClearNotice}
               savedCalendarUsers={savedCalendarUsers}
               onReplaceSavedCalendarUsers={onReplaceSavedCalendarUsers}
+              settings={settings}
+              onReplaceSettings={onReplaceSettings ?? (() => {})}
+              targetCalendarId={targetCalendarId}
+              onTargetCalendarChange={onTargetCalendarChange}
+              calendars={allCalendars}
+              writableCalendars={writableCalendars}
             />
           </div>
         </div>
@@ -478,6 +499,8 @@ export function TaskSidebar({
               setAddToLibraryTask(task)
               setAddToLibraryCategoryId(blockLibrary.categories[0]?.id ?? '')
             }}
+            timeStepMinutes={settings.timeStepMinutes}
+            defaultBlockMinutes={settings.defaultBlockMinutes}
           />
         ))}
         {mode === 'planning' && (
@@ -655,6 +678,7 @@ export function TaskSidebar({
           onClose={() => setArchivedPlansOpen(false)}
           onShowNotice={onShowNotice}
           onClearNotice={onClearNotice}
+          majorUndoSeconds={settings.majorUndoSeconds}
         />
       )}
 
@@ -669,6 +693,8 @@ export function TaskSidebar({
           onShowNotice={onShowNotice}
           onClearNotice={onClearNotice}
           focusBlockId={libraryFocusBlockId ?? undefined}
+          quickUndoSeconds={settings.quickUndoSeconds}
+          majorUndoSeconds={settings.majorUndoSeconds}
         />
       )}
 
@@ -831,6 +857,8 @@ type BlockGroupPanelProps = {
   blockLibrary: BlockLibrary
   onAddFromLibrary: (inputs: Omit<Task, 'id'>[]) => void
   onAddToLibrary: (task: Task) => void
+  timeStepMinutes?: number
+  defaultBlockMinutes?: number
 }
 
 function GroupColorMenuItem({
@@ -897,6 +925,8 @@ function BlockGroupPanel({
   blockLibrary,
   onAddFromLibrary,
   onAddToLibrary,
+  timeStepMinutes = 5,
+  defaultBlockMinutes = 30,
 }: BlockGroupPanelProps) {
   const { tasks, anchor } = group
   const enabled = isGroupEnabled(group)
@@ -1234,7 +1264,7 @@ function BlockGroupPanel({
     window.getSelection()?.removeAllRanges()
 
     function isoForTick(tick: number): string {
-      return stepLocalTime(originIso, field, tick)
+      return stepLocalTime(originIso, field, tick, timeStepMinutes)
     }
 
     function onMove(ev: PointerEvent) {
@@ -1315,7 +1345,7 @@ function BlockGroupPanel({
     e.preventDefault()
     const field = anchorFieldFromSelection(readSelectionStart(e.currentTarget))
     const steps = e.key === 'ArrowUp' ? 1 : -1
-    onIsoChange(stepLocalTime(baseIso, field, steps))
+    onIsoChange(stepLocalTime(baseIso, field, steps, timeStepMinutes))
   }
 
   function beginAnchorScrub(e: React.PointerEvent<HTMLInputElement>) {
@@ -1544,7 +1574,7 @@ function BlockGroupPanel({
                   <span className="sr-only">List starts at</span>
                   <input
                     type="time"
-                    step={300}
+                    step={timeStepMinutes * 60}
                     value={toLocalTimeValue(anchor.at)}
                     onChange={(e) => {
                       applyTimeInputChange(e.target.value, anchor.at, (iso) =>
@@ -1567,7 +1597,7 @@ function BlockGroupPanel({
                       <span className="sr-only">Intended end time</span>
                       <input
                         type="time"
-                        step={300}
+                        step={timeStepMinutes * 60}
                         value={toLocalTimeValue(group.intendedEndAt)}
                         disabled={busy}
                         onChange={(e) => {
@@ -1625,7 +1655,7 @@ function BlockGroupPanel({
                 </span>
                 <input
                   type="time"
-                  step={300}
+                  step={timeStepMinutes * 60}
                   value={toLocalTimeValue(anchor.at)}
                   onChange={(e) => {
                     applyTimeInputChange(e.target.value, anchor.at, (iso) =>
@@ -1775,6 +1805,7 @@ function BlockGroupPanel({
                   initialTitle={task.title}
                   initialDuration={task.durationMinutes}
                   initialEmpty={task.empty === true}
+                  stepMinutes={timeStepMinutes}
                   submitLabel="Save"
                   busy={busy}
                   previewGroupId={group.id}
@@ -1934,7 +1965,8 @@ function BlockGroupPanel({
           {adding ? (
             <TaskFieldsForm
               initialTitle=""
-              initialDuration={30}
+              initialDuration={defaultBlockMinutes}
+              stepMinutes={timeStepMinutes}
               submitLabel="Add"
               busy={busy}
               onCancel={onCancelAdd}

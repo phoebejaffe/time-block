@@ -121,6 +121,24 @@ export function useCalendarEvents({
     })
   }, [])
 
+  /** Drop ids from the visible set (e.g. when Settings hides calendars). */
+  const omitVisibleIds = useCallback((ids: Iterable<string>) => {
+    const hide = new Set(ids)
+    if (hide.size === 0) return
+    setVisibleIds((prev) => {
+      let changed = false
+      const next = new Set<string>()
+      for (const id of prev) {
+        if (hide.has(id)) {
+          changed = true
+          continue
+        }
+        next.add(id)
+      }
+      return changed ? next : prev
+    })
+  }, [])
+
   const setDates = useCallback((start: Date, end: Date) => {
     setRange((prev) => {
       if (
@@ -141,6 +159,7 @@ export function useCalendarEvents({
     writableCalendars,
     busy,
     toggleCalendar,
+    omitVisibleIds,
     setDates,
     refreshEvents,
     reset,

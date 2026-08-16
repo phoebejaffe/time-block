@@ -3,6 +3,7 @@ import {
   anchorOnDay,
   blockLibraryKey,
   createCheckpoint,
+  createBlockGroup,
   defaultBlockLibrary,
   formatCalendarDay,
   formatCalendarRange,
@@ -228,6 +229,25 @@ describe('migratePlan', () => {
     })
     expect(plan!.groups[0]!.calendarGuests).toEqual({
       'cal-1': [{ email: 'ada@example.com', name: 'Ada' }],
+    })
+  })
+
+  it('drops invalid calendar guests when loading a plan', () => {
+    const plan = migratePlan({
+      groups: [
+        {
+          id: 'g1',
+          tasks: [{ id: '1', title: 'Write', durationMinutes: 25 }],
+          anchor: { kind: 'start', at: '2026-07-18T08:00:00.000Z' },
+          calendarGuests: {
+            'cal-1': [{ email: 'nope' }, { email: 'ada@example.com' }],
+            '': [{ email: 'x@y.com' }],
+          },
+        },
+      ],
+    })
+    expect(plan!.groups[0]!.calendarGuests).toEqual({
+      'cal-1': [{ email: 'ada@example.com' }],
     })
   })
 
@@ -523,6 +543,24 @@ describe('checkpoints', () => {
   it('matches when tasks are identical in title/duration/order/empty', () => {
     const checkpoint = createCheckpoint(tasks, anchor)
     expect(tasksMatchCheckpoint(tasks, checkpoint)).toBe(true)
+  })
+
+  it('does not store calendar guests on a checkpoint', () => {
+    const guests = { 'cal-1': [{ email: 'ada@example.com', name: 'Ada' }] }
+    const group = createBlockGroup({ tasks, anchor, calendarGuests: guests })
+    const checkpoint = createCheckpoint(group.tasks, group.anchor)
+    expect(group.calendarGuests).toEqual(guests)
+    expect(checkpoint).not.toHaveProperty('calendarGuests')
+    expect(checkpoint.tasks).toBeDefined()
+    expect(checkpoint.anchor).toEqual(anchor)
+  })
+
+  it('clones calendar guests so duplicate/archive cannot share the same object', () => {
+    const guests = { 'cal-1': [{ email: 'ada@example.com', name: 'Ada' }] }
+    const group = createBlockGroup({ calendarGuests: guests })
+    expect(group.calendarGuests).toEqual(guests)
+    expect(group.calendarGuests).not.toBe(guests)
+    expect(group.calendarGuests!['cal-1']).not.toBe(guests['cal-1'])
   })
 
   it('detects drift from an edited title, duration, reorder, or added/removed task', () => {

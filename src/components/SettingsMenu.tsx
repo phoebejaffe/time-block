@@ -1,13 +1,15 @@
 import { useMemo, useRef, useState } from 'react'
 import { HowItWorksModal } from './HowItWorksModal'
 import { BlockLibraryModal } from './BlockLibraryModal'
-import { AuthSessionDiagnostics } from './AuthSessionDiagnostics'
 import { FixedMenuPortal } from './FixedMenuPortal'
 import { SettingsModal } from './SettingsModal'
-import type { BlockLibrary } from '../lib/tasks'
+import type { BlockLibrary, Plan } from '../lib/tasks'
+import type { PlanArchive } from '../lib/planArchive'
 import type { SavedCalendarUser } from '../lib/savedCalendarUsers'
 import type { NoticeOptions } from '../lib/notice'
 import type { SessionDiagnostics } from '../lib/google'
+import type { GoogleCalendar } from '../lib/calendarApi'
+import type { UserSettings } from '../lib/userSettings'
 import { hardReloadApp } from '../lib/hardReload'
 import { useFixedMenu } from '../hooks/useFixedMenu'
 
@@ -22,11 +24,21 @@ type SettingsMenuProps = {
   onAuthTestRefresh?: () => void
   blockLibrary: BlockLibrary
   onReplaceBlockLibrary: (library: BlockLibrary) => void
+  plan: Plan
+  onReplacePlan: (plan: Plan) => void
+  planArchive: PlanArchive
+  onReplacePlanArchive: (archive: PlanArchive) => void
   onOpenArchivedPlans?: () => void
   onShowNotice?: (text: string, options?: NoticeOptions) => void
   onClearNotice?: () => void
   savedCalendarUsers: SavedCalendarUser[]
   onReplaceSavedCalendarUsers: (users: SavedCalendarUser[]) => void
+  settings: UserSettings
+  onReplaceSettings: (settings: UserSettings) => void
+  targetCalendarId: string
+  onTargetCalendarChange: (id: string) => void
+  calendars: GoogleCalendar[]
+  writableCalendars: GoogleCalendar[]
 }
 
 const SHARE_APP_URL = 'https://phoebejaffe.github.io/time-block/'
@@ -53,11 +65,21 @@ export function SettingsMenu({
   onAuthTestRefresh,
   blockLibrary,
   onReplaceBlockLibrary,
+  plan,
+  onReplacePlan,
+  planArchive,
+  onReplacePlanArchive,
   onOpenArchivedPlans,
   onShowNotice,
   onClearNotice,
   savedCalendarUsers,
   onReplaceSavedCalendarUsers,
+  settings,
+  onReplaceSettings,
+  targetCalendarId,
+  onTargetCalendarChange,
+  calendars,
+  writableCalendars,
 }: SettingsMenuProps) {
   const [open, setOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
@@ -101,116 +123,107 @@ export function SettingsMenu({
         style={menu.style}
         className="settings-menu-dropdown"
       >
+        <button
+          type="button"
+          role="menuitem"
+          className="calendar-menu-item"
+          onClick={() => {
+            setOpen(false)
+            setLibraryOpen(true)
+          }}
+        >
+          Block library
+        </button>
+        {onOpenArchivedPlans && (
           <button
             type="button"
             role="menuitem"
             className="calendar-menu-item"
             onClick={() => {
               setOpen(false)
-              setLibraryOpen(true)
+              onOpenArchivedPlans()
             }}
           >
-            Block library
+            Archived plans
           </button>
-          {onOpenArchivedPlans && (
-            <button
-              type="button"
-              role="menuitem"
-              className="calendar-menu-item"
-              onClick={() => {
-                setOpen(false)
-                onOpenArchivedPlans()
-              }}
-            >
-              Archived plans
-            </button>
-          )}
-          <button
-            type="button"
-            role="menuitem"
-            className="calendar-menu-item"
-            onClick={() => {
-              setOpen(false)
-              setSettingsOpen(true)
-            }}
-          >
-            Settings
-          </button>
-          <div className="calendar-menu-sep" role="separator" />
-          <button
-            type="button"
-            role="menuitem"
-            className="calendar-menu-item"
-            onClick={() => {
-              setOpen(false)
-              setHelpOpen(true)
-            }}
-          >
-            How Time Block works
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            className="calendar-menu-item"
-            onClick={() => {
-              setOpen(false)
-              void shareAppLink()
-            }}
-          >
-            Share app
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            className="calendar-menu-item"
-            onClick={() => {
-              setOpen(false)
-              void hardReloadApp()
-            }}
-          >
-            Reload app
-          </button>
-          {signedIn
-            ? onSignOut && (
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="calendar-menu-item"
-                  disabled={busy}
-                  onClick={() => {
-                    setOpen(false)
-                    onSignOut()
-                  }}
-                >
-                  Log out
-                </button>
-              )
-            : onSignIn && (
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="calendar-menu-item"
-                  disabled={busy}
-                  onClick={() => {
-                    setOpen(false)
-                    onSignIn()
-                  }}
-                >
-                  Log in
-                </button>
-              )}
-          <div className="calendar-menu-sep" role="separator" />
-          <p className="settings-menu-build">{buildTime}</p>
-          {authDiagnostics && (
-            <AuthSessionDiagnostics
-              diagnostics={authDiagnostics}
-              signedIn={authSignedIn ?? Boolean(signedIn)}
-              testBusy={authTestRefreshBusy}
-              onTestRefresh={onAuthTestRefresh}
-              compact
-            />
-          )}
-        </FixedMenuPortal>
+        )}
+        <button
+          type="button"
+          role="menuitem"
+          className="calendar-menu-item"
+          onClick={() => {
+            setOpen(false)
+            setSettingsOpen(true)
+          }}
+        >
+          Settings
+        </button>
+        <div className="calendar-menu-sep" role="separator" />
+        <button
+          type="button"
+          role="menuitem"
+          className="calendar-menu-item"
+          onClick={() => {
+            setOpen(false)
+            setHelpOpen(true)
+          }}
+        >
+          How Time Block works
+        </button>
+        <button
+          type="button"
+          role="menuitem"
+          className="calendar-menu-item"
+          onClick={() => {
+            setOpen(false)
+            void shareAppLink()
+          }}
+        >
+          Share app
+        </button>
+        <button
+          type="button"
+          role="menuitem"
+          className="calendar-menu-item"
+          onClick={() => {
+            setOpen(false)
+            void hardReloadApp()
+          }}
+        >
+          Reload app
+        </button>
+        {signedIn
+          ? onSignOut && (
+              <button
+                type="button"
+                role="menuitem"
+                className="calendar-menu-item"
+                disabled={busy}
+                onClick={() => {
+                  setOpen(false)
+                  onSignOut()
+                }}
+              >
+                Log out
+              </button>
+            )
+          : onSignIn && (
+              <button
+                type="button"
+                role="menuitem"
+                className="calendar-menu-item"
+                disabled={busy}
+                onClick={() => {
+                  setOpen(false)
+                  onSignIn()
+                }}
+              >
+                Log in
+              </button>
+            )}
+        <div className="calendar-menu-sep" role="separator" />
+        <p className="settings-menu-build">{buildTime}</p>
+      </FixedMenuPortal>
       {helpOpen && <HowItWorksModal onClose={() => setHelpOpen(false)} />}
       {libraryOpen && (
         <BlockLibraryModal
@@ -219,12 +232,31 @@ export function SettingsMenu({
           onClose={() => setLibraryOpen(false)}
           onShowNotice={onShowNotice}
           onClearNotice={onClearNotice}
+          majorUndoSeconds={settings.majorUndoSeconds}
+          quickUndoSeconds={settings.quickUndoSeconds}
         />
       )}
       {settingsOpen && (
         <SettingsModal
+          settings={settings}
+          onChangeSettings={onReplaceSettings}
+          targetCalendarId={targetCalendarId}
+          onTargetCalendarChange={onTargetCalendarChange}
+          calendars={calendars}
+          writableCalendars={writableCalendars}
           savedUsers={savedCalendarUsers}
-          onChange={onReplaceSavedCalendarUsers}
+          onChangeSavedUsers={onReplaceSavedCalendarUsers}
+          blockLibrary={blockLibrary}
+          onReplaceBlockLibrary={onReplaceBlockLibrary}
+          plan={plan}
+          onReplacePlan={onReplacePlan}
+          planArchive={planArchive}
+          onReplacePlanArchive={onReplacePlanArchive}
+          onShowNotice={(text) => onShowNotice?.(text)}
+          authDiagnostics={authDiagnostics}
+          authSignedIn={authSignedIn}
+          authTestRefreshBusy={authTestRefreshBusy}
+          onAuthTestRefresh={onAuthTestRefresh}
           onClose={() => setSettingsOpen(false)}
         />
       )}

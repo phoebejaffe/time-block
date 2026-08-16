@@ -1,9 +1,10 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import {
   applyGotDelayed,
   createBlockGroup,
   createCheckpoint,
   createTask,
+  defaultAnchor,
   defaultPlan,
   isTaskDelay,
   prepareGroupForExecution,
@@ -11,7 +12,6 @@ import {
   tasksFromCheckpoint,
   type BlockGroup,
   type BlockGroupCheckpoint,
-  type CalendarGuest,
   type Plan,
   type StackAnchor,
   type Task,
@@ -20,6 +20,7 @@ import {
   blockGroupFromArchivedPlan,
   type ArchivedPlan,
 } from '../lib/planArchive'
+import { mergeCalendarGuests, type CalendarGuest } from '../lib/savedCalendarUsers'
 
 function mapGroup(
   groups: BlockGroup[],
@@ -35,8 +36,10 @@ function mapGroup(
  * Starts empty; `replacePlan` fills it in once the initial Firestore load
  * (or a later sign-in) resolves.
  */
-export function usePlan() {
+export function usePlan(options?: { getDefaultAnchor?: () => StackAnchor }) {
   const [plan, setPlan] = useState<Plan>(() => defaultPlan())
+  const getDefaultAnchorRef = useRef(options?.getDefaultAnchor ?? defaultAnchor)
+  getDefaultAnchorRef.current = options?.getDefaultAnchor ?? defaultAnchor
 
   const updatePlan = useCallback((updater: (prev: Plan) => Plan) => {
     setPlan((prev) => updater(prev))
@@ -45,7 +48,9 @@ export function usePlan() {
   const addGroup = useCallback(() => {
     let id = ''
     updatePlan((prev) => {
-      const group = createBlockGroup()
+      const group = createBlockGroup({
+        anchor: getDefaultAnchorRef.current(),
+      })
       id = group.id
       return { groups: [...prev.groups, group] }
     })
@@ -56,7 +61,14 @@ export function usePlan() {
     (groupId: string) => {
       updatePlan((prev) => {
         if (prev.groups.length <= 1) {
-          return { groups: [createBlockGroup({ id: prev.groups[0]?.id })] }
+          return {
+            groups: [
+              createBlockGroup({
+                id: prev.groups[0]?.id,
+                anchor: getDefaultAnchorRef.current(),
+              }),
+            ],
+          }
         }
         return { groups: prev.groups.filter((g) => g.id !== groupId) }
       })
@@ -436,20 +448,8 @@ export function usePlan() {
     (groupId: string, guestsByCalendar: Record<string, CalendarGuest[]>) => {
       updatePlan((prev) => ({
         groups: mapGroup(prev.groups, groupId, (g) => {
-          const merged: Record<string, CalendarGuest[]> = {
-            ...(g.calendarGuests ?? {}),
-          }
-          for (const [calendarId, guests] of Object.entries(guestsByCalendar)) {
-            if (guests.length === 0) delete merged[calendarId]
-            else {
-              merged[calendarId] = guests.map((guest) =>
-                guest.name?.trim()
-                  ? { email: guest.email, name: guest.name.trim() }
-                  : { email: guest.email },
-              )
-            }
-          }
-          if (Object.keys(merged).length === 0) {
+          const merged = mergeCalendarGuests(g.calendarGuests, guestsByCalendar)
+          if (!merged) {
             if (!g.calendarGuests) return g
             const next = { ...g }
             delete next.calendarGuests

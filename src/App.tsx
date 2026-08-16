@@ -17,7 +17,7 @@ import { useUserData } from './hooks/useUserData'
 import { calendarNamesForPushedGroupDay, deleteGroupFromCalendar, syncGroupToCalendars, type SyncProgress } from './lib/calendarApi'
 import { isFirebaseConfigured } from './lib/firebase'
 import { formatError } from './lib/errors'
-import { UNDO_MS, UNDO_MS_LONG } from './lib/notice'
+import { undoNoticeOptions } from './lib/notice'
 import { ensureWriteScope } from './lib/google'
 import { hasPushedGroupOnDay } from './lib/pushedEvents'
 import {
@@ -26,6 +26,13 @@ import {
   removeArchivedPlan,
   type ArchivedPlan,
 } from './lib/planArchive'
+import {
+  defaultAnchorFromSettings,
+  defaultUserSettings,
+  executionAutoEndAfterMs,
+  hiddenCalendarIdSet,
+  type UserSettings,
+} from './lib/userSettings'
 import {
   anchorOnDay,
   applyTaskEditPreview,
@@ -46,7 +53,10 @@ import {
 export default function App() {
   const { notice, show, clear } = useNotice()
   const session = useGoogleSession()
-  const plan = usePlan()
+  const settingsRef = useRef<UserSettings>(defaultUserSettings())
+  const plan = usePlan({
+    getDefaultAnchor: () => defaultAnchorFromSettings(settingsRef.current),
+  })
   const calendars = useCalendarEvents({
     signedIn: session.signedIn,
     onError: (message) => session.setError(message),
@@ -56,7 +66,27 @@ export default function App() {
     plan: plan.plan,
     onRemotePlan: plan.replacePlan,
   })
+  settingsRef.current = userData.settings
   const { setExecutingGroupId } = userData
+
+  const hiddenIds = useMemo(
+    () => hiddenCalendarIdSet(userData.settings),
+    [userData.settings],
+  )
+  const listedCalendars = useMemo(
+    () => calendars.calendars.filter((c) => !hiddenIds.has(c.id)),
+    [calendars.calendars, hiddenIds],
+  )
+  const listedWritableCalendars = useMemo(
+    () => calendars.writableCalendars.filter((c) => !hiddenIds.has(c.id)),
+    [calendars.writableCalendars, hiddenIds],
+  )
+
+  const omitVisibleIds = calendars.omitVisibleIds
+  useEffect(() => {
+    if (hiddenIds.size === 0) return
+    omitVisibleIds(hiddenIds)
+  }, [hiddenIds, omitVisibleIds])
 
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
   const [commitBusy, setCommitBusy] = useState(false)
@@ -202,12 +232,10 @@ export default function App() {
     const previousTasks = group.tasks
     if (!plan.insertGotDelayed(groupId)) return
     show('info', 'Added a delay block.', {
-      actionLabel: 'Undo',
-      progressMs: UNDO_MS,
-      onAction: () => {
+      ...undoNoticeOptions(userData.settings.quickUndoSeconds, () => {
         plan.replaceTasks(groupId, previousTasks)
         clear()
-      },
+      }),
     })
   }
 
@@ -224,12 +252,10 @@ export default function App() {
 
     if (delayDurationChanged && previousTasks) {
       show('info', 'Delay updated.', {
-        actionLabel: 'Undo',
-        progressMs: UNDO_MS,
-        onAction: () => {
+        ...undoNoticeOptions(userData.settings.quickUndoSeconds, () => {
           plan.replaceTasks(groupId, previousTasks)
           clear()
-        },
+        }),
       })
     }
   }
@@ -265,12 +291,14 @@ export default function App() {
   useEffect(() => {
     if (!executingGroup) return
 
+    const afterMs = executionAutoEndAfterMs(userData.settings)
     const endIfStale = () => {
-      if (shouldAutoEndExecution(executingGroup)) handleEndExecutionRef.current()
+      if (shouldAutoEndExecution(executingGroup, new Date(), afterMs))
+        handleEndExecutionRef.current()
     }
 
     endIfStale()
-    const autoEndAt = executionAutoEndAt(executingGroup)
+    const autoEndAt = executionAutoEndAt(executingGroup, afterMs)
     if (autoEndAt == null) return
     const remaining = autoEndAt - Date.now()
     if (remaining <= 0) return
@@ -284,7 +312,7 @@ export default function App() {
       document.removeEventListener('visibilitychange', onResume)
       window.removeEventListener('focus', onResume)
     }
-  }, [executingGroup])
+  }, [executingGroup, userData.settings])
 
   function handleRemoveTask(groupId: string, taskId: string) {
     const group = plan.plan.groups.find((g) => g.id === groupId)
@@ -296,12 +324,10 @@ export default function App() {
     if (editingTaskId === taskId) handleEditingIdChange(null)
 
     show('info', `"${task.title}" deleted`, {
-      actionLabel: 'Undo',
-      progressMs: UNDO_MS,
-      onAction: () => {
+      ...undoNoticeOptions(userData.settings.quickUndoSeconds, () => {
         plan.insertTaskAt(groupId, task, index)
         clear()
-      },
+      }),
     })
   }
 
@@ -324,12 +350,10 @@ export default function App() {
 
     const label = group.name?.trim() || 'Untitled plan'
     show('info', `“${label}” deleted`, {
-      actionLabel: 'Undo',
-      progressMs: UNDO_MS_LONG,
-      onAction: () => {
+      ...undoNoticeOptions(userData.settings.majorUndoSeconds, () => {
         plan.insertGroupAt(group, index)
         clear()
-      },
+      }),
     })
   }
 
@@ -365,15 +389,13 @@ export default function App() {
 
     const label = group.name?.trim() || 'Untitled plan'
     show('info', `"${label}" archived`, {
-      actionLabel: 'Undo',
-      progressMs: UNDO_MS,
-      onAction: () => {
+      ...undoNoticeOptions(userData.settings.quickUndoSeconds, () => {
         plan.insertGroupAt(group, index)
         userData.replacePlanArchive(
           removeArchivedPlan(nextArchive, snapshot.id).archive,
         )
         clear()
-      },
+      }),
     })
   }
 
@@ -404,12 +426,10 @@ export default function App() {
 
     plan.setAnchor(groupId, next)
     show('info', 'Blocks moved.', {
-      actionLabel: 'Undo',
-      progressMs: UNDO_MS,
-      onAction: () => {
+      ...undoNoticeOptions(userData.settings.quickUndoSeconds, () => {
         plan.setAnchor(groupId, previousAnchor)
         clear()
-      },
+      }),
     })
   }
 
@@ -428,12 +448,10 @@ export default function App() {
     plan.saveCheckpoint(groupId)
 
     show('info', 'Saved as default blocks.', {
-      actionLabel: 'Undo',
-      progressMs: UNDO_MS_LONG,
-      onAction: () => {
+      ...undoNoticeOptions(userData.settings.majorUndoSeconds, () => {
         plan.setCheckpoint(groupId, previousCheckpoint)
         clear()
-      },
+      }),
     })
   }
 
@@ -447,13 +465,11 @@ export default function App() {
     handleEditingIdChange(null)
 
     show('info', 'Reverted to default blocks.', {
-      actionLabel: 'Undo',
-      progressMs: UNDO_MS_LONG,
-      onAction: () => {
+      ...undoNoticeOptions(userData.settings.majorUndoSeconds, () => {
         plan.replaceTasks(groupId, previousTasks)
         plan.setAnchor(groupId, previousAnchor)
         clear()
-      },
+      }),
     })
   }
 
@@ -781,7 +797,7 @@ export default function App() {
           <TaskSidebar
             groups={previewGroups}
             canDeleteGroup={plan.plan.groups.length > 1}
-            writableCalendars={calendars.writableCalendars}
+            writableCalendars={listedWritableCalendars}
             onAdd={handleAddTask}
             onAddBlocks={handleAddBlocks}
             onUpdate={handleUpdateTask}
@@ -831,6 +847,11 @@ export default function App() {
             onClearNotice={clear}
             savedCalendarUsers={userData.savedCalendarUsers}
             onReplaceSavedCalendarUsers={userData.replaceSavedCalendarUsers}
+            settings={userData.settings}
+            onReplaceSettings={userData.replaceSettings}
+            allCalendars={calendars.calendars}
+            plan={plan.plan}
+            onReplacePlan={plan.replacePlan}
           />
 
           <SidebarResizeHandle
@@ -846,7 +867,7 @@ export default function App() {
           <main className="main-panel">
             <CalendarView
               googleEvents={calendars.googleEvents}
-              calendars={calendars.calendars}
+              calendars={listedCalendars}
               visibleCalendarIds={calendars.visibleIds}
               onToggleCalendar={calendars.toggleCalendar}
               groups={calendarGroups}
@@ -874,10 +895,10 @@ export default function App() {
             groupsForSidebar={[executingPreviewGroup]}
             calendarGroups={executingCalendarGroups}
             googleEvents={calendars.googleEvents}
-            calendars={calendars.calendars}
+            calendars={listedCalendars}
             visibleCalendarIds={calendars.visibleIds}
             onToggleCalendar={calendars.toggleCalendar}
-            writableCalendars={calendars.writableCalendars}
+            writableCalendars={listedWritableCalendars}
             onAdd={handleAddTask}
             onAddBlocks={handleAddBlocks}
             onUpdate={handleUpdateTask}

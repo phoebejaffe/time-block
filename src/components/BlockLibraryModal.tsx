@@ -14,7 +14,7 @@ import { TaskFieldsForm } from './TaskFieldsForm'
 import { EditIcon, TrashIcon } from './icons'
 import { FixedMenuPortal } from './FixedMenuPortal'
 import type { NoticeOptions } from '../lib/notice'
-import { UNDO_MS, UNDO_MS_LONG } from '../lib/notice'
+import { undoNoticeOptions } from '../lib/notice'
 import { useFixedMenu } from '../hooks/useFixedMenu'
 
 const DRAG_ACTIVATE_PX = 5
@@ -26,6 +26,8 @@ type BlockLibraryModalProps = {
   onShowNotice?: (text: string, options?: NoticeOptions) => void
   onClearNotice?: () => void
   focusBlockId?: string
+  quickUndoSeconds?: number
+  majorUndoSeconds?: number
 }
 
 export function BlockLibraryModal({
@@ -35,6 +37,8 @@ export function BlockLibraryModal({
   onShowNotice,
   onClearNotice,
   focusBlockId,
+  quickUndoSeconds = 5,
+  majorUndoSeconds = 10,
 }: BlockLibraryModalProps) {
   const [editingKey, setEditingKey] = useState<string | null>(null)
   const [renamingCategoryId, setRenamingCategoryId] = useState<string | null>(
@@ -97,12 +101,10 @@ export function BlockLibraryModal({
     commitCategories(previousCategories.filter((c) => c.id !== categoryId))
     if (editingKey?.startsWith(`${categoryId}:`)) setEditingKey(null)
     onShowNotice?.(`“${label}” category deleted`, {
-      actionLabel: 'Undo',
-      progressMs: UNDO_MS_LONG,
-      onAction: () => {
+      ...undoNoticeOptions(majorUndoSeconds, () => {
         commitCategories(previousCategories)
         onClearNotice?.()
-      },
+      }),
     })
   }
 
@@ -170,16 +172,14 @@ export function BlockLibraryModal({
       ? 'Empty block'
       : `"${block.title.trim() || 'Untitled'}"`
     onShowNotice?.(`${label} deleted`, {
-      actionLabel: 'Undo',
-      progressMs: UNDO_MS,
-      onAction: () => {
+      ...undoNoticeOptions(quickUndoSeconds, () => {
         updateCategory(categoryId, (c) => {
           const blocks = [...c.blocks]
           blocks.splice(index, 0, block)
           return { ...c, blocks }
         })
         onClearNotice?.()
-      },
+      }),
     })
   }
 
