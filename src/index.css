@@ -2733,8 +2733,9 @@ body.is-task-reordering .task-sidebar {
 .app-gate-footer .auth-diagnostics.is-expanded,
 .app-gate-footer .auth-diagnostics-recoverable {
   border: 0;
-  background: transparent;
-  padding: 0.05rem 0 0.35rem;
+  border-radius: 8px;
+  background: var(--paper-2);
+  padding: 0.35rem 0.55rem 0.45rem;
 }
 
 .app-gate-footer .auth-diagnostics-title {
