@@ -611,7 +611,10 @@ Top to bottom:
        reserved space so long titles can't crowd them out). **Add to
        library** opens a small modal to pick a target category (or create
        one if the library is empty), with **Add** and **Add and open
-       library**; saves title/duration/`empty` into that category. The disable
+       library**; saves title/duration/`empty` into that category. **Add and
+       open library** then opens the block library modal scrolled to the
+       new block, which is highlighted in green for 4 seconds then fades
+       over 2 seconds. The disable
        control (bell-with-X) toggles `disabled` —
        strikethrough title, omitted from stack layout/calendar/push (§4.1);
        disabled (non-interactive) on delay spacers.

@@ -212,6 +212,9 @@ export function TaskSidebar({
   const [addingGroupId, setAddingGroupId] = useState<string | null>(null)
   const [archivedPlansOpen, setArchivedPlansOpen] = useState(false)
   const [blockLibraryOpen, setBlockLibraryOpen] = useState(false)
+  const [libraryFocusBlockId, setLibraryFocusBlockId] = useState<string | null>(
+    null,
+  )
   const [addToLibraryTask, setAddToLibraryTask] = useState<Task | null>(null)
   const [addToLibraryCategoryId, setAddToLibraryCategoryId] = useState('')
   const [scrollToGroupId, setScrollToGroupId] = useState<string | null>(null)
@@ -621,9 +624,13 @@ export function TaskSidebar({
         <BlockLibraryModal
           library={blockLibrary}
           onChange={onReplaceBlockLibrary}
-          onClose={() => setBlockLibraryOpen(false)}
+          onClose={() => {
+            setBlockLibraryOpen(false)
+            setLibraryFocusBlockId(null)
+          }}
           onShowNotice={onShowNotice}
           onClearNotice={onClearNotice}
+          focusBlockId={libraryFocusBlockId ?? undefined}
         />
       )}
 
@@ -732,7 +739,10 @@ export function TaskSidebar({
     )
     setAddToLibraryTask(null)
     onShowNotice?.('Added to block library.')
-    if (openLibrary) setBlockLibraryOpen(true)
+    if (openLibrary) {
+      setLibraryFocusBlockId(block.id)
+      setBlockLibraryOpen(true)
+    }
   }
 }
 

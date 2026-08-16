@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type {
   BlockLibrary,
   BlockLibraryCategory,
@@ -25,6 +25,7 @@ type BlockLibraryModalProps = {
   onClose: () => void
   onShowNotice?: (text: string, options?: NoticeOptions) => void
   onClearNotice?: () => void
+  focusBlockId?: string
 }
 
 export function BlockLibraryModal({
@@ -33,12 +34,28 @@ export function BlockLibraryModal({
   onClose,
   onShowNotice,
   onClearNotice,
+  focusBlockId,
 }: BlockLibraryModalProps) {
   const [editingKey, setEditingKey] = useState<string | null>(null)
   const [renamingCategoryId, setRenamingCategoryId] = useState<string | null>(
     null,
   )
   const [categoryNameInput, setCategoryNameInput] = useState('')
+  const bodyRef = useRef<HTMLDivElement>(null)
+  const [highlightBlockId, setHighlightBlockId] = useState<string | null>(null)
+
+  useLayoutEffect(() => {
+    if (!focusBlockId) return
+    const el = bodyRef.current?.querySelector(
+      `[data-block-id="${CSS.escape(focusBlockId)}"]`,
+    )
+    el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    setHighlightBlockId(focusBlockId)
+    const timeout = window.setTimeout(() => {
+      setHighlightBlockId((id) => (id === focusBlockId ? null : id))
+    }, 6000)
+    return () => window.clearTimeout(timeout)
+  }, [focusBlockId])
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -241,7 +258,7 @@ export function BlockLibraryModal({
           </button>
         </div>
 
-        <div className="block-library-body">
+        <div className="block-library-body" ref={bodyRef}>
           {library.categories.length === 0 ? (
             <p className="muted block-library-empty">
               No categories yet. Add one to start building your library.
@@ -268,6 +285,7 @@ export function BlockLibraryModal({
                 onReorderBlocks={(from, to) =>
                   reorderBlocks(category.id, from, to)
                 }
+                highlightBlockId={highlightBlockId}
               />
             ))
           )}
@@ -352,6 +370,7 @@ function CategorySection({
   onRemoveBlock,
   onDiscardBlock,
   onReorderBlocks,
+  highlightBlockId,
 }: {
   category: BlockLibraryCategory
   editingKey: string | null
@@ -367,6 +386,7 @@ function CategorySection({
   onRemoveBlock: (blockId: string) => void
   onDiscardBlock: (blockId: string) => void
   onReorderBlocks: (fromIndex: number, toIndex: number) => void
+  highlightBlockId: string | null
 }) {
   const listRef = useRef<HTMLUListElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -584,12 +604,14 @@ function CategorySection({
             <li
               key={block.id}
               data-block-index={index}
+              data-block-id={block.id}
               className={[
                 'task-card',
                 dragIndex === index ? 'is-dragging' : '',
                 showLineBefore ? 'drop-line-before' : '',
                 editing ? 'is-editing' : '',
                 isTaskEmpty(block) && !editing ? 'task-card-empty' : '',
+                highlightBlockId === block.id ? 'is-just-added' : '',
               ]
                 .filter(Boolean)
                 .join(' ')}

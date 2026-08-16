@@ -1384,6 +1384,27 @@ body.is-datetime-scrubbing .task-form-duration input {
   background: #fff;
 }
 
+@keyframes library-block-highlight {
+  0%,
+  66.666% {
+    background-color: color-mix(in srgb, var(--accent) 18%, #fff);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.block-library-list .task-card.is-just-added {
+  animation: library-block-highlight 6s ease-out forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .block-library-list .task-card.is-just-added {
+    animation: none;
+    background-color: color-mix(in srgb, var(--accent) 18%, #fff);
+  }
+}
+
 .block-library-add-block {
   margin-top: 0.45rem;
   padding-left: 0.5rem;
