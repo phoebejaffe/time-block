@@ -1,6 +1,5 @@
-import { useEffect, useRef } from 'react'
+import { useRef } from 'react'
 import type { GoogleCalendar } from '../lib/calendarApi'
-import { subscribeMenuOutsideClose } from '../lib/menuDismiss'
 import { useFixedMenu } from '../hooks/useFixedMenu'
 import { CalendarToggles } from './CalendarToggles'
 import { FixedMenuPortal } from './FixedMenuPortal'
@@ -58,28 +57,19 @@ export function CalendarToolbar({
 }: CalendarToolbarProps) {
   const menuRootRef = useRef<HTMLDivElement>(null)
   const calendarsRootRef = useRef<HTMLDivElement>(null)
-  const optionsMenu = useFixedMenu({ open: menuOpen, align: 'end' })
+  const optionsMenu = useFixedMenu({
+    open: menuOpen,
+    align: 'end',
+    onClose: onDismissMenus,
+    extraInside: calendarsRootRef,
+  })
   const calendarsMenu = useFixedMenu({
     open: calendarsOpen,
     align: 'end',
     constrainHeight: true,
+    onClose: onDismissMenus,
+    extraInside: menuRootRef,
   })
-
-  useEffect(() => {
-    if (!menuOpen && !calendarsOpen) return
-    return subscribeMenuOutsideClose(
-      (target) =>
-        Boolean(
-          (menuOpen &&
-            (menuRootRef.current?.contains(target) ||
-              optionsMenu.dropdownRef.current?.contains(target))) ||
-            (calendarsOpen &&
-              (calendarsRootRef.current?.contains(target) ||
-                calendarsMenu.dropdownRef.current?.contains(target))),
-        ),
-      onDismissMenus,
-    )
-  }, [menuOpen, calendarsOpen, onDismissMenus, optionsMenu.dropdownRef, calendarsMenu.dropdownRef])
 
   return (
     <div className="calendar-toolbar">

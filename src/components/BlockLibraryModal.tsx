@@ -15,7 +15,6 @@ import { EditIcon, TrashIcon } from './icons'
 import { FixedMenuPortal } from './FixedMenuPortal'
 import type { NoticeOptions } from '../lib/notice'
 import { UNDO_MS, UNDO_MS_LONG } from '../lib/notice'
-import { subscribeMenuOutsideClose } from '../lib/menuDismiss'
 import { useFixedMenu } from '../hooks/useFixedMenu'
 
 const DRAG_ACTIVATE_PX = 5
@@ -372,23 +371,15 @@ function CategorySection({
   const listRef = useRef<HTMLUListElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const [menuOpen, setMenuOpen] = useState(false)
-  const menu = useFixedMenu({ open: menuOpen, align: 'end' })
+  const menu = useFixedMenu({
+    open: menuOpen,
+    align: 'end',
+    onClose: () => setMenuOpen(false),
+  })
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   const [dropLineIndex, setDropLineIndex] = useState<number | null>(null)
   const dropLineIndexRef = useRef<number | null>(null)
   const suppressClickRef = useRef(false)
-
-  useEffect(() => {
-    if (!menuOpen) return
-    return subscribeMenuOutsideClose(
-      (target) =>
-        Boolean(
-          menuRef.current?.contains(target) ||
-            menu.dropdownRef.current?.contains(target),
-        ),
-      () => setMenuOpen(false),
-    )
-  }, [menuOpen, menu.dropdownRef])
 
   function blockKey(blockId: string) {
     return `${category.id}:${blockId}`

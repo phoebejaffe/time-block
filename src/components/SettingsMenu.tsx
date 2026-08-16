@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { HowItWorksModal } from './HowItWorksModal'
 import { BlockLibraryModal } from './BlockLibraryModal'
 import { AuthSessionDiagnostics } from './AuthSessionDiagnostics'
@@ -7,7 +7,6 @@ import type { BlockLibrary } from '../lib/tasks'
 import type { NoticeOptions } from '../lib/notice'
 import type { SessionDiagnostics } from '../lib/google'
 import { hardReloadApp } from '../lib/hardReload'
-import { subscribeMenuOutsideClose } from '../lib/menuDismiss'
 import { useFixedMenu } from '../hooks/useFixedMenu'
 
 type SettingsMenuProps = {
@@ -62,6 +61,7 @@ export function SettingsMenu({
     open,
     align: 'end',
     constrainHeight: true,
+    onClose: () => setOpen(false),
   })
   const buildTime = useMemo(() => formatBuildTime(__BUILD_TIME__), [])
 
@@ -73,18 +73,6 @@ export function SettingsMenu({
       onShowNotice?.("Couldn't copy the link.")
     }
   }
-
-  useEffect(() => {
-    if (!open) return
-    return subscribeMenuOutsideClose(
-      (target) =>
-        Boolean(
-          menuRef.current?.contains(target) ||
-            menu.dropdownRef.current?.contains(target),
-        ),
-      () => setOpen(false),
-    )
-  }, [open, menu.dropdownRef])
 
   return (
     <div className="settings-menu" ref={menuRef}>

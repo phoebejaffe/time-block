@@ -738,7 +738,10 @@ calendar menus, archive/library category menus) all portal to
 `document.body` so they are not clipped by sidebar or modal overflow; they
 flip above/below the trigger and clamp to the viewport. They close on
 Escape or on an outside `mousedown` in the capture phase; that outside
-press is cancelled so it does not activate the control underneath.
+press is cancelled so it does not activate the control underneath (the
+following `click` is swallowed too). While a
+menu's native color picker is focused, that picker does not count as an
+outside click.
 
 ### 7.6 Notices / toasts
 

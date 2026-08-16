@@ -28,7 +28,6 @@ import {
 } from '../lib/tasks'
 import type { NoticeOptions } from '../lib/notice'
 import { UNDO_MS_LONG } from '../lib/notice'
-import { subscribeMenuOutsideClose } from '../lib/menuDismiss'
 import { useFixedMenu } from '../hooks/useFixedMenu'
 import { FixedMenuPortal } from './FixedMenuPortal'
 
@@ -592,7 +591,11 @@ function FolderSection({
   const menuRef = useRef<HTMLDivElement>(null)
   const suppressClickRef = useRef(false)
   const [menuOpen, setMenuOpen] = useState(false)
-  const menu = useFixedMenu({ open: menuOpen, align: 'end' })
+  const menu = useFixedMenu({
+    open: menuOpen,
+    align: 'end',
+    onClose: () => setMenuOpen(false),
+  })
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   const [dropLineIndex, setDropLineIndex] = useState<number | null>(null)
   const dropLineIndexRef = useRef<number | null>(null)
@@ -602,18 +605,6 @@ function FolderSection({
   useEffect(() => {
     dropLineIndexRef.current = dropLineIndex
   }, [dropLineIndex])
-
-  useEffect(() => {
-    if (!menuOpen) return
-    return subscribeMenuOutsideClose(
-      (target) =>
-        Boolean(
-          menuRef.current?.contains(target) ||
-            menu.dropdownRef.current?.contains(target),
-        ),
-      () => setMenuOpen(false),
-    )
-  }, [menuOpen, menu.dropdownRef])
 
   function lineIndexFromY(clientY: number): number {
     const list = listRef.current
@@ -885,7 +876,11 @@ function ArchivedPlanRow({
 }) {
   const menuRef = useRef<HTMLDivElement>(null)
   const [menuOpen, setMenuOpen] = useState(false)
-  const menu = useFixedMenu({ open: menuOpen, align: 'end' })
+  const menu = useFixedMenu({
+    open: menuOpen,
+    align: 'end',
+    onClose: () => setMenuOpen(false),
+  })
   const accent = groupSidebarAccentColor(plan.color)
   const blockCount = plan.tasks.length
   const duration = formatDurationMinutes(stackDurationMinutes(plan.tasks))
@@ -899,18 +894,6 @@ function ArchivedPlanRow({
     dragIndex != null &&
     dropLineIndex !== dragIndex &&
     dropLineIndex !== dragIndex + 1
-
-  useEffect(() => {
-    if (!menuOpen) return
-    return subscribeMenuOutsideClose(
-      (target) =>
-        Boolean(
-          menuRef.current?.contains(target) ||
-            menu.dropdownRef.current?.contains(target),
-        ),
-      () => setMenuOpen(false),
-    )
-  }, [menuOpen, menu.dropdownRef])
 
   return (
     <li

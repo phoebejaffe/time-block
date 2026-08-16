@@ -45,7 +45,6 @@ import {
   type PushedEvent,
   type PushSnapshot,
 } from '../lib/pushedEvents'
-import { subscribeMenuOutsideClose } from '../lib/menuDismiss'
 import { useFixedMenu } from '../hooks/useFixedMenu'
 import { FixedMenuPortal } from './FixedMenuPortal'
 import { SettingsMenu } from './SettingsMenu'
@@ -861,7 +860,11 @@ function BlockGroupPanel({
 
   const listRef = useRef<HTMLUListElement>(null)
   const listMenuRef = useRef<HTMLDivElement>(null)
-  const listMenu = useFixedMenu({ open: listMenuOpen, align: 'end' })
+  const listMenu = useFixedMenu({
+    open: listMenuOpen,
+    align: 'end',
+    onClose: () => setListMenuOpen(false),
+  })
   const libraryMenuRef = useRef<HTMLDivElement>(null)
   const libraryMenu = useFixedMenu({
     open: libraryOpen,
@@ -870,6 +873,7 @@ function BlockGroupPanel({
     matchTriggerWidth: true,
     minWidth: 224,
     maxWidth: 288,
+    onClose: () => setLibraryOpen(false),
   })
   const dropLineIndexRef = useRef<number | null>(null)
   const suppressClickRef = useRef(false)
@@ -904,30 +908,6 @@ function BlockGroupPanel({
     )
     card?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
   }, [editingId, tasks])
-
-  useEffect(() => {
-    if (!listMenuOpen) return
-    return subscribeMenuOutsideClose(
-      (target) =>
-        Boolean(
-          listMenuRef.current?.contains(target) ||
-            listMenu.dropdownRef.current?.contains(target),
-        ),
-      () => setListMenuOpen(false),
-    )
-  }, [listMenuOpen, listMenu.dropdownRef])
-
-  useEffect(() => {
-    if (!libraryOpen) return
-    return subscribeMenuOutsideClose(
-      (target) =>
-        Boolean(
-          libraryMenuRef.current?.contains(target) ||
-            libraryMenu.dropdownRef.current?.contains(target),
-        ),
-      () => setLibraryOpen(false),
-    )
-  }, [libraryOpen, libraryMenu.dropdownRef])
 
   const colorPickerValue =
     group.color && /^#[0-9a-fA-F]{6}$/.test(group.color)

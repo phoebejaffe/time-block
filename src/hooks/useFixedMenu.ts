@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useLayoutEffect,
   useRef,
   useState,
@@ -9,14 +10,19 @@ import {
   layoutFixedMenu,
   type FixedMenuAlign,
 } from '../lib/fixedMenu'
+import { subscribeMenuOutsideClose } from '../lib/menuDismiss'
 
 type UseFixedMenuOptions = {
   open: boolean
+  onClose?: () => void
   align?: FixedMenuAlign
   constrainHeight?: boolean
   minWidth?: number
   maxWidth?: number
   matchTriggerWidth?: boolean
+  extraInside?:
+    | RefObject<HTMLElement | null>
+    | ReadonlyArray<RefObject<HTMLElement | null>>
 }
 
 function scrollParentsOf(el: HTMLElement | null): HTMLElement[] {
@@ -47,11 +53,13 @@ function sameStyle(a: CSSProperties, b: CSSProperties): boolean {
  */
 export function useFixedMenu<T extends HTMLElement = HTMLButtonElement>({
   open,
+  onClose,
   align = 'end',
   constrainHeight = false,
   minWidth,
   maxWidth,
   matchTriggerWidth = false,
+  extraInside,
 }: UseFixedMenuOptions): {
   triggerRef: RefObject<T | null>
   dropdownRef: RefObject<HTMLDivElement | null>
@@ -59,6 +67,10 @@ export function useFixedMenu<T extends HTMLElement = HTMLButtonElement>({
 } {
   const triggerRef = useRef<T | null>(null)
   const dropdownRef = useRef<HTMLDivElement | null>(null)
+  const extraInsideRef = useRef(extraInside)
+  extraInsideRef.current = extraInside
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
   const [style, setStyle] = useState<CSSProperties>({})
 
   useLayoutEffect(() => {
@@ -116,6 +128,18 @@ export function useFixedMenu<T extends HTMLElement = HTMLButtonElement>({
       observer.disconnect()
     }
   }, [open, align, constrainHeight, minWidth, maxWidth, matchTriggerWidth])
+
+  useEffect(() => {
+    if (!open || !onCloseRef.current) return
+    return subscribeMenuOutsideClose((target) => {
+      if (triggerRef.current?.contains(target)) return true
+      if (dropdownRef.current?.contains(target)) return true
+      const extras = extraInsideRef.current
+      if (!extras) return false
+      const list = Array.isArray(extras) ? extras : [extras]
+      return list.some((ref) => ref.current?.contains(target))
+    }, () => onCloseRef.current?.())
+  }, [open])
 
   return { triggerRef, dropdownRef, style }
 }
