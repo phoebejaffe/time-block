@@ -1059,7 +1059,10 @@ non-disabled tasks for that day on the target calendar, reusing
 previously-created events where possible (so editing a title/time updates
 the same event rather than creating a duplicate), tolerating events that
 were deleted by hand on the Google side, and cleaning up if the user
-changed which calendar this group pushes to.
+changed which calendar this group pushes to. Create/update/delete API
+calls for a calendar run concurrently (bounded pool) after the matching
+plan is computed; when syncing to multiple calendars, those calendars
+are also updated in parallel.
 
 1. **Calendar changed**: for any event previously tracked for this
    group+day but on a *different* calendar than the current target, delete
@@ -1104,8 +1107,11 @@ From a group's overflow menu (only enabled once something's tracked for
 that group+day): confirm via a native dialog naming the calendar(s)
 involved, then delete every tracked event for that exact group+day from
 whichever calendar(s) they're actually on (tolerating already-deleted
-events), untrack them, clear that group+day's push snapshot, refresh the
-visible Google events, and toast the result. This does not touch the
+events; deletes run concurrently with a bounded pool), untrack them,
+clear that group+day's push snapshot, refresh the visible Google events,
+and toast the result. While deletions run, an info toast shows stepped
+progress (`Removing events from calendar: Removing 2 of 7`, pluralizing
+"calendar" when more than one is involved). This does not touch the
 in-app plan/tasks at all — it only removes calendar-side events.
 
 ## 9. Error handling conventions

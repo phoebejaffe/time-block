@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { syncGroupToCalendars, syncTasksToCalendar } from './calendarApi'
+import {
+  deleteGroupFromCalendar,
+  syncGroupToCalendars,
+  syncTasksToCalendar,
+} from './calendarApi'
 import type { Task } from './tasks'
 
 type FakeEvent = { id: string; summary: string; start: string; end: string }
@@ -313,5 +317,40 @@ describe('syncGroupToCalendars — multi-calendar', () => {
     expect(progress.at(-1)).toMatchObject({ current: 4, total: 4 })
     expect(progress.some((step) => step.label.startsWith('Adding'))).toBe(true)
     expect(progress.filter((step) => step.current > 0)).toHaveLength(4)
+  })
+})
+
+describe('deleteGroupFromCalendar — progress', () => {
+  beforeEach(() => {
+    mockGapiCalendar()
+  })
+
+  it('reports stepped remove progress', async () => {
+    const anchor = {
+      kind: 'start' as const,
+      at: new Date('2026-07-23T15:00:00.000Z').toISOString(),
+    }
+    const first = await syncTasksToCalendar(
+      'cal-a',
+      'group-1',
+      [
+        { id: 't1', title: 'Focus', durationMinutes: 60 },
+        { id: 't2', title: 'Break', durationMinutes: 15 },
+      ],
+      anchor,
+      [],
+    )
+    const progress: { current: number; total: number; label: string }[] = []
+    const dayKey = first.pushedEvents[0]!.dayKey
+    await deleteGroupFromCalendar(
+      'group-1',
+      dayKey,
+      first.pushedEvents,
+      (step) => progress.push(step),
+    )
+
+    expect(progress[0]).toMatchObject({ current: 0, total: 2 })
+    expect(progress.at(-1)).toMatchObject({ current: 2, total: 2 })
+    expect(progress.some((step) => step.label.startsWith('Removing'))).toBe(true)
   })
 })

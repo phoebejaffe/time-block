@@ -33,7 +33,7 @@ export function useNotice() {
       clearTimer()
       const next = makeNotice(kind, text, options)
       setNotice(next)
-      if (kind !== 'error') {
+      if (kind !== 'error' && !options?.persist) {
         const ms = options?.progressMs ?? AUTO_CLEAR_MS
         timerRef.current = setTimeout(() => {
           timerRef.current = null

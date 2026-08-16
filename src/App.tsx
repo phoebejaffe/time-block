@@ -562,12 +562,25 @@ export default function App() {
     setCommitBusy(true)
     session.setError(null)
     clear()
+    const calendarWord =
+      calendarNames.length > 1 ? 'calendars' : 'calendar'
     try {
       await ensureWriteScope()
       const { removed, failures, pushedEvents } = await deleteGroupFromCalendar(
         groupId,
         dayKey,
         userData.pushedEvents,
+        (progress) => {
+          const step =
+            progress.current === 0
+              ? 'Starting…'
+              : `Removing ${progress.current} of ${progress.total}`
+          show(
+            'info',
+            `Removing events from ${calendarWord}: ${step}`,
+            { persist: true },
+          )
+        },
       )
       userData.applyCalendarDelete(pushedEvents, groupId, dayKey)
       await calendars.refreshEvents()

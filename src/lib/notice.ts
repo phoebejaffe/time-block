@@ -14,6 +14,8 @@ export type NoticeOptions = {
   actionLabel?: string
   onAction?: () => void
   progressMs?: number
+  /** When true, do not auto-dismiss (useful for in-progress status). */
+  persist?: boolean
 }
 
 export function notice(
