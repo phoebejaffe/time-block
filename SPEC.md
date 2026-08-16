@@ -272,10 +272,11 @@ group you're editing, one or many at a time, rather than replacing/
 restoring the whole list). Users create categories, add/edit/delete/
 reorder blocks within a category via drag, and rename/reorder/delete whole
 categories, from a dedicated "Block library" modal (opened from the app's
-settings menu). When adding blocks from the
-library into a group, the user multi-selects blocks (in the picker they're
-numbered in selection order) and they get appended to the group in that
-order as brand-new `Task`s (fresh ids).
+settings menu). A plan-row **add to library** control can also append the
+current block (title/duration/`empty`) into a chosen category. When adding
+blocks from the library into a group, the user multi-selects blocks (in the
+picker they're numbered in selection order) and they get appended to the
+group in that order as brand-new `Task`s (fresh ids).
 
 ### 4.8 Calendar-push tracking (making "Add"/"Update" idempotent and drift-aware)
 
@@ -600,8 +601,13 @@ Top to bottom:
        then, if the task is currently reflected on Google Calendar for the
        day in view, a small icon — a checkmark if it exactly matches what
        was last pushed, or a "calendar" glyph if it's out of sync since
-       the last push; then edit, disable, and delete icon-buttons (always
-       reserved space so long titles can't crowd them out). The disable
+       the last push; then edit, **add to library** (library+; omitted on
+       delay spacers), disable, and delete icon-buttons (always
+       reserved space so long titles can't crowd them out). **Add to
+       library** opens a small modal to pick a target category (or create
+       one if the library is empty), with **Add** and **Add and open
+       library**; saves title/duration/`empty` into that category (delays
+       are not offered). The disable
        control (bell-with-X) toggles `disabled` —
        strikethrough title, omitted from stack layout/calendar/push (§4.1);
        disabled (non-interactive) on delay spacers.

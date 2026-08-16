@@ -17,6 +17,7 @@ import type {
 import {
   blockLibraryKey,
   DEFAULT_GROUP_COLOR,
+  createSavedBlock,
   formatDurationMinutes,
   fromLocalTimeValue,
   getStackEndStatus,
@@ -34,6 +35,7 @@ import {
   stepLocalTime,
   toggleAnchorPreservingStack,
   toLocalTimeValue,
+  touchBlockLibrary,
 } from '../lib/tasks'
 import {
   calendarCommitLabel,
@@ -45,6 +47,7 @@ import {
   type PushSnapshot,
 } from '../lib/pushedEvents'
 import { SettingsMenu } from './SettingsMenu'
+import { BlockLibraryModal } from './BlockLibraryModal'
 import { TaskFieldsForm } from './TaskFieldsForm'
 import {
   BlockIcon,
@@ -53,6 +56,7 @@ import {
   EditIcon,
   FinishedCheckIcon,
   LibraryIcon,
+  LibraryPlusIcon,
   PendingIcon,
   TrashIcon,
 } from './icons'
@@ -206,6 +210,9 @@ export function TaskSidebar({
   const [modalGroupId, setModalGroupId] = useState<string | null>(null)
   const [addingGroupId, setAddingGroupId] = useState<string | null>(null)
   const [archivedPlansOpen, setArchivedPlansOpen] = useState(false)
+  const [blockLibraryOpen, setBlockLibraryOpen] = useState(false)
+  const [addToLibraryTask, setAddToLibraryTask] = useState<Task | null>(null)
+  const [addToLibraryCategoryId, setAddToLibraryCategoryId] = useState('')
   const [scrollToGroupId, setScrollToGroupId] = useState<string | null>(null)
   const blockGroupsRef = useRef<HTMLDivElement>(null)
   const [selectedCommitIds, setSelectedCommitIds] = useState<string[]>([])
@@ -438,6 +445,10 @@ export function TaskSidebar({
             onSetGroupColor={(color) => onSetGroupColor(group.id, color)}
             blockLibrary={blockLibrary}
             onAddFromLibrary={(inputs) => onAddBlocks(group.id, inputs)}
+            onAddToLibrary={(task) => {
+              setAddToLibraryTask(task)
+              setAddToLibraryCategoryId(blockLibrary.categories[0]?.id ?? '')
+            }}
           />
         ))}
         {mode === 'planning' && (
@@ -605,8 +616,123 @@ export function TaskSidebar({
         />
       )}
 
+      {blockLibraryOpen && (
+        <BlockLibraryModal
+          library={blockLibrary}
+          onChange={onReplaceBlockLibrary}
+          onClose={() => setBlockLibraryOpen(false)}
+          onShowNotice={onShowNotice}
+          onClearNotice={onClearNotice}
+        />
+      )}
+
+      {addToLibraryTask && (
+        <Modal
+          title="Add to block library"
+          onClose={() => setAddToLibraryTask(null)}
+        >
+          <div className="modal-form">
+            {blockLibrary.categories.length === 0 ? (
+              <p className="muted">
+                No categories yet. Create one to save this block.
+              </p>
+            ) : (
+              <label>
+                <span>Category</span>
+                <select
+                  value={addToLibraryCategoryId}
+                  onChange={(e) => setAddToLibraryCategoryId(e.target.value)}
+                  autoFocus
+                >
+                  {blockLibrary.categories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name.trim() || 'Untitled'}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => setAddToLibraryTask(null)}
+              >
+                Cancel
+              </button>
+              {blockLibrary.categories.length === 0 ? (
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={() => {
+                    const category = {
+                      id: crypto.randomUUID(),
+                      name: 'New category',
+                      blocks: [],
+                    }
+                    onReplaceBlockLibrary(
+                      touchBlockLibrary([...blockLibrary.categories, category]),
+                    )
+                    setAddToLibraryCategoryId(category.id)
+                  }}
+                >
+                  Create category
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    disabled={!addToLibraryCategoryId}
+                    onClick={() => {
+                      saveTaskToLibrary(addToLibraryTask, addToLibraryCategoryId, false)
+                    }}
+                  >
+                    Add
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    disabled={!addToLibraryCategoryId}
+                    onClick={() => {
+                      saveTaskToLibrary(addToLibraryTask, addToLibraryCategoryId, true)
+                    }}
+                  >
+                    Add and open library
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </Modal>
+      )}
+
     </aside>
   )
+
+  function saveTaskToLibrary(
+    task: Task,
+    categoryId: string,
+    openLibrary: boolean,
+  ) {
+    const block = createSavedBlock({
+      title: task.title,
+      durationMinutes: task.durationMinutes,
+      empty: isTaskEmpty(task) || undefined,
+    })
+    onReplaceBlockLibrary(
+      touchBlockLibrary(
+        blockLibrary.categories.map((category) =>
+          category.id === categoryId
+            ? { ...category, blocks: [...category.blocks, block] }
+            : category,
+        ),
+      ),
+    )
+    setAddToLibraryTask(null)
+    onShowNotice?.('Added to block library.')
+    if (openLibrary) setBlockLibraryOpen(true)
+  }
 }
 
 type BlockGroupPanelProps = {
@@ -655,6 +781,7 @@ type BlockGroupPanelProps = {
   onSetGroupColor: (color: string | undefined) => void
   blockLibrary: BlockLibrary
   onAddFromLibrary: (inputs: Omit<Task, 'id'>[]) => void
+  onAddToLibrary: (task: Task) => void
 }
 
 function GroupColorMenuItem({
@@ -720,6 +847,7 @@ function BlockGroupPanel({
   onSetGroupColor,
   blockLibrary,
   onAddFromLibrary,
+  onAddToLibrary,
 }: BlockGroupPanelProps) {
   const { tasks, anchor } = group
   const enabled = isGroupEnabled(group)
@@ -1846,6 +1974,20 @@ function BlockGroupPanel({
                     >
                       <EditIcon />
                     </button>
+                    {!isTaskDelay(task) && (
+                      <button
+                        type="button"
+                        className="icon-btn"
+                        aria-label={`Add ${task.title} to block library`}
+                        title="Add to library"
+                        onClick={() => {
+                          if (suppressClickRef.current) return
+                          onAddToLibrary(task)
+                        }}
+                      >
+                        <LibraryPlusIcon />
+                      </button>
+                    )}
                     <button
                       type="button"
                       className="icon-btn"
