@@ -1032,7 +1032,11 @@ Given a group id and a target calendar id (from the commit modal):
 3. Refuse to proceed (info toast) if the group has zero tasks and nothing
    has ever been pushed for it on this day (nothing to add and nothing to
    update).
-4. Run the sync algorithm (§8.5.1) against Google Calendar.
+4. Run the sync algorithm (§8.5.1) against Google Calendar. While it runs,
+   the commit modal shows stepped status text and a determinate progress
+   bar (e.g. "Updating 2 of 5…", "Adding 1 of 3…", "Removing 1 of 2…")
+   driven by each create/update/remove attempt across the selected
+   calendars (and any calendars being deselected).
 5. Merge the returned updated push-tracking rows into the synced store,
    refresh the visible Google events from the API (so the newly
    created/updated/removed events are reflected), and show a toast
@@ -1040,7 +1044,8 @@ Given a group id and a target calendar id (from the commit modal):
    "Calendar already up to date." / a partial-failure message naming each
    failed block and why, while still reporting whatever *did* succeed).
 6. The commit modal closes only on full success; on partial/total failure
-   it stays open so the user can retry.
+   it stays open so the user can retry. Cancel is disabled while the sync
+   is in progress.
 
 #### 8.5.1 Sync algorithm (per group, per day, per target calendar)
 

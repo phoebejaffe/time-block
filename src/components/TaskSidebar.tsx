@@ -7,7 +7,7 @@ import {
   type CSSProperties,
 } from 'react'
 import { createPortal } from 'react-dom'
-import type { GoogleCalendar } from '../lib/calendarApi'
+import type { GoogleCalendar, SyncProgress } from '../lib/calendarApi'
 import type {
   BlockGroup,
   BlockLibrary,
@@ -128,6 +128,7 @@ type TaskSidebarProps = {
   editingId: string | null
   onEditingIdChange: (id: string | null) => void
   busy?: boolean
+  commitProgress?: SyncProgress | null
   signedIn?: boolean
   onSignIn?: () => void
   onSignOut?: () => void
@@ -180,6 +181,7 @@ export function TaskSidebar({
   editingId,
   onEditingIdChange,
   busy,
+  commitProgress = null,
   signedIn,
   onSignIn,
   onSignOut,
@@ -463,7 +465,7 @@ export function TaskSidebar({
       {modal === 'commit' && modalGroup && (
         <Modal
           title={calendarCommitLabel(modalIsUpdate, modalPushedCalendarCount)}
-          onClose={closeModal}
+          onClose={busy ? () => {} : closeModal}
           dialogClassName="modal-dialog-commit"
         >
           <div className="modal-form modal-form-commit">
@@ -496,11 +498,40 @@ export function TaskSidebar({
                 ))
               )}
             </div>
+            {busy && commitProgress && (
+              <div
+                className="commit-progress"
+                role="status"
+                aria-live="polite"
+                aria-busy="true"
+              >
+                <p className="commit-progress-label">{commitProgress.label}</p>
+                <div
+                  className="commit-progress-track"
+                  aria-valuemin={0}
+                  aria-valuemax={commitProgress.total}
+                  aria-valuenow={commitProgress.current}
+                  role="progressbar"
+                >
+                  <div
+                    className="commit-progress-fill"
+                    style={{
+                      width: `${Math.min(
+                        100,
+                        (commitProgress.current / Math.max(commitProgress.total, 1)) *
+                          100,
+                      )}%`,
+                    }}
+                  />
+                </div>
+              </div>
+            )}
             <div className="modal-actions">
               <button
                 type="button"
                 className="btn btn-ghost btn-sm"
                 onClick={closeModal}
+                disabled={busy}
               >
                 Cancel
               </button>
@@ -515,9 +546,8 @@ export function TaskSidebar({
                 }
               >
                 {busy
-                  ? modalIsUpdate
-                    ? 'Updating…'
-                    : 'Adding…'
+                  ? commitProgress?.label ??
+                    (modalIsUpdate ? 'Updating…' : 'Adding…')
                   : calendarCommitLabel(
                       modalIsUpdate,
                       selectedCommitIds.length > 1

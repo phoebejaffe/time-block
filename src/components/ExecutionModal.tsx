@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, type CSSProperties } from 'react'
-import type { GoogleCalendar, CalendarEvent } from '../lib/calendarApi'
+import type { GoogleCalendar, CalendarEvent, SyncProgress } from '../lib/calendarApi'
 import type {
   BlockGroup,
   BlockLibrary,
@@ -50,6 +50,7 @@ type ExecutionModalProps = {
   onDatesSet: (start: Date, end: Date) => void
   onTaskClick: (taskId: string) => void
   busy?: boolean
+  commitProgress?: SyncProgress | null
   targetCalendarId: string
   onTargetCalendarChange: (id: string) => void
   pushedEvents: PushedEvent[]
@@ -102,6 +103,7 @@ export function ExecutionModal({
   onDatesSet,
   onTaskClick,
   busy,
+  commitProgress = null,
   targetCalendarId,
   onTargetCalendarChange,
   pushedEvents,
@@ -188,6 +190,7 @@ export function ExecutionModal({
           editingId={editingId}
           onEditingIdChange={onEditingIdChange}
           busy={busy}
+          commitProgress={commitProgress}
           targetCalendarId={targetCalendarId}
           onTargetCalendarChange={onTargetCalendarChange}
           pushedEvents={pushedEvents}

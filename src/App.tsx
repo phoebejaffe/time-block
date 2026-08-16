@@ -14,7 +14,7 @@ import { useNotice } from './hooks/useNotice'
 import { usePlan } from './hooks/usePlan'
 import { useSidebarWidth } from './hooks/useSidebarWidth'
 import { useUserData } from './hooks/useUserData'
-import { calendarNamesForPushedGroupDay, deleteGroupFromCalendar, syncGroupToCalendars } from './lib/calendarApi'
+import { calendarNamesForPushedGroupDay, deleteGroupFromCalendar, syncGroupToCalendars, type SyncProgress } from './lib/calendarApi'
 import { isFirebaseConfigured } from './lib/firebase'
 import { formatError } from './lib/errors'
 import { ensureWriteScope } from './lib/google'
@@ -58,6 +58,7 @@ export default function App() {
 
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
   const [commitBusy, setCommitBusy] = useState(false)
+  const [commitProgress, setCommitProgress] = useState<SyncProgress | null>(null)
   const [viewDate, setViewDate] = useState(() => startOfLocalDay())
   const [executionModalOpen, setExecutionModalOpen] = useState(false)
   const [stackDragPreview, setStackDragPreview] = useState<{
@@ -461,6 +462,7 @@ export default function App() {
     }
 
     setCommitBusy(true)
+    setCommitProgress({ current: 0, total: 1, label: 'Starting…' })
     session.setError(null)
     clear()
     try {
@@ -484,6 +486,7 @@ export default function App() {
         anchor,
         userData.pushedEvents,
         userData.firebaseUser?.uid ?? null,
+        setCommitProgress,
       )
       userData.applyCalendarSync(
         pushedEvents,
@@ -528,6 +531,7 @@ export default function App() {
       return false
     } finally {
       setCommitBusy(false)
+      setCommitProgress(null)
     }
   }
 
@@ -757,6 +761,7 @@ export default function App() {
             editingId={editingTaskId}
             onEditingIdChange={handleEditingIdChange}
             busy={busy}
+            commitProgress={commitProgress}
             signedIn={session.signedIn}
             onSignIn={() => void handleSignIn()}
             onSignOut={handleSignOut}
@@ -848,6 +853,7 @@ export default function App() {
             onDatesSet={handleDatesSet}
             onTaskClick={setEditingTaskId}
             busy={busy}
+            commitProgress={commitProgress}
             targetCalendarId={userData.targetCalendarId}
             onTargetCalendarChange={userData.setTargetCalendarId}
             pushedEvents={userData.pushedEvents}

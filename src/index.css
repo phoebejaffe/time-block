@@ -559,6 +559,33 @@ body.is-sidebar-resizing .main-panel {
   background: #fffcf6;
 }
 
+.commit-progress {
+  flex-shrink: 0;
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.45rem 0 0.15rem;
+}
+
+.commit-progress-label {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--ink-muted);
+}
+
+.commit-progress-track {
+  height: 0.4rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink-muted) 18%, transparent);
+  overflow: hidden;
+}
+
+.commit-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 120ms ease-out;
+}
+
 .modal-dialog-wide {
   width: min(34rem, 100%);
   max-height: min(88vh, 42rem);

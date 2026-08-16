@@ -293,4 +293,25 @@ describe('syncGroupToCalendars — multi-calendar', () => {
       true,
     )
   })
+
+  it('reports stepped progress for each sync attempt', async () => {
+    const progress: { current: number; total: number; label: string }[] = []
+    await syncGroupToCalendars(
+      ['cal-a', 'cal-b'],
+      'group-1',
+      [
+        { id: 't1', title: 'Focus', durationMinutes: 60 },
+        { id: 't2', title: 'Break', durationMinutes: 15 },
+      ],
+      anchor,
+      [],
+      null,
+      (step) => progress.push(step),
+    )
+
+    expect(progress[0]).toMatchObject({ current: 0, total: 4 })
+    expect(progress.at(-1)).toMatchObject({ current: 4, total: 4 })
+    expect(progress.some((step) => step.label.startsWith('Adding'))).toBe(true)
+    expect(progress.filter((step) => step.current > 0)).toHaveLength(4)
+  })
 })

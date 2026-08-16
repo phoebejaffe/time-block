@@ -240,6 +240,78 @@ export type SyncTaskFailure = {
   message: string
 }
 
+export type SyncProgress = {
+  current: number
+  total: number
+  label: string
+}
+
+export type SyncProgressCallback = (progress: SyncProgress) => void
+
+/** Count create/update/remove attempts for one calendar sync (no API calls). */
+export function countTasksSyncOps(
+  calendarId: string,
+  groupId: string,
+  tasks: Task[],
+  anchor: StackAnchor,
+  pushedEvents: PushedEvent[],
+): number {
+  const resolved = resolveStack(tasks, anchor)
+  const dayKey = localDateKey(anchor.at)
+  const unusedDay = pushedEvents.filter(
+    (e) =>
+      e.calendarId === calendarId &&
+      e.groupId === groupId &&
+      e.dayKey === dayKey,
+  )
+  let ops = 0
+
+  for (const task of resolved) {
+    if (isTaskEmpty(task) || isTaskDisabled(task)) {
+      const matches = pushedEvents.filter(
+        (e) =>
+          e.calendarId === calendarId &&
+          e.groupId === groupId &&
+          e.dayKey === dayKey &&
+          e.taskId === task.id,
+      )
+      for (const match of matches) {
+        ops += 1
+        const unusedIdx = unusedDay.findIndex((e) => e.eventId === match.eventId)
+        if (unusedIdx >= 0) unusedDay.splice(unusedIdx, 1)
+      }
+      continue
+    }
+
+    ops += 1
+    const match = unusedDay.find((e) => e.taskId === task.id) || unusedDay[0]
+    if (match) {
+      const idx = unusedDay.indexOf(match)
+      if (idx >= 0) unusedDay.splice(idx, 1)
+    }
+  }
+
+  return ops + unusedDay.length
+}
+
+function makeProgressTicker(total: number, onProgress?: SyncProgressCallback) {
+  const safeTotal = Math.max(total, 1)
+  let current = 0
+  onProgress?.({
+    current: 0,
+    total: safeTotal,
+    label: total === 0 ? 'Finishing…' : 'Starting…',
+  })
+  return (labelPrefix: 'Updating' | 'Adding' | 'Removing') => {
+    current = Math.min(current + 1, safeTotal)
+    onProgress?.({
+      current,
+      total: safeTotal,
+      label: `${labelPrefix} ${current} of ${safeTotal}…`,
+    })
+  }
+}
+
 export type SyncTasksResult = {
   updated: number
   created: number
@@ -264,6 +336,8 @@ export async function syncTasksToCalendar(
   anchor: StackAnchor,
   pushedEvents: PushedEvent[],
   userId?: string | null,
+  onProgress?: SyncProgressCallback,
+  tickOverride?: (labelPrefix: 'Updating' | 'Adding' | 'Removing') => void,
 ): Promise<SyncTasksResult> {
   const resolved = resolveStack(tasks, anchor)
   const dayKey = localDateKey(anchor.at)
@@ -272,6 +346,12 @@ export async function syncTasksToCalendar(
   let created = 0
   let removed = 0
   const failures: SyncTaskFailure[] = []
+  const tick =
+    tickOverride ??
+    makeProgressTicker(
+      countTasksSyncOps(calendarId, groupId, tasks, anchor, pushedEvents),
+      onProgress,
+    )
 
   const dayPool = tracked.filter(
     (e) =>
@@ -339,15 +419,16 @@ export async function syncTasksToCalendar(
           if (isNotFoundError(err)) {
             forgetTracked(match)
             removed += 1
-            continue
+          } else {
+            failures.push({
+              taskId: task.id,
+              title: task.title,
+              action: 'remove',
+              message: formatError(err),
+            })
           }
-          failures.push({
-            taskId: task.id,
-            title: task.title,
-            action: 'remove',
-            message: formatError(err),
-          })
         }
+        tick('Removing')
       }
       continue
     }
@@ -382,6 +463,7 @@ export async function syncTasksToCalendar(
               pushedAt: new Date().toISOString(),
             })
             updated += 1
+            tick('Updating')
             continue
           } catch (err) {
             if (!isNotFoundError(err)) {
@@ -391,6 +473,7 @@ export async function syncTasksToCalendar(
                 action: 'update',
                 message: formatError(err),
               })
+              tick('Updating')
               continue
             }
             forgetTracked(match)
@@ -405,6 +488,7 @@ export async function syncTasksToCalendar(
           action: 'update',
           message: formatError(err),
         })
+        tick('Updating')
         continue
       }
     }
@@ -435,6 +519,7 @@ export async function syncTasksToCalendar(
         message: formatError(err),
       })
     }
+    tick('Adding')
   }
 
   for (const orphan of unusedDay) {
@@ -455,15 +540,16 @@ export async function syncTasksToCalendar(
       if (isNotFoundError(err)) {
         forgetTracked(orphan)
         removed += 1
-        continue
+      } else {
+        failures.push({
+          taskId: orphan.taskId,
+          title: 'Previously synced event',
+          action: 'remove',
+          message: formatError(err),
+        })
       }
-      failures.push({
-        taskId: orphan.taskId,
-        title: 'Previously synced event',
-        action: 'remove',
-        message: formatError(err),
-      })
     }
+    tick('Removing')
   }
 
   const pruned = prunePushedEvents(tracked)
@@ -531,6 +617,7 @@ export async function syncGroupToCalendars(
   anchor: StackAnchor,
   pushedEvents: PushedEvent[],
   userId?: string | null,
+  onProgress?: SyncProgressCallback,
 ): Promise<SyncGroupCalendarsResult> {
   const dayKey = localDateKey(anchor.at)
   const previouslyPushed = [
@@ -545,6 +632,27 @@ export async function syncGroupToCalendars(
   )
 
   let tracked = [...pushedEvents]
+  let totalOps = 0
+  for (const calendarId of removedCalendarIds) {
+    totalOps += tracked.filter(
+      (e) =>
+        e.groupId === groupId &&
+        e.dayKey === dayKey &&
+        e.calendarId === calendarId,
+    ).length
+  }
+  for (const calendarId of calendarIds) {
+    totalOps += countTasksSyncOps(
+      calendarId,
+      groupId,
+      tasks,
+      anchor,
+      tracked,
+    )
+  }
+
+  const tick = makeProgressTicker(totalOps, onProgress)
+
   let updated = 0
   let created = 0
   let removed = 0
@@ -557,6 +665,7 @@ export async function syncGroupToCalendars(
       dayKey,
       calendarId,
       tracked,
+      () => tick('Removing'),
     )
     tracked = result.pushedEvents
     removed += result.removed
@@ -571,6 +680,8 @@ export async function syncGroupToCalendars(
       anchor,
       tracked,
       userId,
+      undefined,
+      tick,
     )
     tracked = result.pushedEvents
     updated += result.updated
@@ -599,6 +710,7 @@ export async function deleteGroupFromCalendarOnCalendar(
   dayKey: string,
   calendarId: string,
   pushedEvents: PushedEvent[],
+  onOp?: () => void,
 ): Promise<DeleteFromCalendarResult> {
   const toDelete = pushedEvents.filter(
     (e) =>
@@ -641,15 +753,16 @@ export async function deleteGroupFromCalendarOnCalendar(
       if (isNotFoundError(err)) {
         forgetTracked(event)
         removed += 1
-        continue
+      } else {
+        failures.push({
+          taskId: event.taskId,
+          title: 'Calendar event',
+          action: 'remove',
+          message: formatError(err),
+        })
       }
-      failures.push({
-        taskId: event.taskId,
-        title: 'Calendar event',
-        action: 'remove',
-        message: formatError(err),
-      })
     }
+    onOp?.()
   }
 
   return {
