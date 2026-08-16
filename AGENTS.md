@@ -75,7 +75,7 @@ Domain model + pure logic (no React) lives in `src/lib/`:
 | File | Contents |
 | --- | --- |
 | `src/lib/tasks.ts` | `Task`, `BlockGroup`, `BlockGroupCheckpoint`, `BlockLibrary` types; stack resolution (`resolveStack`); plan/group/task/checkpoint mutators; date/formatting helpers |
-| `src/lib/savedCalendarUsers.ts` | Address book (`SavedCalendarUser`) and per-calendar guests (`CalendarGuest`); normalize/label helpers |
+| `src/lib/savedCalendarUsers.ts` | Address book (`SavedCalendarUser`) and per-calendar guests (`CalendarGuest`); normalize/merge/partition/label helpers |
 | `src/lib/calendarApi.ts` | Google Calendar API calls (list/create/update/delete) and the push/sync algorithm (`syncTasksToCalendar`, `deleteGroupFromCalendar`) |
 | `src/lib/pushedEvents.ts` | `PushedEvent`/`PushSnapshot` tracking — what's been pushed to Google, for idempotent "Add"/"Update" and drift detection |
 | `src/lib/google.ts` | GIS/`gapi` bootstrap, OAuth code exchange, token refresh/scope logic |

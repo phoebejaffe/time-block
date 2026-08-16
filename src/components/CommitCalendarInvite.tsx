@@ -4,6 +4,7 @@ import {
   guestChipLabel,
   guestEmailKey,
   isValidEmail,
+  partitionGuests,
   type CalendarGuest,
   type SavedCalendarUser,
 } from '../lib/savedCalendarUsers'
@@ -42,9 +43,7 @@ export function CommitCalendarInvite({
     onClose: () => setMenuOpen(false),
   })
 
-  const invitedKeys = new Set(lastGuests.map((g) => guestEmailKey(g.email)))
-  const invited = guests.filter((g) => invitedKeys.has(guestEmailKey(g.email)))
-  const inviting = guests.filter((g) => !invitedKeys.has(guestEmailKey(g.email)))
+  const { invited, inviting } = partitionGuests(guests, lastGuests)
   const selectedKeys = new Set(guests.map((g) => guestEmailKey(g.email)))
 
   function addGuest(email: string, name?: string) {

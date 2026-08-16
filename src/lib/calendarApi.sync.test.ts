@@ -14,11 +14,13 @@ type FakeEvent = {
   attendees?: { email: string; displayName?: string }[]
 }
 
-function mockGapiCalendar() {
+function mockGapiCalendar(options?: { failInsertOn?: string[] }) {
+  const failInsertOn = new Set(options?.failInsertOn ?? [])
   const store = new Map<string, FakeEvent>()
   let nextId = 1
   const calls: Array<{
     method: 'insert' | 'update' | 'delete'
+    calendarId?: string
     sendUpdates?: string
     attendees?: { email: string; displayName?: string }[]
   }> = []
@@ -42,6 +44,7 @@ function mockGapiCalendar() {
       }
     },
     update: async ({
+      calendarId,
       eventId,
       sendUpdates,
       resource,
@@ -60,6 +63,7 @@ function mockGapiCalendar() {
       if (!event) throw { status: 404 }
       calls.push({
         method: 'update',
+        calendarId,
         sendUpdates,
         attendees: resource.attendees,
       })
@@ -73,6 +77,7 @@ function mockGapiCalendar() {
       return { result: { id: eventId } }
     },
     insert: async ({
+      calendarId,
       sendUpdates,
       resource,
     }: {
@@ -85,9 +90,13 @@ function mockGapiCalendar() {
         attendees?: { email: string; displayName?: string }[]
       }
     }) => {
+      if (failInsertOn.has(calendarId)) {
+        throw { message: 'quota exceeded' }
+      }
       const id = `evt-${nextId++}`
       calls.push({
         method: 'insert',
+        calendarId,
         sendUpdates,
         attendees: resource.attendees,
       })
@@ -101,6 +110,7 @@ function mockGapiCalendar() {
       return { result: { id } }
     },
     delete: async ({
+      calendarId,
       eventId,
       sendUpdates,
     }: {
@@ -108,7 +118,7 @@ function mockGapiCalendar() {
       eventId: string
       sendUpdates?: string
     }) => {
-      calls.push({ method: 'delete', sendUpdates })
+      calls.push({ method: 'delete', calendarId, sendUpdates })
       store.delete(eventId)
     },
   }
@@ -375,6 +385,52 @@ describe('syncGroupToCalendars — multi-calendar', () => {
     expect(second.pushedEvents).toEqual([])
   })
 
+  it('writes a distinct attendee list per calendar', async () => {
+    const { calls } = mockGapiCalendar()
+    await syncGroupToCalendars(
+      ['cal-a', 'cal-b'],
+      'group-1',
+      tasks,
+      anchor,
+      [],
+      null,
+      undefined,
+      {
+        'cal-a': [{ email: 'ada@example.com', name: 'Ada' }],
+        'cal-b': [{ email: 'bob@example.com' }],
+      },
+    )
+    const inserts = calls.filter((c) => c.method === 'insert')
+    expect(inserts).toHaveLength(2)
+    expect(inserts.find((c) => c.calendarId === 'cal-a')).toEqual({
+      method: 'insert',
+      calendarId: 'cal-a',
+      sendUpdates: 'none',
+      attendees: [{ email: 'ada@example.com', displayName: 'Ada' }],
+    })
+    expect(inserts.find((c) => c.calendarId === 'cal-b')).toEqual({
+      method: 'insert',
+      calendarId: 'cal-b',
+      sendUpdates: 'none',
+      attendees: [{ email: 'bob@example.com' }],
+    })
+  })
+
+  it('omits failed calendars from successfulCalendarIds', async () => {
+    mockGapiCalendar({ failInsertOn: ['cal-b'] })
+    const result = await syncGroupToCalendars(
+      ['cal-a', 'cal-b'],
+      'group-1',
+      tasks,
+      anchor,
+      [],
+    )
+    expect(result.successfulCalendarIds).toEqual(['cal-a'])
+    expect(result.created).toBe(1)
+    expect(result.failures).toHaveLength(1)
+    expect(result.failures[0]?.action).toBe('create')
+  })
+
   it('reports stepped progress for each sync attempt', async () => {
     const progress: { current: number; total: number; label: string }[] = []
     await syncGroupToCalendars(
@@ -454,6 +510,7 @@ describe('syncTasksToCalendar — attendees', () => {
     expect(calls.filter((c) => c.method === 'insert')).toEqual([
       {
         method: 'insert',
+        calendarId: 'cal-a',
         sendUpdates: 'none',
         attendees: [{ email: 'ada@example.com', displayName: 'Ada' }],
       },
@@ -473,6 +530,7 @@ describe('syncTasksToCalendar — attendees', () => {
     expect(calls.filter((c) => c.method === 'update')).toEqual([
       {
         method: 'update',
+        calendarId: 'cal-a',
         sendUpdates: 'none',
         attendees: [{ email: 'ada@example.com', displayName: 'Ada' }],
       },
@@ -484,7 +542,7 @@ describe('syncTasksToCalendar — attendees', () => {
       first.pushedEvents,
     )
     expect(calls.filter((c) => c.method === 'delete')).toEqual([
-      { method: 'delete', sendUpdates: 'none' },
+      { method: 'delete', calendarId: 'cal-a', sendUpdates: 'none' },
     ])
   })
 
@@ -524,6 +582,7 @@ describe('syncTasksToCalendar — attendees', () => {
     expect(calls.filter((c) => c.method === 'update')).toEqual([
       {
         method: 'update',
+        calendarId: 'cal-a',
         sendUpdates: 'none',
         attendees: [{ email: 'bob@example.com', displayName: 'Bob' }],
       },
@@ -545,10 +604,68 @@ describe('syncTasksToCalendar — attendees', () => {
     )
     expect(calls.filter((c) => c.method === 'update').at(-1)).toEqual({
       method: 'update',
+      calendarId: 'cal-a',
       sendUpdates: 'none',
       attendees: [],
     })
     expect(store.get(first.pushedEvents[0]!.eventId)?.attendees).toEqual([])
+  })
+
+  it('omits displayName when the guest has no name', async () => {
+    const { calls } = mockGapiCalendar()
+    await syncTasksToCalendar(
+      'cal-a',
+      'group-1',
+      [{ id: 't1', title: 'Focus', durationMinutes: 60 }],
+      {
+        kind: 'start',
+        at: new Date('2026-07-23T15:00:00.000Z').toISOString(),
+      },
+      [],
+      null,
+      undefined,
+      undefined,
+      [{ email: 'ada@example.com' }],
+    )
+    expect(calls.filter((c) => c.method === 'insert')).toEqual([
+      {
+        method: 'insert',
+        calendarId: 'cal-a',
+        sendUpdates: 'none',
+        attendees: [{ email: 'ada@example.com' }],
+      },
+    ])
+  })
+
+  it('does not create events (or attendees) for empty or disabled blocks', async () => {
+    const { calls } = mockGapiCalendar()
+    const guests = [{ email: 'ada@example.com', name: 'Ada' }]
+    await syncTasksToCalendar(
+      'cal-a',
+      'group-1',
+      [
+        { id: 't1', title: 'Gap', durationMinutes: 15, empty: true },
+        { id: 't2', title: 'Skip', durationMinutes: 20, disabled: true },
+        { id: 't3', title: 'Focus', durationMinutes: 60 },
+      ],
+      {
+        kind: 'start',
+        at: new Date('2026-07-23T15:00:00.000Z').toISOString(),
+      },
+      [],
+      null,
+      undefined,
+      undefined,
+      guests,
+    )
+    expect(calls.filter((c) => c.method === 'insert')).toEqual([
+      {
+        method: 'insert',
+        calendarId: 'cal-a',
+        sendUpdates: 'none',
+        attendees: [{ email: 'ada@example.com', displayName: 'Ada' }],
+      },
+    ])
   })
 })
 

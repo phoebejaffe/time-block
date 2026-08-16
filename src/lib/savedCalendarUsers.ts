@@ -88,3 +88,38 @@ export function guestChipLabel(
   if (guest.name?.trim()) return guest.name.trim()
   return guest.email
 }
+
+export function mergeCalendarGuests(
+  existing: Record<string, CalendarGuest[]> | undefined,
+  patch: Record<string, CalendarGuest[]>,
+): Record<string, CalendarGuest[]> | undefined {
+  const merged: Record<string, CalendarGuest[]> = { ...(existing ?? {}) }
+  for (const [calendarId, guests] of Object.entries(patch)) {
+    if (!calendarId) continue
+    if (guests.length === 0) delete merged[calendarId]
+    else {
+      merged[calendarId] = guests.map((guest) =>
+        guest.name?.trim()
+          ? { email: guest.email, name: guest.name.trim() }
+          : { email: guest.email },
+      )
+    }
+  }
+  return Object.keys(merged).length > 0 ? merged : undefined
+}
+
+export function partitionGuests(
+  current: CalendarGuest[],
+  lastSuccessful: CalendarGuest[],
+): { invited: CalendarGuest[]; inviting: CalendarGuest[] } {
+  const invitedKeys = new Set(
+    lastSuccessful.map((guest) => guestEmailKey(guest.email)),
+  )
+  const invited: CalendarGuest[] = []
+  const inviting: CalendarGuest[] = []
+  for (const guest of current) {
+    if (invitedKeys.has(guestEmailKey(guest.email))) invited.push(guest)
+    else inviting.push(guest)
+  }
+  return { invited, inviting }
+}

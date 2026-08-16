@@ -4,8 +4,10 @@ import {
   guestChipLabel,
   guestEmailKey,
   isValidEmail,
+  mergeCalendarGuests,
   normalizeCalendarGuests,
   normalizeSavedCalendarUsers,
+  partitionGuests,
 } from './savedCalendarUsers'
 
 describe('saved calendar users', () => {
@@ -63,5 +65,98 @@ describe('saved calendar users', () => {
     )
     expect(guestChipLabel({ email: 'one@off.com' }, saved)).toBe('one@off.com')
     expect(guestEmailKey(' Ada@X.com ')).toBe('ada@x.com')
+  })
+})
+
+describe('mergeCalendarGuests', () => {
+  it('adds a calendar without touching others', () => {
+    expect(
+      mergeCalendarGuests(
+        { 'cal-a': [{ email: 'ada@example.com', name: 'Ada' }] },
+        { 'cal-b': [{ email: 'bob@example.com' }] },
+      ),
+    ).toEqual({
+      'cal-a': [{ email: 'ada@example.com', name: 'Ada' }],
+      'cal-b': [{ email: 'bob@example.com' }],
+    })
+  })
+
+  it('deletes a calendar key when the patch list is empty', () => {
+    expect(
+      mergeCalendarGuests(
+        {
+          'cal-a': [{ email: 'ada@example.com' }],
+          'cal-b': [{ email: 'bob@example.com' }],
+        },
+        { 'cal-a': [] },
+      ),
+    ).toEqual({
+      'cal-b': [{ email: 'bob@example.com' }],
+    })
+  })
+
+  it('drops calendarGuests entirely when the last calendar is cleared', () => {
+    expect(
+      mergeCalendarGuests(
+        { 'cal-a': [{ email: 'ada@example.com' }] },
+        { 'cal-a': [] },
+      ),
+    ).toBeUndefined()
+    expect(mergeCalendarGuests(undefined, { 'cal-a': [] })).toBeUndefined()
+  })
+
+  it('trims names and omits blank ones', () => {
+    expect(
+      mergeCalendarGuests(undefined, {
+        'cal-a': [
+          { email: 'ada@example.com', name: ' Ada ' },
+          { email: 'bob@example.com', name: '   ' },
+        ],
+      }),
+    ).toEqual({
+      'cal-a': [
+        { email: 'ada@example.com', name: 'Ada' },
+        { email: 'bob@example.com' },
+      ],
+    })
+  })
+})
+
+describe('partitionGuests', () => {
+  const ada = { email: 'ada@example.com', name: 'Ada' }
+  const bob = { email: 'bob@example.com' }
+
+  it('treats last-successful guests as Invited and new ones as Inviting', () => {
+    expect(partitionGuests([ada, bob], [ada])).toEqual({
+      invited: [ada],
+      inviting: [bob],
+    })
+  })
+
+  it('matches Invited by email case-insensitively', () => {
+    expect(
+      partitionGuests([{ email: 'ADA@example.com', name: 'Ada' }], [ada]),
+    ).toEqual({
+      invited: [{ email: 'ADA@example.com', name: 'Ada' }],
+      inviting: [],
+    })
+  })
+
+  it('omits a removed Invited person from both lists', () => {
+    expect(partitionGuests([], [ada, bob])).toEqual({
+      invited: [],
+      inviting: [],
+    })
+    expect(partitionGuests([bob], [ada, bob])).toEqual({
+      invited: [bob],
+      inviting: [],
+    })
+  })
+
+  it('keeps a re-added snapshot guest as Invited', () => {
+    expect(partitionGuests([ada], [ada])).toEqual({
+      invited: [ada],
+      inviting: [],
+    })
   })
 })
