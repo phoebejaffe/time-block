@@ -570,7 +570,7 @@ Top to bottom:
    - **Expanded** group:
      - **Name row**: the group's name (or its synthesized "Unnamed N"
        label), always visible above the anchor controls — tapping the name
-       collapses the group (hides it from the calendar); a **Start** /
+       collapses the group (hides it from the calendar); a **Start plan** /
        **Running**
        button when eligible (§7.9); and a "···" overflow menu on the far
        right — positioned via a portal that flips above/below and clamps
@@ -784,7 +784,7 @@ duration, not the trailing icon buttons) reorders it within its list:
 Planning mode is for drafting multiple plans. **Execution mode** is
 for running one group against the clock:
 
-1. **"Start"** (planning sidebar, to the right of the group's title
+1. **"Start plan"** (planning sidebar, to the right of the group's title
    when expanded) appears on an enabled group when wall-clock now is within one
    hour of that group's stack on today (from an hour before start through an
    hour after end), and no other group is already executing. While **this**

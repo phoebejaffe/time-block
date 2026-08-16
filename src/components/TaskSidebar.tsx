@@ -1452,7 +1452,7 @@ function BlockGroupPanel({
               disabled={busy}
               onClick={onExecutePlan}
             >
-              {isExecutingPlan ? 'Running' : 'Start'}
+              {isExecutingPlan ? 'Running' : 'Start plan'}
             </button>
           )}
           {renderListMenu()}
@@ -1484,7 +1484,7 @@ function BlockGroupPanel({
                 disabled={busy}
                 onClick={onExecutePlan}
               >
-                {isExecutingPlan ? 'Running' : 'Start'}
+                {isExecutingPlan ? 'Running' : 'Start plan'}
               </button>
             )}
             {renderListMenu()}

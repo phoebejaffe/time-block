@@ -94,7 +94,7 @@ export function HowItWorksModal({ onClose }: HowItWorksModalProps) {
 
           <h3>Run it</h3>
           <p>
-            When you&apos;re ready, <strong>Start</strong> appears next to
+            When you&apos;re ready, <strong>Start plan</strong> appears next to
             the plan title if the current time is within an hour of that
             plan. That opens a focused view of that one list beside the calendar
             to help you stay on track.
