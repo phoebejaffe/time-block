@@ -576,9 +576,8 @@ Top to bottom:
        collapses the group (hides it from the calendar); a **Start plan** /
        **Running**
        button when eligible (§7.9); and a "···" overflow menu on the far
-       right — positioned via a portal that flips above/below and clamps
-       horizontally to stay on-screen, the same technique used by the
-       block library picker — containing, when the group is enabled:
+       right — using the shared document-body portal that flips above/below
+       and clamps to the viewport (§7.5) — containing, when the group is enabled:
        "Update default" (only shown while there's
        no checkpoint yet — labeled **"Save as default"** — or the blocks
        have drifted from an existing checkpoint — labeled **"Update
@@ -655,8 +654,9 @@ Top to bottom:
 
 All modals share a common shell: a full-screen semi-transparent backdrop
 (click-outside or Escape to close), a centered dialog with a header
-(title + "×" close button) and a body, rendered via a portal so they sit
-above everything else. Modals used:
+(title + "×" close button) and a body, rendered via a portal. Dialogs sit
+above dropdowns and the execution modal; nested dialogs (rename-inside-
+library, etc.) sit above those; toasts sit above nested dialogs. Modals used:
 
 - **Rename plan** (opened via the plan menu's "Rename" item) — one field
   (plan name); Cancel / Save.
@@ -734,14 +734,16 @@ which deployed version is running), then the collapsible "Session diagnostics"
 panel.
 
 Dropdowns and overflow menus (plan ···, block library picker, settings,
-calendar menus, archive/library category menus) close on Escape or on an
-outside `mousedown` in the capture phase; that outside press is cancelled
-so it does not activate the control underneath.
+calendar menus, archive/library category menus) all portal to
+`document.body` so they are not clipped by sidebar or modal overflow; they
+flip above/below the trigger and clamp to the viewport. They close on
+Escape or on an outside `mousedown` in the capture phase; that outside
+press is cancelled so it does not activate the control underneath.
 
 ### 7.6 Notices / toasts
 
 A single-slot (only one at a time) toast anchored to the bottom of the
-screen, styled per kind (`success` | `error` | `info`), optionally with an
+screen (above nested dialogs), styled per kind (`success` | `error` | `info`), optionally with an
 action button (used for "Undo" after deleting a task) and/or a shrinking
 progress bar indicating time-to-auto-dismiss. Success and info notices
 auto-dismiss after a default delay (~5s, or a custom delay if specified —
@@ -994,7 +996,8 @@ whenever the calendar's visible date range changes.
   (since the whole app's mental model is "plan around now"); a calendars
   picker (checkboxes with each calendar's color swatch and name; visible
   calendars determine which Google events are fetched/shown) and a general
-  overflow menu (show/hide all-day events; view switcher).
+  overflow menu (show/hide all-day events; view switcher) — both portaled
+  like other overflow menus (§7.5).
 - **Sync status indicators per task**: while the task's group has been
   pushed to Google Calendar for the day currently in view, its row (in both
   sidebar and implicitly via what's fetched from Google) shows either a

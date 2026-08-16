@@ -1,5 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
-import { createPortal } from 'react-dom'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   addArchiveFolder,
   addArchivedPlan,
@@ -30,6 +29,8 @@ import {
 import type { NoticeOptions } from '../lib/notice'
 import { UNDO_MS_LONG } from '../lib/notice'
 import { subscribeMenuOutsideClose } from '../lib/menuDismiss'
+import { useFixedMenu } from '../hooks/useFixedMenu'
+import { FixedMenuPortal } from './FixedMenuPortal'
 
 const DRAG_ACTIVATE_PX = 5
 
@@ -591,6 +592,7 @@ function FolderSection({
   const menuRef = useRef<HTMLDivElement>(null)
   const suppressClickRef = useRef(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const menu = useFixedMenu({ open: menuOpen, align: 'end' })
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   const [dropLineIndex, setDropLineIndex] = useState<number | null>(null)
   const dropLineIndexRef = useRef<number | null>(null)
@@ -604,10 +606,14 @@ function FolderSection({
   useEffect(() => {
     if (!menuOpen) return
     return subscribeMenuOutsideClose(
-      (target) => Boolean(menuRef.current?.contains(target)),
+      (target) =>
+        Boolean(
+          menuRef.current?.contains(target) ||
+            menu.dropdownRef.current?.contains(target),
+        ),
       () => setMenuOpen(false),
     )
-  }, [menuOpen])
+  }, [menuOpen, menu.dropdownRef])
 
   function lineIndexFromY(clientY: number): number {
     const list = listRef.current
@@ -733,6 +739,7 @@ function FolderSection({
           <div className="task-new-menu block-library-category-menu" ref={menuRef}>
             <button
               type="button"
+              ref={menu.triggerRef}
               className="btn btn-text btn-icon task-new-menu-btn"
               aria-label="Folder options"
               aria-expanded={menuOpen}
@@ -741,8 +748,12 @@ function FolderSection({
             >
               ···
             </button>
-            {menuOpen && (
-              <div className="task-new-menu-dropdown" role="menu">
+            <FixedMenuPortal
+              open={menuOpen}
+              dropdownRef={menu.dropdownRef}
+              style={menu.style}
+              className="task-new-menu-dropdown"
+            >
                 {!isUnfiled && (
                   <button
                     type="button"
@@ -805,8 +816,7 @@ function FolderSection({
                     </button>
                   </>
                 )}
-              </div>
-            )}
+            </FixedMenuPortal>
           </div>
         )}
       </div>
@@ -874,10 +884,8 @@ function ArchivedPlanRow({
   onDelete: () => void
 }) {
   const menuRef = useRef<HTMLDivElement>(null)
-  const menuTriggerRef = useRef<HTMLButtonElement>(null)
-  const menuDropdownRef = useRef<HTMLDivElement>(null)
   const [menuOpen, setMenuOpen] = useState(false)
-  const [menuDropdownStyle, setMenuDropdownStyle] = useState<CSSProperties>({})
+  const menu = useFixedMenu({ open: menuOpen, align: 'end' })
   const accent = groupSidebarAccentColor(plan.color)
   const blockCount = plan.tasks.length
   const duration = formatDurationMinutes(stackDurationMinutes(plan.tasks))
@@ -898,61 +906,11 @@ function ArchivedPlanRow({
       (target) =>
         Boolean(
           menuRef.current?.contains(target) ||
-            menuDropdownRef.current?.contains(target),
+            menu.dropdownRef.current?.contains(target),
         ),
       () => setMenuOpen(false),
     )
-  }, [menuOpen])
-
-  useLayoutEffect(() => {
-    if (!menuOpen) {
-      setMenuDropdownStyle({})
-      return
-    }
-
-    function reposition() {
-      const trigger = menuTriggerRef.current
-      const dropdown = menuDropdownRef.current
-      if (!trigger || !dropdown) return
-      const gap = 6
-      const pad = 8
-      const triggerRect = trigger.getBoundingClientRect()
-      const dropdownHeight = dropdown.offsetHeight
-      const dropdownWidth = dropdown.offsetWidth
-      const spaceBelow = window.innerHeight - triggerRect.bottom - pad
-      const spaceAbove = triggerRect.top - pad
-      const openUp =
-        spaceAbove >= dropdownHeight + gap &&
-        (spaceAbove >= spaceBelow || spaceBelow < dropdownHeight + gap)
-      let top = openUp
-        ? triggerRect.top - dropdownHeight - gap
-        : triggerRect.bottom + gap
-      top = Math.max(pad, Math.min(top, window.innerHeight - pad - dropdownHeight))
-      let left = triggerRect.right - dropdownWidth
-      left = Math.max(pad, Math.min(left, window.innerWidth - dropdownWidth - pad))
-      setMenuDropdownStyle({
-        position: 'fixed',
-        top,
-        left,
-        minWidth: dropdownWidth,
-        zIndex: 95,
-        bottom: 'auto',
-        right: 'auto',
-      })
-    }
-
-    reposition()
-    window.addEventListener('resize', reposition)
-    document
-      .querySelector('.archived-plans-body')
-      ?.addEventListener('scroll', reposition, { passive: true })
-    return () => {
-      window.removeEventListener('resize', reposition)
-      document
-        .querySelector('.archived-plans-body')
-        ?.removeEventListener('scroll', reposition)
-    }
-  }, [menuOpen])
+  }, [menuOpen, menu.dropdownRef])
 
   return (
     <li
@@ -994,7 +952,7 @@ function ArchivedPlanRow({
         </button>
         <div className="task-new-menu archived-plan-menu" ref={menuRef}>
           <button
-            ref={menuTriggerRef}
+            ref={menu.triggerRef}
             type="button"
             className="btn btn-text btn-icon task-new-menu-btn"
             aria-label="Plan options"
@@ -1006,14 +964,12 @@ function ArchivedPlanRow({
           >
             ···
           </button>
-          {menuOpen &&
-            createPortal(
-              <div
-                ref={menuDropdownRef}
-                className="task-new-menu-dropdown task-new-menu-dropdown-fixed"
-                style={menuDropdownStyle}
-                role="menu"
-              >
+          <FixedMenuPortal
+            open={menuOpen}
+            dropdownRef={menu.dropdownRef}
+            style={menu.style}
+            className="task-new-menu-dropdown"
+          >
                 <button
                   type="button"
                   role="menuitem"
@@ -1071,9 +1027,7 @@ function ArchivedPlanRow({
                 >
                   Delete from archive
                 </button>
-              </div>,
-              document.body,
-            )}
+          </FixedMenuPortal>
         </div>
       </div>
       {expanded && (

@@ -4,9 +4,7 @@ import {
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
 } from 'react'
-import { createPortal } from 'react-dom'
 import type { GoogleCalendar, SyncProgress } from '../lib/calendarApi'
 import type {
   BlockGroup,
@@ -48,6 +46,8 @@ import {
   type PushSnapshot,
 } from '../lib/pushedEvents'
 import { subscribeMenuOutsideClose } from '../lib/menuDismiss'
+import { useFixedMenu } from '../hooks/useFixedMenu'
+import { FixedMenuPortal } from './FixedMenuPortal'
 import { SettingsMenu } from './SettingsMenu'
 import { BlockLibraryModal } from './BlockLibraryModal'
 import { TaskFieldsForm } from './TaskFieldsForm'
@@ -858,16 +858,19 @@ function BlockGroupPanel({
   const [listMenuOpen, setListMenuOpen] = useState(false)
   const [libraryOpen, setLibraryOpen] = useState(false)
   const [librarySelection, setLibrarySelection] = useState<string[]>([])
-  const [libraryDropdownStyle, setLibraryDropdownStyle] =
-    useState<CSSProperties>({})
 
   const listRef = useRef<HTMLUListElement>(null)
   const listMenuRef = useRef<HTMLDivElement>(null)
-  const listMenuTriggerRef = useRef<HTMLButtonElement>(null)
-  const listMenuDropdownRef = useRef<HTMLDivElement>(null)
+  const listMenu = useFixedMenu({ open: listMenuOpen, align: 'end' })
   const libraryMenuRef = useRef<HTMLDivElement>(null)
-  const libraryTriggerRef = useRef<HTMLButtonElement>(null)
-  const libraryDropdownRef = useRef<HTMLDivElement>(null)
+  const libraryMenu = useFixedMenu({
+    open: libraryOpen,
+    align: 'start',
+    constrainHeight: true,
+    matchTriggerWidth: true,
+    minWidth: 224,
+    maxWidth: 288,
+  })
   const dropLineIndexRef = useRef<number | null>(null)
   const suppressClickRef = useRef(false)
   const timePointerActiveRef = useRef(false)
@@ -876,8 +879,6 @@ function BlockGroupPanel({
   anchorRef.current = anchor
   const intendedEndAtRef = useRef(group.intendedEndAt)
   intendedEndAtRef.current = group.intendedEndAt
-  const [listMenuDropdownStyle, setListMenuDropdownStyle] =
-    useState<CSSProperties>({})
   const [nowMs, setNowMs] = useState(() => Date.now())
 
   useEffect(() => {
@@ -910,11 +911,11 @@ function BlockGroupPanel({
       (target) =>
         Boolean(
           listMenuRef.current?.contains(target) ||
-            listMenuDropdownRef.current?.contains(target),
+            listMenu.dropdownRef.current?.contains(target),
         ),
       () => setListMenuOpen(false),
     )
-  }, [listMenuOpen])
+  }, [listMenuOpen, listMenu.dropdownRef])
 
   useEffect(() => {
     if (!libraryOpen) return
@@ -922,68 +923,11 @@ function BlockGroupPanel({
       (target) =>
         Boolean(
           libraryMenuRef.current?.contains(target) ||
-            libraryDropdownRef.current?.contains(target),
+            libraryMenu.dropdownRef.current?.contains(target),
         ),
       () => setLibraryOpen(false),
     )
-  }, [libraryOpen])
-
-  useLayoutEffect(() => {
-    if (!libraryOpen) {
-      setLibraryDropdownStyle({})
-      return
-    }
-
-    function repositionLibraryDropdown() {
-      const trigger = libraryTriggerRef.current
-      const dropdown = libraryDropdownRef.current
-      if (!trigger || !dropdown) return
-
-      const gap = 6
-      const pad = 8
-      const triggerRect = trigger.getBoundingClientRect()
-      const width = Math.min(
-        288,
-        Math.max(triggerRect.width, 224),
-        window.innerWidth - pad * 2,
-      )
-      const dropdownHeight = dropdown.scrollHeight
-      const spaceBelow = window.innerHeight - triggerRect.bottom - pad
-      const spaceAbove = triggerRect.top - pad
-      const openDown = spaceBelow >= spaceAbove
-      const available = (openDown ? spaceBelow : spaceAbove) - gap
-      const viewportCap = window.innerHeight * 0.75 - pad * 2
-      const maxHeight = Math.max(160, Math.min(available, viewportCap))
-      let top = openDown
-        ? triggerRect.bottom + gap
-        : triggerRect.top - Math.min(dropdownHeight, maxHeight) - gap
-      top = Math.max(pad, Math.min(top, window.innerHeight - pad - maxHeight))
-      let left = triggerRect.left
-      left = Math.max(pad, Math.min(left, window.innerWidth - width - pad))
-
-      setLibraryDropdownStyle({
-        position: 'fixed',
-        top,
-        left,
-        width,
-        maxHeight,
-        zIndex: 75,
-        bottom: 'auto',
-        right: 'auto',
-      })
-    }
-
-    repositionLibraryDropdown()
-    const sidebar = libraryMenuRef.current?.closest('.task-sidebar')
-    window.addEventListener('resize', repositionLibraryDropdown)
-    sidebar?.addEventListener('scroll', repositionLibraryDropdown, {
-      passive: true,
-    })
-    return () => {
-      window.removeEventListener('resize', repositionLibraryDropdown)
-      sidebar?.removeEventListener('scroll', repositionLibraryDropdown)
-    }
-  }, [libraryOpen, librarySelection, blockLibrary])
+  }, [libraryOpen, libraryMenu.dropdownRef])
 
   const colorPickerValue =
     group.color && /^#[0-9a-fA-F]{6}$/.test(group.color)
@@ -1076,77 +1020,13 @@ function BlockGroupPanel({
   )
   const showSaveCheckpoint = !group.checkpoint || hasCheckpointDrift
 
-  useLayoutEffect(() => {
-    if (!listMenuOpen) {
-      setListMenuDropdownStyle({})
-      return
-    }
-
-    function repositionListMenuDropdown() {
-      const trigger = listMenuTriggerRef.current
-      const dropdown = listMenuDropdownRef.current
-      if (!trigger || !dropdown) return
-
-      const gap = 6
-      const pad = 8
-      const triggerRect = trigger.getBoundingClientRect()
-      const dropdownHeight = dropdown.offsetHeight
-      const dropdownWidth = dropdown.offsetWidth
-      const spaceBelow = window.innerHeight - triggerRect.bottom - pad
-      const spaceAbove = triggerRect.top - pad
-      const openUp =
-        spaceAbove >= dropdownHeight + gap &&
-        (spaceAbove >= spaceBelow || spaceBelow < dropdownHeight + gap)
-      let top = openUp
-        ? triggerRect.top - dropdownHeight - gap
-        : triggerRect.bottom + gap
-      top -= 4
-      top = Math.max(pad, Math.min(top, window.innerHeight - pad - dropdownHeight))
-      let left = triggerRect.right - dropdownWidth
-      left = Math.max(pad, Math.min(left, window.innerWidth - dropdownWidth - pad))
-
-      setListMenuDropdownStyle({
-        position: 'fixed',
-        top,
-        left,
-        minWidth: dropdownWidth,
-        zIndex: 75,
-        bottom: 'auto',
-        right: 'auto',
-      })
-    }
-
-    repositionListMenuDropdown()
-    const sidebar = listMenuRef.current?.closest('.task-sidebar')
-    window.addEventListener('resize', repositionListMenuDropdown)
-    sidebar?.addEventListener('scroll', repositionListMenuDropdown, {
-      passive: true,
-    })
-    return () => {
-      window.removeEventListener('resize', repositionListMenuDropdown)
-      sidebar?.removeEventListener('scroll', repositionListMenuDropdown)
-    }
-  }, [
-    listMenuOpen,
-    enabled,
-    canMoveGroupUp,
-    canMoveGroupDown,
-    showSaveCheckpoint,
-    group.checkpoint,
-    tasks.length,
-    onCalendar,
-    canDeleteGroup,
-  ])
-
   function renderListMenuDropdown() {
-    if (!listMenuOpen) return null
-
-    return createPortal(
-      <div
-        ref={listMenuDropdownRef}
-        className="task-new-menu-dropdown task-new-menu-dropdown-fixed"
-        style={listMenuDropdownStyle}
-        role="menu"
+    return (
+      <FixedMenuPortal
+        open={listMenuOpen}
+        dropdownRef={listMenu.dropdownRef}
+        style={listMenu.style}
+        className="task-new-menu-dropdown"
       >
         {enabled && showSaveCheckpoint && (
           <>
@@ -1282,8 +1162,7 @@ function BlockGroupPanel({
             </button>
           </>
         )}
-      </div>,
-      document.body,
+      </FixedMenuPortal>
     )
   }
 
@@ -1292,7 +1171,7 @@ function BlockGroupPanel({
       <div className="task-new-menu" ref={listMenuRef}>
         <button
           type="button"
-          ref={listMenuTriggerRef}
+          ref={listMenu.triggerRef}
           className="btn btn-text btn-icon task-new-menu-btn"
           aria-label="Plan options"
           aria-expanded={listMenuOpen}
@@ -2038,7 +1917,7 @@ function BlockGroupPanel({
               <div className="task-new-triggers">
                 <div className="task-new-menu task-new-library" ref={libraryMenuRef}>
                   <button
-                    ref={libraryTriggerRef}
+                    ref={libraryMenu.triggerRef}
                     type="button"
                     className="task-new-trigger"
                     disabled={busy}
@@ -2052,15 +1931,14 @@ function BlockGroupPanel({
                     <LibraryIcon />
                     <span className="task-new-trigger-label">Library block</span>
                   </button>
-                  {libraryOpen &&
-                    createPortal(
-                      <div
-                        ref={libraryDropdownRef}
-                        className="task-new-menu-dropdown block-library-picker block-library-picker-fixed"
-                        style={libraryDropdownStyle}
-                        role="listbox"
-                        aria-multiselectable="true"
-                      >
+                  <FixedMenuPortal
+                    open={libraryOpen}
+                    dropdownRef={libraryMenu.dropdownRef}
+                    style={libraryMenu.style}
+                    className="task-new-menu-dropdown block-library-picker"
+                    role="listbox"
+                    aria-multiselectable
+                  >
                         <div className="block-library-picker-list">
                           {blockLibrary.categories.length === 0 ? (
                             <p className="muted block-library-picker-empty">
@@ -2137,9 +2015,7 @@ function BlockGroupPanel({
                                 : 'Add blocks'}
                           </button>
                         </div>
-                      </div>,
-                      document.body,
-                    )}
+                      </FixedMenuPortal>
                 </div>
                 <button
                   type="button"

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import FullCalendar from '@fullcalendar/react'
 import type {
   DateSpanApi,
@@ -34,7 +34,6 @@ import {
   CalendarToolbar,
   type CalendarViewType,
 } from './CalendarToolbar'
-import { subscribeMenuOutsideClose } from '../lib/menuDismiss'
 
 const NARROW_BREAKPOINT = 560
 /** Touch: hold before stack drag so vertical swipes scroll the calendar. */
@@ -282,8 +281,6 @@ export function CalendarView({
   const calendarRef = useRef<FullCalendar>(null)
   const shellRef = useRef<HTMLDivElement>(null)
   const calendarBodyRef = useRef<HTMLDivElement>(null)
-  const menuRef = useRef<HTMLDivElement>(null)
-  const calendarsMenuRef = useRef<HTMLDivElement>(null)
   /** Pixel height — `height="100%"` breaks after the OAuth gate; numeric height sticks across re-renders. */
   const [calendarHeight, setCalendarHeight] = useState(0)
   const dragOriginStartRef = useRef<number | null>(null)
@@ -371,6 +368,10 @@ export function CalendarView({
   const [showAllDay, setShowAllDay] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [calendarsOpen, setCalendarsOpen] = useState(false)
+  const dismissMenus = useCallback(() => {
+    setMenuOpen(false)
+    setCalendarsOpen(false)
+  }, [])
   const [isOnToday, setIsOnToday] = useState(true)
   const [farFromTodayOrTomorrow, setFarFromTodayOrTomorrow] = useState(false)
   const [prevDisabled, setPrevDisabled] = useState(false)
@@ -635,24 +636,6 @@ export function CalendarView({
     setViewType('timeGridThreeDay')
   }, [narrow, viewType])
 
-  useEffect(() => {
-    if (!menuOpen && !calendarsOpen) return
-
-    function isInsideMenus(target: Node) {
-      return Boolean(
-        (menuOpen && menuRef.current?.contains(target)) ||
-          (calendarsOpen && calendarsMenuRef.current?.contains(target)),
-      )
-    }
-
-    function closeOutside() {
-      setMenuOpen(false)
-      setCalendarsOpen(false)
-    }
-
-    return subscribeMenuOutsideClose(isInsideMenus, closeOutside)
-  }, [menuOpen, calendarsOpen])
-
   // FullCalendar can keep stale start/end on existing task ids after reorder or
   // anchor edits. Reconcile FC's internal dates and DOM labels from resolveStack.
   useEffect(() => {
@@ -822,8 +805,6 @@ export function CalendarView({
         calendars={calendars}
         visibleCalendarIds={visibleCalendarIds}
         busy={busy}
-        menuRef={menuRef}
-        calendarsMenuRef={calendarsMenuRef}
         onPrev={() => calendarRef.current?.getApi().prev()}
         onNext={() => calendarRef.current?.getApi().next()}
         prevDisabled={prevDisabled}
@@ -843,6 +824,7 @@ export function CalendarView({
         }}
         onChangeView={changeView}
         onToggleCalendar={onToggleCalendar}
+        onDismissMenus={dismissMenus}
       />
 
       <div

@@ -2,11 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { HowItWorksModal } from './HowItWorksModal'
 import { BlockLibraryModal } from './BlockLibraryModal'
 import { AuthSessionDiagnostics } from './AuthSessionDiagnostics'
+import { FixedMenuPortal } from './FixedMenuPortal'
 import type { BlockLibrary } from '../lib/tasks'
 import type { NoticeOptions } from '../lib/notice'
 import type { SessionDiagnostics } from '../lib/google'
 import { hardReloadApp } from '../lib/hardReload'
 import { subscribeMenuOutsideClose } from '../lib/menuDismiss'
+import { useFixedMenu } from '../hooks/useFixedMenu'
 
 type SettingsMenuProps = {
   busy?: boolean
@@ -56,6 +58,11 @@ export function SettingsMenu({
   const [helpOpen, setHelpOpen] = useState(false)
   const [libraryOpen, setLibraryOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
+  const menu = useFixedMenu({
+    open,
+    align: 'end',
+    constrainHeight: true,
+  })
   const buildTime = useMemo(() => formatBuildTime(__BUILD_TIME__), [])
 
   async function shareAppLink() {
@@ -70,15 +77,20 @@ export function SettingsMenu({
   useEffect(() => {
     if (!open) return
     return subscribeMenuOutsideClose(
-      (target) => Boolean(menuRef.current?.contains(target)),
+      (target) =>
+        Boolean(
+          menuRef.current?.contains(target) ||
+            menu.dropdownRef.current?.contains(target),
+        ),
       () => setOpen(false),
     )
-  }, [open])
+  }, [open, menu.dropdownRef])
 
   return (
     <div className="settings-menu" ref={menuRef}>
       <button
         type="button"
+        ref={menu.triggerRef}
         className="btn btn-text btn-icon"
         aria-label="Menu"
         aria-expanded={open}
@@ -88,8 +100,12 @@ export function SettingsMenu({
       >
         <MenuIcon />
       </button>
-      {open && (
-        <div className="settings-menu-dropdown" role="menu">
+      <FixedMenuPortal
+        open={open}
+        dropdownRef={menu.dropdownRef}
+        style={menu.style}
+        className="settings-menu-dropdown"
+      >
           <button
             type="button"
             role="menuitem"
@@ -188,8 +204,7 @@ export function SettingsMenu({
               compact
             />
           )}
-        </div>
-      )}
+        </FixedMenuPortal>
       {helpOpen && <HowItWorksModal onClose={() => setHelpOpen(false)} />}
       {libraryOpen && (
         <BlockLibraryModal

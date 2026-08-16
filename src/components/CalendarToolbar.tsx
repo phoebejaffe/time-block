@@ -1,6 +1,9 @@
-import type { RefObject } from 'react'
+import { useEffect, useRef } from 'react'
 import type { GoogleCalendar } from '../lib/calendarApi'
+import { subscribeMenuOutsideClose } from '../lib/menuDismiss'
+import { useFixedMenu } from '../hooks/useFixedMenu'
 import { CalendarToggles } from './CalendarToggles'
+import { FixedMenuPortal } from './FixedMenuPortal'
 
 export type CalendarViewType = 'timeGridDay' | 'timeGridThreeDay' | 'timeGridWeek'
 
@@ -16,8 +19,6 @@ type CalendarToolbarProps = {
   calendars: GoogleCalendar[]
   visibleCalendarIds: Set<string>
   busy?: boolean
-  menuRef: RefObject<HTMLDivElement | null>
-  calendarsMenuRef: RefObject<HTMLDivElement | null>
   onPrev: () => void
   onNext: () => void
   prevDisabled?: boolean
@@ -28,6 +29,7 @@ type CalendarToolbarProps = {
   onToggleAllDay: () => void
   onChangeView: (view: CalendarViewType) => void
   onToggleCalendar: (calendarId: string) => void
+  onDismissMenus: () => void
 }
 
 export function CalendarToolbar({
@@ -42,8 +44,6 @@ export function CalendarToolbar({
   calendars,
   visibleCalendarIds,
   busy,
-  menuRef,
-  calendarsMenuRef,
   onPrev,
   onNext,
   prevDisabled = false,
@@ -54,7 +54,33 @@ export function CalendarToolbar({
   onToggleAllDay,
   onChangeView,
   onToggleCalendar,
+  onDismissMenus,
 }: CalendarToolbarProps) {
+  const menuRootRef = useRef<HTMLDivElement>(null)
+  const calendarsRootRef = useRef<HTMLDivElement>(null)
+  const optionsMenu = useFixedMenu({ open: menuOpen, align: 'end' })
+  const calendarsMenu = useFixedMenu({
+    open: calendarsOpen,
+    align: 'end',
+    constrainHeight: true,
+  })
+
+  useEffect(() => {
+    if (!menuOpen && !calendarsOpen) return
+    return subscribeMenuOutsideClose(
+      (target) =>
+        Boolean(
+          (menuOpen &&
+            (menuRootRef.current?.contains(target) ||
+              optionsMenu.dropdownRef.current?.contains(target))) ||
+            (calendarsOpen &&
+              (calendarsRootRef.current?.contains(target) ||
+                calendarsMenu.dropdownRef.current?.contains(target))),
+        ),
+      onDismissMenus,
+    )
+  }, [menuOpen, calendarsOpen, onDismissMenus, optionsMenu.dropdownRef, calendarsMenu.dropdownRef])
+
   return (
     <div className="calendar-toolbar">
       <div className="calendar-toolbar-side calendar-toolbar-left">
@@ -109,9 +135,10 @@ export function CalendarToolbar({
 
       <div className="calendar-toolbar-side calendar-toolbar-right">
         <div className="calendar-toolbar-menus">
-          <div className="calendars-menu" ref={calendarsMenuRef}>
+          <div className="calendars-menu" ref={calendarsRootRef}>
             <button
               type="button"
+              ref={calendarsMenu.triggerRef}
               className="btn btn-text btn-icon"
               aria-label="Calendars"
               aria-expanded={calendarsOpen}
@@ -121,21 +148,25 @@ export function CalendarToolbar({
             >
               <CalendarIcon />
             </button>
-            {calendarsOpen && (
-              <div className="calendars-dropdown" role="menu">
-                <CalendarToggles
-                  calendars={calendars}
-                  visibleIds={visibleCalendarIds}
-                  onToggle={onToggleCalendar}
-                  disabled={busy}
-                />
-              </div>
-            )}
+            <FixedMenuPortal
+              open={calendarsOpen}
+              dropdownRef={calendarsMenu.dropdownRef}
+              style={calendarsMenu.style}
+              className="calendars-dropdown"
+            >
+              <CalendarToggles
+                calendars={calendars}
+                visibleIds={visibleCalendarIds}
+                onToggle={onToggleCalendar}
+                disabled={busy}
+              />
+            </FixedMenuPortal>
           </div>
 
-          <div className="calendar-menu" ref={menuRef}>
+          <div className="calendar-menu" ref={menuRootRef}>
             <button
               type="button"
+              ref={optionsMenu.triggerRef}
               className="btn btn-text btn-icon"
               aria-label="Calendar options"
               aria-expanded={menuOpen}
@@ -144,8 +175,12 @@ export function CalendarToolbar({
             >
               ···
             </button>
-            {menuOpen && (
-              <div className="calendar-menu-dropdown" role="menu">
+            <FixedMenuPortal
+              open={menuOpen}
+              dropdownRef={optionsMenu.dropdownRef}
+              style={optionsMenu.style}
+              className="calendar-menu-dropdown"
+            >
                 <button
                   type="button"
                   role="menuitemcheckbox"
@@ -200,8 +235,7 @@ export function CalendarToolbar({
                     Week
                   </button>
                 )}
-              </div>
-            )}
+            </FixedMenuPortal>
           </div>
         </div>
       </div>
