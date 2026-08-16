@@ -236,10 +236,12 @@ version of this group's blocks" that the user can always get back to after
 making one-off adjustments (e.g. a daily routine that gets tweaked day to
 day but should be easy to reset).
 
-- **Update default** snapshots the group's current
+- **Save as default** / **Update default** snapshots the group's current
   tasks (title, duration, `empty`/`delay`/`disabled` flags, and order — no
   ids) and its current anchor (kind + datetime) as the checkpoint,
-  overwriting any previous one.
+  overwriting any previous one. The menu label is **Save as default** when
+  there is no checkpoint yet, and **Update default** once one exists
+  (including when offering an update after drift).
   Updating an existing checkpoint asks for confirmation via a native dialog
   first. Only offered while the group is enabled, and only when there either
   is no checkpoint yet or the current group has "drifted" from it.
@@ -578,7 +580,9 @@ Top to bottom:
        horizontally to stay on-screen, the same technique used by the
        block library picker — containing, when the group is enabled:
        "Update default" (only shown while there's
-       no checkpoint yet or the blocks have drifted from it — see §4.6) /
+       no checkpoint yet — labeled **"Save as default"** — or the blocks
+       have drifted from an existing checkpoint — labeled **"Update
+       default"**; see §4.6) /
        — separator — / Rename / a "Change color" swatch input / —
        separator — / Move up / Move down (either omitted if not
        applicable) / Duplicate / — separator — / **Archive** (disabled if

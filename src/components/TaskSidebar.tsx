@@ -1188,7 +1188,7 @@ function BlockGroupPanel({
                 onSaveCheckpoint()
               }}
             >
-              Update default
+              {group.checkpoint ? 'Update default' : 'Save as default'}
             </button>
             <div className="calendar-menu-sep" role="separator" />
           </>
