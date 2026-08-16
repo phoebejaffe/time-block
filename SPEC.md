@@ -740,7 +740,10 @@ panel.
 Dropdowns and overflow menus (plan ···, block library picker, app menu,
 calendar menus, archive/library category menus) all portal to
 `document.body` so they are not clipped by sidebar or modal overflow; they
-flip above/below the trigger and clamp to the viewport. They close on
+flip above/below the trigger (6px gap) and clamp to the viewport. Compact
+overflow menus share one panel chrome (radius, padding, 12.5rem min width,
+0.9rem items); the block-library picker and calendars panel are the wider
+variant. They close on
 Escape or on an outside `mousedown` in the capture phase; that outside
 press is cancelled so it does not activate the control underneath (the
 following `click` is swallowed too). While a

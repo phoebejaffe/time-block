@@ -1,4 +1,4 @@
-export const FIXED_MENU_GAP = 6
+export const FIXED_MENU_GAP = 6 /* matches --menu-gap */
 export const FIXED_MENU_PAD = 8
 
 export type FixedMenuAlign = 'start' | 'end'

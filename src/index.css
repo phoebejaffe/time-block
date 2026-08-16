@@ -15,6 +15,10 @@
   --task: #0f6e56;
   --shadow: 0 18px 50px rgba(26, 31, 28, 0.08);
   --radius: 14px;
+  --menu-bg: #fffcf6;
+  --menu-pad: 0.35rem;
+  --menu-min-width: 12.5rem;
+  --menu-gap: 6px;
   --z-dropdown: 70;
   --z-execution: 60;
   --z-modal: 80;
@@ -326,7 +330,7 @@ body.is-sidebar-resizing .main-panel {
 }
 
 .task-sidebar-execution .block-group .task-card.task-card-current {
-  border-left: 2px solid #d32f2f;
+  border-left: 2px solid var(--danger);
   padding-left: calc(0.5rem - 2px);
 }
 
@@ -930,6 +934,13 @@ body.is-datetime-scrubbing .task-form-duration input {
 
 .btn-icon:not(:disabled):hover {
   color: var(--ink);
+  background: var(--paper-2);
+}
+
+.btn-icon:focus-visible,
+.icon-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
 .task-list-header {
@@ -1039,12 +1050,12 @@ body.is-datetime-scrubbing .task-form-duration input {
 }
 
 .task-done-btn.is-done {
-  color: #2f9e44;
+  color: var(--accent);
 }
 
 .task-done-btn.is-done:hover {
-  color: #2b8a3e;
-  background: rgba(47, 158, 68, 0.1);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
 }
 
 .task-card-drag {
@@ -1143,13 +1154,21 @@ body.is-datetime-scrubbing .task-form-duration input {
   color: var(--ink-muted);
 }
 
-.task-new-menu-dropdown {
-  min-width: 11.875rem;
-  padding: 0.3rem;
+.task-new-menu-dropdown,
+.settings-menu-dropdown,
+.calendar-menu-dropdown,
+.calendars-dropdown {
   border-radius: var(--radius);
   border: 1px solid var(--line);
-  background: #fffcf6;
+  background: var(--menu-bg);
   box-shadow: var(--shadow);
+}
+
+.task-new-menu-dropdown,
+.settings-menu-dropdown,
+.calendar-menu-dropdown {
+  min-width: var(--menu-min-width);
+  padding: var(--menu-pad);
 }
 
 .task-new-menu-dropdown-fixed {
@@ -1157,12 +1176,6 @@ body.is-datetime-scrubbing .task-form-duration input {
   z-index: var(--z-dropdown);
   bottom: auto;
   right: auto;
-}
-
-.task-new-menu-dropdown .calendar-menu-item {
-  font-size: 0.78rem;
-  padding: 0.38rem 0.55rem;
-  white-space: nowrap;
 }
 
 .task-new-commit {
@@ -2051,6 +2064,7 @@ body.is-task-reordering .task-sidebar {
   background: transparent;
   color: var(--ink-muted);
   cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
 .icon-btn:hover {
@@ -2393,12 +2407,6 @@ body.is-task-reordering .task-sidebar {
 }
 
 .settings-menu-dropdown {
-  min-width: 12.5rem;
-  padding: 0.35rem;
-  border-radius: var(--radius);
-  border: 1px solid var(--line);
-  background: #fffcf6;
-  box-shadow: var(--shadow);
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -2428,12 +2436,8 @@ body.is-task-reordering .task-sidebar {
 }
 
 .calendars-dropdown {
-  width: min(280px, calc(100vw - 2rem));
-  padding: 0.75rem;
-  border-radius: var(--radius);
-  border: 1px solid var(--line);
-  background: #fffcf6;
-  box-shadow: var(--shadow);
+  width: min(18rem, calc(100vw - 2rem));
+  padding: var(--menu-pad);
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
@@ -2443,15 +2447,6 @@ body.is-task-reordering .task-sidebar {
   letter-spacing: 0.05em;
   font-size: 1.35rem;
   line-height: 1;
-}
-
-.calendar-menu-dropdown {
-  min-width: 11.5rem;
-  padding: 0.35rem;
-  border-radius: var(--radius);
-  border: 1px solid var(--line);
-  background: #fffcf6;
-  box-shadow: var(--shadow);
 }
 
 .calendar-menu-item {
@@ -2466,6 +2461,7 @@ body.is-task-reordering .task-sidebar {
   font: inherit;
   font-size: 0.9rem;
   text-align: left;
+  white-space: nowrap;
   cursor: pointer;
 }
 
