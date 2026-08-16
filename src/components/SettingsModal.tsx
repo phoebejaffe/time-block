@@ -436,6 +436,9 @@ export function SettingsModal({
                 <h3 className="settings-section-title settings-section-title-spaced">
                   Default target calendar
                 </h3>
+                <p className="muted settings-section-hint">
+                  When adding blocks to a calendar, this is the default.
+                </p>
                 <label className="settings-field">
                   <span className="sr-only">Default target calendar</span>
                   <select
@@ -574,8 +577,8 @@ export function SettingsModal({
               <section className="settings-section settings-section-enter">
                 <h3 className="settings-section-title">Run auto-end</h3>
                 <p className="muted settings-section-hint">
-                  After the last active block finishes, the run ends itself
-                  once this much time has passed.
+                  After the last active block finishes, the running plan ends
+                  automatically after this much time.
                 </p>
                 <label className="settings-field">
                   <span>Auto-end after</span>
