@@ -1821,16 +1821,16 @@ function BlockGroupPanel({
                     }}
                   >
                     <span className="task-title">
+                      <span className="task-title-text">{task.title}</span>
+                      <span className="muted task-duration">
+                        · {formatDurationMinutes(task.durationMinutes)}
+                      </span>
                       {pushed &&
                         (synced ? (
                           <TaskSyncedCheckIcon title="Matches Google Calendar" />
                         ) : (
                           <CalendarSyncedIcon title="On Google Calendar — tap Update to sync changes" />
                         ))}
-                      <span className="task-title-text">{task.title}</span>
-                      <span className="muted task-duration">
-                        · {formatDurationMinutes(task.durationMinutes)}
-                      </span>
                     </span>
                   </div>
                   <div className="task-card-icons">

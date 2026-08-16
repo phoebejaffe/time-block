@@ -594,15 +594,15 @@ Top to bottom:
        anchor's local time (`HH:mm`, 5-minute step); and, if the group has
        any tasks, a read-only summary of the whole stack's start–end time
        range.
-     - **Task list**: one row per task, each showing (in order): if the
-       task is currently reflected on Google Calendar for the day in view,
-       a small icon — a checkmark if it exactly matches what was last
-       pushed, or a "calendar" glyph if it's out of sync since the last
-       push; then the task's title, truncated with an ellipsis if it
-       doesn't fit rather than pushing anything else out of the row; then
-       its duration ("· N min"); then edit, disable, and delete
-       icon-buttons (always reserved space so long titles can't crowd them
-       out). The disable control (bell-with-X) toggles `disabled` —
+     - **Task list**: one row per task, each showing (in order): the task's
+       title, truncated with an ellipsis if it doesn't fit rather than
+       pushing anything else out of the row; then its duration ("· N min");
+       then, if the task is currently reflected on Google Calendar for the
+       day in view, a small icon — a checkmark if it exactly matches what
+       was last pushed, or a "calendar" glyph if it's out of sync since
+       the last push; then edit, disable, and delete icon-buttons (always
+       reserved space so long titles can't crowd them out). The disable
+       control (bell-with-X) toggles `disabled` —
        strikethrough title, omitted from stack layout/calendar/push (§4.1);
        disabled (non-interactive) on delay spacers.
        Tasks with `empty: true` render in a visually muted/reduced style
@@ -982,7 +982,8 @@ whenever the calendar's visible date range changes.
   sidebar and implicitly via what's fetched from Google) shows either a
   "matches" checkmark (the live stack exactly matches the last successful
   push's fingerprint for that task) or an "out of sync" calendar icon
-  (something changed since the push — title, time, or duration).
+  (something changed since the push — title, time, or duration), placed
+  immediately after the duration.
 
 ### 8.4 Cross-device sync (Firestore)
 

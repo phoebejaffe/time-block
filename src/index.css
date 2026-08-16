@@ -2024,8 +2024,8 @@ body.is-task-reordering .task-sidebar {
 .task-synced-icon {
   display: inline-flex;
   flex-shrink: 0;
-  vertical-align: -0.12em;
-  margin-right: 0.2rem;
+  align-self: center;
+  margin-left: 0.3rem;
 }
 
 .task-synced-icon svg {
