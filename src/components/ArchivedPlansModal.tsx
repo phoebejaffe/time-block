@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { createPortal } from 'react-dom'
 import {
   addArchiveFolder,
   addArchivedPlan,
@@ -883,7 +884,10 @@ function ArchivedPlanRow({
   onDelete: () => void
 }) {
   const menuRef = useRef<HTMLDivElement>(null)
+  const menuTriggerRef = useRef<HTMLButtonElement>(null)
+  const menuDropdownRef = useRef<HTMLDivElement>(null)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [menuDropdownStyle, setMenuDropdownStyle] = useState<CSSProperties>({})
   const accent = groupSidebarAccentColor(plan.color)
   const blockCount = plan.tasks.length
   const duration = formatDurationMinutes(stackDurationMinutes(plan.tasks))
@@ -903,7 +907,12 @@ function ArchivedPlanRow({
     function handlePointerDown(event: MouseEvent) {
       const target = event.target
       if (!(target instanceof Node)) return
-      if (menuRef.current?.contains(target)) return
+      if (
+        menuRef.current?.contains(target) ||
+        menuDropdownRef.current?.contains(target)
+      ) {
+        return
+      }
       setMenuOpen(false)
     }
     function handleKeyDown(event: KeyboardEvent) {
@@ -914,6 +923,56 @@ function ArchivedPlanRow({
     return () => {
       document.removeEventListener('mousedown', handlePointerDown)
       document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [menuOpen])
+
+  useLayoutEffect(() => {
+    if (!menuOpen) {
+      setMenuDropdownStyle({})
+      return
+    }
+
+    function reposition() {
+      const trigger = menuTriggerRef.current
+      const dropdown = menuDropdownRef.current
+      if (!trigger || !dropdown) return
+      const gap = 6
+      const pad = 8
+      const triggerRect = trigger.getBoundingClientRect()
+      const dropdownHeight = dropdown.offsetHeight
+      const dropdownWidth = dropdown.offsetWidth
+      const spaceBelow = window.innerHeight - triggerRect.bottom - pad
+      const spaceAbove = triggerRect.top - pad
+      const openUp =
+        spaceAbove >= dropdownHeight + gap &&
+        (spaceAbove >= spaceBelow || spaceBelow < dropdownHeight + gap)
+      let top = openUp
+        ? triggerRect.top - dropdownHeight - gap
+        : triggerRect.bottom + gap
+      top = Math.max(pad, Math.min(top, window.innerHeight - pad - dropdownHeight))
+      let left = triggerRect.right - dropdownWidth
+      left = Math.max(pad, Math.min(left, window.innerWidth - dropdownWidth - pad))
+      setMenuDropdownStyle({
+        position: 'fixed',
+        top,
+        left,
+        minWidth: dropdownWidth,
+        zIndex: 95,
+        bottom: 'auto',
+        right: 'auto',
+      })
+    }
+
+    reposition()
+    window.addEventListener('resize', reposition)
+    document
+      .querySelector('.archived-plans-body')
+      ?.addEventListener('scroll', reposition, { passive: true })
+    return () => {
+      window.removeEventListener('resize', reposition)
+      document
+        .querySelector('.archived-plans-body')
+        ?.removeEventListener('scroll', reposition)
     }
   }, [menuOpen])
 
@@ -957,6 +1016,7 @@ function ArchivedPlanRow({
         </button>
         <div className="task-new-menu archived-plan-menu" ref={menuRef}>
           <button
+            ref={menuTriggerRef}
             type="button"
             className="btn btn-text btn-icon task-new-menu-btn"
             aria-label="Plan options"
@@ -968,67 +1028,74 @@ function ArchivedPlanRow({
           >
             ···
           </button>
-          {menuOpen && (
-            <div className="task-new-menu-dropdown" role="menu">
-              <button
-                type="button"
-                role="menuitem"
-                className="calendar-menu-item"
-                onClick={() => {
-                  setMenuOpen(false)
-                  onAddToHome()
-                }}
+          {menuOpen &&
+            createPortal(
+              <div
+                ref={menuDropdownRef}
+                className="task-new-menu-dropdown task-new-menu-dropdown-fixed"
+                style={menuDropdownStyle}
+                role="menu"
               >
-                Add copy to home
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                className="calendar-menu-item"
-                onClick={() => {
-                  setMenuOpen(false)
-                  onRename()
-                }}
-              >
-                Rename
-              </button>
-              <label className="calendar-menu-item group-color-menu-item">
-                <span>Change color</span>
-                <input
-                  type="color"
-                  value={colorPickerValue}
-                  aria-label="Plan color"
-                  onChange={(e) => {
-                    const next = e.target.value
-                    onSetColor(next === DEFAULT_GROUP_COLOR ? undefined : next)
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="calendar-menu-item"
+                  onClick={() => {
+                    setMenuOpen(false)
+                    onAddToHome()
                   }}
-                />
-              </label>
-              <button
-                type="button"
-                role="menuitem"
-                className="calendar-menu-item"
-                onClick={() => {
-                  setMenuOpen(false)
-                  onMove()
-                }}
-              >
-                Move to folder
-              </button>
-              <div className="calendar-menu-sep" role="separator" />
-              <button
-                type="button"
-                role="menuitem"
-                className="calendar-menu-item"
-                onClick={() => {
-                  setMenuOpen(false)
-                  onDelete()
-                }}
-              >
-                Delete from archive
-              </button>
-            </div>
-          )}
+                >
+                  Add copy to home
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="calendar-menu-item"
+                  onClick={() => {
+                    setMenuOpen(false)
+                    onRename()
+                  }}
+                >
+                  Rename
+                </button>
+                <label className="calendar-menu-item group-color-menu-item">
+                  <span>Change color</span>
+                  <input
+                    type="color"
+                    value={colorPickerValue}
+                    aria-label="Plan color"
+                    onChange={(e) => {
+                      const next = e.target.value
+                      onSetColor(next === DEFAULT_GROUP_COLOR ? undefined : next)
+                    }}
+                  />
+                </label>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="calendar-menu-item"
+                  onClick={() => {
+                    setMenuOpen(false)
+                    onMove()
+                  }}
+                >
+                  Move to folder
+                </button>
+                <div className="calendar-menu-sep" role="separator" />
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="calendar-menu-item"
+                  onClick={() => {
+                    setMenuOpen(false)
+                    onDelete()
+                  }}
+                >
+                  Delete from archive
+                </button>
+              </div>,
+              document.body,
+            )}
         </div>
       </div>
       {expanded && (
