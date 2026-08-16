@@ -4,9 +4,11 @@ import {
   createTask,
   type BlockGroup,
   type BlockGroupCheckpoint,
+  type CalendarGuest,
   type StackAnchor,
   type Task,
 } from './tasks'
+import { cloneCalendarGuests } from './savedCalendarUsers'
 
 export type ArchivedPlanTask = {
   title: string
@@ -24,6 +26,7 @@ export type ArchivedPlan = {
   name?: string
   color?: string
   checkpoint?: BlockGroupCheckpoint
+  calendarGuests?: Record<string, CalendarGuest[]>
 }
 
 export type ArchiveFolder = {
@@ -76,6 +79,7 @@ export function archivedPlanFromGroup(
   group: BlockGroup,
   archivedAt: string = new Date().toISOString(),
 ): ArchivedPlan {
+  const calendarGuests = cloneCalendarGuests(group.calendarGuests)
   return {
     id: newId(),
     tasks: snapshotTasks(group.tasks),
@@ -84,6 +88,7 @@ export function archivedPlanFromGroup(
     ...(group.name?.trim() ? { name: group.name.trim() } : {}),
     ...(group.color?.trim() ? { color: group.color.trim() } : {}),
     ...(group.checkpoint ? { checkpoint: cloneCheckpoint(group.checkpoint) } : {}),
+    ...(calendarGuests ? { calendarGuests } : {}),
   }
 }
 
@@ -104,6 +109,9 @@ export function blockGroupFromArchivedPlan(
     anchor: anchorOnDay(archived.anchor, day),
     ...(archived.name ? { name: archived.name } : {}),
     ...(archived.color ? { color: archived.color } : {}),
+    ...(archived.calendarGuests
+      ? { calendarGuests: archived.calendarGuests }
+      : {}),
   })
   if (!archived.checkpoint) return group
   return { ...group, checkpoint: cloneCheckpoint(archived.checkpoint) }
@@ -210,6 +218,9 @@ function normalizeArchivedPlan(raw: unknown): ArchivedPlan | null {
       : {}),
     ...(normalizeCheckpoint(p.checkpoint)
       ? { checkpoint: normalizeCheckpoint(p.checkpoint) }
+      : {}),
+    ...(cloneCalendarGuests(p.calendarGuests)
+      ? { calendarGuests: cloneCalendarGuests(p.calendarGuests) }
       : {}),
   }
 }

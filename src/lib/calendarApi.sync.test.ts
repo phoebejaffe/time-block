@@ -6,11 +6,22 @@ import {
 } from './calendarApi'
 import type { Task } from './tasks'
 
-type FakeEvent = { id: string; summary: string; start: string; end: string }
+type FakeEvent = {
+  id: string
+  summary: string
+  start: string
+  end: string
+  attendees?: { email: string; displayName?: string }[]
+}
 
 function mockGapiCalendar() {
   const store = new Map<string, FakeEvent>()
   let nextId = 1
+  const calls: Array<{
+    method: 'insert' | 'patch' | 'delete'
+    sendUpdates?: string
+    attendees?: { email: string; displayName?: string }[]
+  }> = []
 
   const events = {
     get: async ({ eventId }: { calendarId: string; eventId: string }) => {
@@ -23,38 +34,72 @@ function mockGapiCalendar() {
     },
     patch: async ({
       eventId,
+      sendUpdates,
       resource,
     }: {
       calendarId: string
       eventId: string
-      resource: { summary?: string; start?: { dateTime?: string }; end?: { dateTime?: string } }
+      sendUpdates?: string
+      resource: {
+        summary?: string
+        start?: { dateTime?: string }
+        end?: { dateTime?: string }
+        attendees?: { email: string; displayName?: string }[]
+      }
     }) => {
       const event = store.get(eventId)
       if (!event) throw { status: 404 }
+      calls.push({
+        method: 'patch',
+        sendUpdates,
+        attendees: resource.attendees,
+      })
       store.set(eventId, {
         ...event,
         summary: resource.summary ?? event.summary,
         start: resource.start?.dateTime ?? event.start,
         end: resource.end?.dateTime ?? event.end,
+        attendees: resource.attendees ?? event.attendees,
       })
       return { result: { id: eventId } }
     },
     insert: async ({
+      sendUpdates,
       resource,
     }: {
       calendarId: string
-      resource: { summary?: string; start?: { dateTime?: string }; end?: { dateTime?: string } }
+      sendUpdates?: string
+      resource: {
+        summary?: string
+        start?: { dateTime?: string }
+        end?: { dateTime?: string }
+        attendees?: { email: string; displayName?: string }[]
+      }
     }) => {
       const id = `evt-${nextId++}`
+      calls.push({
+        method: 'insert',
+        sendUpdates,
+        attendees: resource.attendees,
+      })
       store.set(id, {
         id,
         summary: resource.summary ?? '',
         start: resource.start?.dateTime ?? '',
         end: resource.end?.dateTime ?? '',
+        attendees: resource.attendees,
       })
       return { result: { id } }
     },
-    delete: async ({ eventId }: { calendarId: string; eventId: string }) => {
+    delete: async ({
+      eventId,
+      sendUpdates,
+    }: {
+      calendarId: string
+      eventId: string
+      sendUpdates?: string
+    }) => {
+      calls.push({ method: 'delete', sendUpdates })
       store.delete(eventId)
     },
   }
@@ -63,7 +108,7 @@ function mockGapiCalendar() {
     client: { calendar: { events } },
   }
 
-  return store
+  return { store, calls }
 }
 
 describe('syncTasksToCalendar — per-day isolation', () => {
@@ -354,3 +399,61 @@ describe('deleteGroupFromCalendar — progress', () => {
     expect(progress.some((step) => step.label.startsWith('Removing'))).toBe(true)
   })
 })
+
+describe('syncTasksToCalendar — attendees', () => {
+  it('writes attendees and never emails guests', async () => {
+    const { calls } = mockGapiCalendar()
+    const anchor = {
+      kind: 'start' as const,
+      at: new Date('2026-07-23T15:00:00.000Z').toISOString(),
+    }
+    const guests = [{ email: 'ada@example.com', name: 'Ada' }]
+    const first = await syncTasksToCalendar(
+      'cal-a',
+      'group-1',
+      [{ id: 't1', title: 'Focus', durationMinutes: 60 }],
+      anchor,
+      [],
+      null,
+      undefined,
+      undefined,
+      guests,
+    )
+    expect(calls.filter((c) => c.method === 'insert')).toEqual([
+      {
+        method: 'insert',
+        sendUpdates: 'none',
+        attendees: [{ email: 'ada@example.com', displayName: 'Ada' }],
+      },
+    ])
+
+    await syncTasksToCalendar(
+      'cal-a',
+      'group-1',
+      [{ id: 't1', title: 'Focus', durationMinutes: 60 }],
+      anchor,
+      first.pushedEvents,
+      null,
+      undefined,
+      undefined,
+      guests,
+    )
+    expect(calls.filter((c) => c.method === 'patch')).toEqual([
+      {
+        method: 'patch',
+        sendUpdates: 'none',
+        attendees: [{ email: 'ada@example.com', displayName: 'Ada' }],
+      },
+    ])
+
+    await deleteGroupFromCalendar(
+      'group-1',
+      first.pushedEvents[0]!.dayKey,
+      first.pushedEvents,
+    )
+    expect(calls.filter((c) => c.method === 'delete')).toEqual([
+      { method: 'delete', sendUpdates: 'none' },
+    ])
+  })
+})
+

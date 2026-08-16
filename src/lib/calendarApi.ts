@@ -8,6 +8,7 @@ import {
 } from './pushedEvents'
 import type { Task } from './tasks'
 import { localDateKey, isTaskDisabled, isTaskEmpty, resolveStack, type StackAnchor } from './tasks'
+import type { CalendarGuest } from './savedCalendarUsers'
 
 export type GoogleCalendar = {
   id: string
@@ -207,12 +208,17 @@ function eventResource(
     end: Date
   },
   userId: string | null | undefined,
+  guests: CalendarGuest[] = [],
 ): gapi.client.calendar.Event {
   return {
     summary: task.title,
     description: timeblockEventDescription(userId),
     start: { dateTime: task.start.toISOString() },
     end: { dateTime: task.end.toISOString() },
+    attendees: guests.map((guest) => ({
+      email: guest.email,
+      ...(guest.name ? { displayName: guest.name } : {}),
+    })),
   }
 }
 
@@ -386,6 +392,7 @@ export async function syncTasksToCalendar(
   userId?: string | null,
   onProgress?: SyncProgressCallback,
   tickOverride?: (labelPrefix: 'Updating' | 'Adding' | 'Removing') => void,
+  guests: CalendarGuest[] = [],
 ): Promise<SyncTasksResult> {
   const resolved = resolveStack(tasks, anchor)
   const dayKey = localDateKey(anchor.at)
@@ -459,7 +466,7 @@ export async function syncTasksToCalendar(
       kind: 'upsert',
       taskId: task.id,
       title: task.title,
-      resource: eventResource(task, userId),
+      resource: eventResource(task, userId, guests),
       match,
     })
   }
@@ -498,6 +505,7 @@ export async function syncTasksToCalendar(
               await gapi.client.calendar.events.delete({
                 calendarId,
                 eventId: op.event.eventId,
+                sendUpdates: 'none',
               })
             }
             return { kind: 'removed', event: op.event }
@@ -529,6 +537,7 @@ export async function syncTasksToCalendar(
                 await gapi.client.calendar.events.patch({
                   calendarId,
                   eventId: match.eventId,
+                  sendUpdates: 'none',
                   resource,
                 })
                 return {
@@ -573,6 +582,7 @@ export async function syncTasksToCalendar(
         try {
           const res = await gapi.client.calendar.events.insert({
             calendarId,
+            sendUpdates: 'none',
             resource,
           })
           const eventId = res.result.id
@@ -724,6 +734,7 @@ export type SyncGroupCalendarsResult = {
   pushedEvents: PushedEvent[]
   pushSnapshots: PushSnapshot[]
   removedCalendarIds: string[]
+  successfulCalendarIds: string[]
 }
 
 /** Sync a group to multiple calendars; delete from deselected calendars. */
@@ -735,6 +746,7 @@ export async function syncGroupToCalendars(
   pushedEvents: PushedEvent[],
   userId?: string | null,
   onProgress?: SyncProgressCallback,
+  guestsByCalendar: Record<string, CalendarGuest[]> = {},
 ): Promise<SyncGroupCalendarsResult> {
   const dayKey = localDateKey(anchor.at)
   const previouslyPushed = [
@@ -813,9 +825,11 @@ export async function syncGroupToCalendars(
         userId,
         undefined,
         tick,
+        guestsByCalendar[calendarId] ?? [],
       ),
     ),
   )
+  const successfulCalendarIds: string[] = []
   for (let i = 0; i < calendarIds.length; i++) {
     const calendarId = calendarIds[i]!
     const result = syncResults[i]!
@@ -830,6 +844,7 @@ export async function syncGroupToCalendars(
     created += result.created
     removed += result.removed
     failures.push(...result.failures)
+    if (result.failures.length === 0) successfulCalendarIds.push(calendarId)
     if (result.pushSnapshot) {
       pushSnapshots.push(result.pushSnapshot)
     }
@@ -843,6 +858,7 @@ export async function syncGroupToCalendars(
     pushedEvents: prunePushedEvents(tracked),
     pushSnapshots,
     removedCalendarIds,
+    successfulCalendarIds,
   }
 }
 
@@ -890,6 +906,7 @@ export async function deleteGroupFromCalendarOnCalendar(
           await gapi.client.calendar.events.delete({
             calendarId: event.calendarId,
             eventId: event.eventId,
+            sendUpdates: 'none',
           })
         }
         onOp?.()
@@ -970,6 +987,7 @@ export async function deleteGroupFromCalendar(
           await gapi.client.calendar.events.delete({
             calendarId: event.calendarId,
             eventId: event.eventId,
+            sendUpdates: 'none',
           })
         }
         tick('Removing')

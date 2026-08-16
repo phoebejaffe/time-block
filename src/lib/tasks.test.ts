@@ -213,6 +213,24 @@ describe('migratePlan', () => {
     })
   })
 
+  it('preserves calendar guests when loading a plan', () => {
+    const plan = migratePlan({
+      groups: [
+        {
+          id: 'g1',
+          tasks: [{ id: '1', title: 'Write', durationMinutes: 25 }],
+          anchor: { kind: 'start', at: '2026-07-18T08:00:00.000Z' },
+          calendarGuests: {
+            'cal-1': [{ email: 'ada@example.com', name: 'Ada' }],
+          },
+        },
+      ],
+    })
+    expect(plan!.groups[0]!.calendarGuests).toEqual({
+      'cal-1': [{ email: 'ada@example.com', name: 'Ada' }],
+    })
+  })
+
   it('preserves empty blocks when loading a plan', () => {
     const plan = migratePlan({
       groups: [

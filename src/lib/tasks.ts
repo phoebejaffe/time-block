@@ -1,3 +1,11 @@
+import {
+  cloneCalendarGuests,
+  normalizeCalendarGuests,
+  type CalendarGuest,
+} from './savedCalendarUsers'
+
+export type { CalendarGuest }
+
 export type StackAnchor = {
   kind: 'start' | 'end'
   at: string // ISO datetime
@@ -56,6 +64,10 @@ export type BlockGroup = {
    * execution; cleared when execution ends. Not part of checkpoints.
    */
   intendedEndAt?: string
+  /**
+   * Last invited guests per Google calendar id. Not part of checkpoints.
+   */
+  calendarGuests?: Record<string, CalendarGuest[]>
 }
 
 export const DEFAULT_GROUP_COLOR = '#0f6e56'
@@ -311,11 +323,15 @@ function newId(): string {
 
 export function createBlockGroup(
   input?: Partial<
-    Pick<BlockGroup, 'tasks' | 'anchor' | 'name' | 'color' | 'enabled'>
+    Pick<
+      BlockGroup,
+      'tasks' | 'anchor' | 'name' | 'color' | 'enabled' | 'calendarGuests'
+    >
   > & {
     id?: string
   },
 ): BlockGroup {
+  const calendarGuests = cloneCalendarGuests(input?.calendarGuests)
   return {
     id: input?.id ?? newId(),
     tasks: input?.tasks ?? [],
@@ -323,6 +339,7 @@ export function createBlockGroup(
     ...(input?.name?.trim() ? { name: input.name.trim() } : {}),
     ...(input?.color?.trim() ? { color: input.color.trim() } : {}),
     ...(input?.enabled === false ? { enabled: false } : {}),
+    ...(calendarGuests ? { calendarGuests } : {}),
   }
 }
 
@@ -553,6 +570,7 @@ function normalizeGroup(raw: unknown): BlockGroup | null {
     typeof g.intendedEndAt === 'string' && g.intendedEndAt
       ? g.intendedEndAt
       : undefined
+  const calendarGuests = normalizeCalendarGuests(g.calendarGuests)
   return {
     id: g.id,
     tasks: normalizeTasks(g.tasks),
@@ -562,6 +580,7 @@ function normalizeGroup(raw: unknown): BlockGroup | null {
     ...(enabled === false ? { enabled: false } : {}),
     ...(checkpoint ? { checkpoint } : {}),
     ...(intendedEndAt ? { intendedEndAt } : {}),
+    ...(calendarGuests ? { calendarGuests } : {}),
   }
 }
 

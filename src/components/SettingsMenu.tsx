@@ -3,7 +3,9 @@ import { HowItWorksModal } from './HowItWorksModal'
 import { BlockLibraryModal } from './BlockLibraryModal'
 import { AuthSessionDiagnostics } from './AuthSessionDiagnostics'
 import { FixedMenuPortal } from './FixedMenuPortal'
+import { SettingsModal } from './SettingsModal'
 import type { BlockLibrary } from '../lib/tasks'
+import type { SavedCalendarUser } from '../lib/savedCalendarUsers'
 import type { NoticeOptions } from '../lib/notice'
 import type { SessionDiagnostics } from '../lib/google'
 import { hardReloadApp } from '../lib/hardReload'
@@ -23,6 +25,8 @@ type SettingsMenuProps = {
   onOpenArchivedPlans?: () => void
   onShowNotice?: (text: string, options?: NoticeOptions) => void
   onClearNotice?: () => void
+  savedCalendarUsers: SavedCalendarUser[]
+  onReplaceSavedCalendarUsers: (users: SavedCalendarUser[]) => void
 }
 
 const SHARE_APP_URL = 'https://phoebejaffe.github.io/time-block/'
@@ -52,10 +56,13 @@ export function SettingsMenu({
   onOpenArchivedPlans,
   onShowNotice,
   onClearNotice,
+  savedCalendarUsers,
+  onReplaceSavedCalendarUsers,
 }: SettingsMenuProps) {
   const [open, setOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
   const [libraryOpen, setLibraryOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const menu = useFixedMenu({
     open,
@@ -118,6 +125,17 @@ export function SettingsMenu({
               Archived plans
             </button>
           )}
+          <button
+            type="button"
+            role="menuitem"
+            className="calendar-menu-item"
+            onClick={() => {
+              setOpen(false)
+              setSettingsOpen(true)
+            }}
+          >
+            Settings
+          </button>
           <div className="calendar-menu-sep" role="separator" />
           <button
             type="button"
@@ -201,6 +219,13 @@ export function SettingsMenu({
           onClose={() => setLibraryOpen(false)}
           onShowNotice={onShowNotice}
           onClearNotice={onClearNotice}
+        />
+      )}
+      {settingsOpen && (
+        <SettingsModal
+          savedUsers={savedCalendarUsers}
+          onChange={onReplaceSavedCalendarUsers}
+          onClose={() => setSettingsOpen(false)}
         />
       )}
     </div>

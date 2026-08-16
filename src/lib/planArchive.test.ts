@@ -67,6 +67,23 @@ describe('plan archive', () => {
     expect(restoredDay.getDate()).toBe(14)
   })
 
+  it('copies calendar guests through archive and home stamp', () => {
+    const withGuests = {
+      ...group,
+      calendarGuests: {
+        'cal-1': [{ email: 'ada@example.com', name: 'Ada' }],
+      },
+    }
+    const archived = archivedPlanFromGroup(withGuests)
+    expect(archived.calendarGuests).toEqual({
+      'cal-1': [{ email: 'ada@example.com', name: 'Ada' }],
+    })
+    const restored = blockGroupFromArchivedPlan(archived)
+    expect(restored.calendarGuests).toEqual({
+      'cal-1': [{ email: 'ada@example.com', name: 'Ada' }],
+    })
+  })
+
   it('adds to Unfiled and can move into a named folder', () => {
     const archived = archivedPlanFromGroup(group)
     let archive = addArchivedPlan(defaultPlanArchive(), archived)

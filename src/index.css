@@ -22,6 +22,7 @@
   --z-dropdown: 70;
   --z-execution: 60;
   --z-modal: 80;
+  --z-modal-dropdown: 85;
   --z-modal-nested: 90;
   --z-toast: 100;
   --font-display: 'Fraunces', 'Iowan Old Style', Georgia, serif;
@@ -834,6 +835,261 @@ body.is-datetime-scrubbing .task-form-duration input {
   font-size: 0.85rem;
 }
 
+.commit-calendar-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.commit-calendar-row-main {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.commit-calendar-row-main .checkbox-row {
+  flex: 1;
+  min-width: 0;
+}
+
+.commit-invite-menu {
+  flex-shrink: 0;
+}
+
+.commit-invite-btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  font-size: 0.7rem;
+  line-height: 1.2;
+  color: var(--accent);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.commit-invite-btn:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.commit-invite-btn:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: 2px;
+}
+
+.commit-invite-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.commit-invite-dropdown {
+  min-width: var(--menu-min-width);
+  padding: var(--menu-pad);
+}
+
+.commit-invite-empty {
+  margin: 0;
+  padding: 0.4rem 0.55rem;
+  font-size: 0.78rem;
+}
+
+.commit-invite-email {
+  display: flex;
+  gap: 0.35rem;
+  padding: 0.35rem 0.35rem 0.2rem;
+  align-items: center;
+}
+
+.commit-invite-email input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 8px;
+  padding: 0.35rem 0.5rem;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.82rem;
+}
+
+.commit-invite-error {
+  margin: 0;
+  padding: 0 0.55rem 0.25rem;
+  font-size: 0.75rem;
+  color: var(--danger);
+}
+
+.commit-invite-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding-left: 1.6rem;
+}
+
+.commit-invite-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.78rem;
+}
+
+.commit-invite-chip-label {
+  color: var(--ink-muted);
+  font-size: 0.68rem;
+}
+
+.commit-invite-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  max-width: 100%;
+  padding: 0.12rem 0.2rem 0.12rem 0.45rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 12%, #fff);
+  color: var(--ink);
+  font-size: 0.75rem;
+}
+
+.commit-invite-chip-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.1rem;
+  height: 1.1rem;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-muted);
+  cursor: pointer;
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.commit-invite-chip-remove:hover:not(:disabled) {
+  color: var(--ink);
+  background: var(--paper-2);
+}
+
+.settings-dialog {
+  max-height: min(92vh, 36rem);
+}
+
+.settings-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-height: min(60vh, 28rem);
+  overflow: auto;
+  padding: 0.35rem 0.65rem 1.15rem;
+}
+
+.settings-section {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.7rem;
+  background: #fffdf8;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.settings-section-title {
+  margin: 0;
+  font-size: 0.88rem;
+  font-weight: 550;
+}
+
+.settings-section-hint,
+.settings-section-empty {
+  margin: 0;
+  font-size: 0.82rem;
+}
+
+.settings-section-error {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--danger);
+}
+
+.settings-saved-users {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: calc(var(--radius) - 2px);
+  background: #fff;
+}
+
+.settings-saved-user {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.35rem 0.4rem 0.65rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.settings-saved-user:last-child {
+  border-bottom: 0;
+}
+
+.settings-saved-user-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+}
+
+.settings-saved-user-name {
+  font-size: 0.85rem;
+}
+
+.settings-saved-user-email {
+  font-size: 0.75rem;
+}
+
+.settings-saved-user-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 0.45rem;
+  align-items: end;
+}
+
+.settings-saved-user-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.78rem;
+  color: var(--ink-muted);
+}
+
+.settings-saved-user-form input {
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 10px;
+  padding: 0.45rem 0.55rem;
+  color: var(--ink);
+  font: inherit;
+  min-width: 0;
+}
+
+@media (max-width: 560px) {
+  .settings-saved-user-form {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .settings-saved-user-form .btn {
+    grid-column: 1 / -1;
+  }
+}
+
 .segmented {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1176,6 +1432,10 @@ body.is-datetime-scrubbing .task-form-duration input {
   z-index: var(--z-dropdown);
   bottom: auto;
   right: auto;
+}
+
+.task-new-menu-dropdown-fixed.is-over-modal {
+  z-index: var(--z-modal-dropdown);
 }
 
 .task-new-commit {

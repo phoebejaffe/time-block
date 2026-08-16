@@ -3,6 +3,7 @@ import type { GoogleCalendar, CalendarEvent, SyncProgress } from '../lib/calenda
 import type {
   BlockGroup,
   BlockLibrary,
+  CalendarGuest,
   StackAnchor,
   Task,
 } from '../lib/tasks'
@@ -10,6 +11,7 @@ import { stackOccupiedLocalDays } from '../lib/tasks'
 import type { ArchivedPlan, PlanArchive } from '../lib/planArchive'
 import type { NoticeOptions } from '../lib/notice'
 import type { PushedEvent, PushSnapshot } from '../lib/pushedEvents'
+import type { SavedCalendarUser } from '../lib/savedCalendarUsers'
 import { CalendarView } from './CalendarView'
 import { MobileSplitHandle } from './MobileSplitHandle'
 import { TaskSidebar } from './TaskSidebar'
@@ -36,7 +38,11 @@ type ExecutionModalProps = {
   onSetGroupName: (groupId: string, name: string) => void
   onSetGroupColor: (groupId: string, color: string | undefined) => void
   onSetGroupEnabled: (groupId: string, enabled: boolean) => void
-  onCommit: (groupId: string, calendarIds: string[]) => Promise<boolean>
+  onCommit: (
+    groupId: string,
+    calendarIds: string[],
+    guestsByCalendar: Record<string, CalendarGuest[]>,
+  ) => Promise<boolean>
   onDeleteFromCalendar: (groupId: string) => Promise<void>
   onTaskEditPreview: (preview: {
     groupId: string
@@ -62,6 +68,8 @@ type ExecutionModalProps = {
   onAddArchivedToHome: (plan: ArchivedPlan) => string
   onShowNotice?: (text: string, options?: NoticeOptions) => void
   onClearNotice?: () => void
+  savedCalendarUsers: SavedCalendarUser[]
+  onReplaceSavedCalendarUsers: (users: SavedCalendarUser[]) => void
   onClose: () => void
   onEndExecution: () => void
   /** Same mobile split CSS vars / setter as the main app body. */
@@ -115,6 +123,8 @@ export function ExecutionModal({
   onAddArchivedToHome,
   onShowNotice,
   onClearNotice,
+  savedCalendarUsers,
+  onReplaceSavedCalendarUsers,
   onClose,
   onEndExecution,
   splitStyle,
@@ -202,6 +212,8 @@ export function ExecutionModal({
           onAddArchivedToHome={onAddArchivedToHome}
           onShowNotice={onShowNotice}
           onClearNotice={onClearNotice}
+          savedCalendarUsers={savedCalendarUsers}
+          onReplaceSavedCalendarUsers={onReplaceSavedCalendarUsers}
         />
         {onSplitChange && (
           <MobileSplitHandle bodyRef={bodyRef} onSplitChange={onSplitChange} />

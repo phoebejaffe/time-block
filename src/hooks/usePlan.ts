@@ -11,6 +11,7 @@ import {
   tasksFromCheckpoint,
   type BlockGroup,
   type BlockGroupCheckpoint,
+  type CalendarGuest,
   type Plan,
   type StackAnchor,
   type Task,
@@ -82,6 +83,9 @@ export function usePlan() {
           ...(source.name ? { name: source.name } : {}),
           ...(source.color ? { color: source.color } : {}),
           ...(source.enabled === false ? { enabled: false } : {}),
+          ...(source.calendarGuests
+            ? { calendarGuests: source.calendarGuests }
+            : {}),
         })
         const index = prev.groups.findIndex((g) => g.id === groupId)
         const groups = [...prev.groups]
@@ -428,6 +432,36 @@ export function usePlan() {
     [updatePlan],
   )
 
+  const setCalendarGuests = useCallback(
+    (groupId: string, guestsByCalendar: Record<string, CalendarGuest[]>) => {
+      updatePlan((prev) => ({
+        groups: mapGroup(prev.groups, groupId, (g) => {
+          const merged: Record<string, CalendarGuest[]> = {
+            ...(g.calendarGuests ?? {}),
+          }
+          for (const [calendarId, guests] of Object.entries(guestsByCalendar)) {
+            if (guests.length === 0) delete merged[calendarId]
+            else {
+              merged[calendarId] = guests.map((guest) =>
+                guest.name?.trim()
+                  ? { email: guest.email, name: guest.name.trim() }
+                  : { email: guest.email },
+              )
+            }
+          }
+          if (Object.keys(merged).length === 0) {
+            if (!g.calendarGuests) return g
+            const next = { ...g }
+            delete next.calendarGuests
+            return next
+          }
+          return { ...g, calendarGuests: merged }
+        }),
+      }))
+    },
+    [updatePlan],
+  )
+
   const clearIntendedEndAt = useCallback(
     (groupId: string) => {
       updatePlan((prev) => ({
@@ -495,6 +529,7 @@ export function usePlan() {
     setCheckpoint,
     beginExecution,
     setIntendedEndAt,
+    setCalendarGuests,
     clearIntendedEndAt,
     clear,
     replacePlan,

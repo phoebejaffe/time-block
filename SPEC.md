@@ -168,6 +168,14 @@ type BlockGroup = {
   checkpoint?: BlockGroupCheckpoint  // saved "default" blocks; see §4.6
   intendedEndAt?: string   // ISO; intended stack end while executing (§7.9);
                             // cleared when execution ends; not in checkpoints
+  calendarGuests?: Record<string, CalendarGuest[]>
+                            // last invited guests per Google calendar id;
+                            // not in checkpoints; copied on duplicate/archive
+}
+
+type CalendarGuest = {
+  email: string
+  name?: string            // from the address book at selection time
 }
 ```
 
@@ -341,6 +349,7 @@ type ArchivedPlan = {
   name?: string
   color?: string
   checkpoint?: BlockGroupCheckpoint
+  calendarGuests?: Record<string, CalendarGuest[]>
 }
 
 type ArchiveFolder = { id: string; name: string; plans: ArchivedPlan[] }
@@ -358,14 +367,15 @@ type PlanArchive = { folders: ArchiveFolder[]; updatedAt: string }
   with Move up / Move down.
 - **Archive** (plan ··· menu) takes the live group off Home and writes a
   snapshot into Unfiled: name, color, tasks (title/duration/empty/delay/
-  disabled — no live ids, no `done`), optional checkpoint, and anchor kind +
+  disabled — no live ids, no `done`), optional checkpoint, calendar guests
+  per Google calendar, and anchor kind +
   clock time. Google events already pushed for that group are left alone
   (same as collapsing a group). Disabled on the last remaining Home group
   and while that group is in a run (toast: "End run first."). An Undo toast
   restores the **same** group object (same ids, so push history still
   matches) at its previous index and removes the archive snapshot.
 - **Duplicate plan** stamps a *new* enabled group (fresh ids) onto the end of
-  Home with copied tasks, name, color, and checkpoint. The archived original
+  Home with copied tasks, name, color, checkpoint, and calendar guests. The archived original
   stays put. Anchor clock time is kept and remapped onto today (same idea as
   Duplicate). Push history does not come along. After add, the new
   group is scrolled into view and expanded. The archive modal stays open so
@@ -658,7 +668,8 @@ Top to bottom:
 All modals share a common shell: a full-screen semi-transparent backdrop
 (click-outside or Escape to close), a centered dialog with a header
 (title + "×" close button) and a body, rendered via a portal. Dialogs sit
-above dropdowns and the execution modal; nested dialogs (rename-inside-
+above page-level dropdowns and the execution modal; dropdowns opened from
+inside a dialog sit above that dialog; nested dialogs (rename-inside-
 library, etc.) sit above those; toasts sit above nested dialogs. Modals used:
 
 - **Rename plan** (opened via the plan menu's "Rename" item) — one field
@@ -670,12 +681,27 @@ library, etc.) sit above those; toasts sit above nested dialogs. Modals used:
   push for this group+day when updating; deselected calendars have that
   group's events deleted on commit). On open, already-selected calendars
   are bubbled to the top of the list; that order stays fixed while the
-  modal is open (toggling a checkbox does not reshuffle). The dialog is
+  modal is open (toggling a checkbox does not reshuffle). Each **checked**
+  row has **+ Invite users** on the right: a portaled dropdown of saved
+  users (Settings) plus an email field for one-off addresses (not auto-saved).
+  Selected people render as chips under that row — **Invited** if they were
+  on this group+calendar's last successful push, **Inviting** if added this
+  session. Chip × removes them from this commit (an Invited person removed
+  is uninvited on Update, without a Google email). Unchecked rows hide the
+  button and chips; stored guests for that calendar stay so re-checking
+  restores Invited. On a successful sync for a calendar, that row's chip
+  list is saved on the group (`calendarGuests`). Partial failure does not
+  update guests for calendars that failed. The dialog is
   capped at 80% of the viewport height with the calendar list scrolling
   and Cancel + the matching commit label pinned at the bottom. The primary
   action is
   disabled while busy, while there are no tasks on a fresh Add, or while
   no calendar is selected.
+- **Settings** (opened from the app menu) — a wider dialog, the home for
+  app preferences. Body is stacked sections. First section, **Saved users**:
+  a list of name + email with remove, and an add form (name, email; rejects
+  invalid or duplicate emails). Closed via header "×", click-outside, or
+  Escape. Further settings land in this same modal later.
 - **Block library** (opened from the app menu, not from a group) — a
   wider dialog listing every category, each with a name heading, a small
   "···" overflow menu (Rename — opens a nested "Rename category" modal
@@ -723,9 +749,9 @@ library, etc.) sit above those; toasts sit above nested dialogs. Modals used:
 
 ### 7.5 App menu (sidebar header)
 
-An icon-button dropdown (hamburger, labeled "Menu" — there is no separate
-Settings window) containing, top to bottom: "Block library" (opens
-that modal), "Archived plans" (opens the archive modal), — separator — /
+An icon-button dropdown (hamburger, labeled "Menu") containing, top to
+bottom: "Block library" (opens that modal), "Archived plans" (opens the
+archive modal), "Settings" (opens the Settings modal, §7.4), — separator — /
 "How Time Block works" (opens the help modal), "Share app" (copies
 `https://phoebejaffe.github.io/time-block/` to the clipboard and toasts
 "Link copied."), "Reload app" (clears
@@ -1022,7 +1048,9 @@ whenever the calendar's visible date range changes.
   `plan` (each group's checkpoint travels inline with it), `blockLibrary`,
   `planArchive`,
   `targetCalendarId`, `pushedEvents`, `pushSnapshots`, `executingGroupId`
-  (string or null — which group is in execution mode, if any).
+  (string or null — which group is in execution mode, if any),
+  `savedCalendarUsers` (address book of `{ id, name, email }` for calendar
+  invites; unique by lowercased email).
 - **On sign-in**, subscribe to that document in real time:
   - If it exists and its `updatedAt` is newer than the last value this tab
     itself wrote, replace all local state with the remote values
@@ -1034,7 +1062,7 @@ whenever the calendar's visible date range changes.
     subscription's own initial write as one to *ignore* when it echoes
     back (to avoid re-processing your own write as if it were a remote
     change).
-- **On local edits** (to plan, block library, archived plans, target calendar, push
+- **On local edits** (to plan, block library, archived plans, saved users, target calendar, push
   history, or executing group id), debounce ~2 seconds of inactivity, then
   overwrite the
   whole document with a fresh `updatedAt` — last-write-wins at the
@@ -1100,7 +1128,8 @@ are also updated in parallel.
 
 1. **Calendar changed**: for any event previously tracked for this
    group+day but on a *different* calendar than the current target, delete
-   it from that old calendar (if it still exists there) and stop tracking
+   it from that old calendar (if it still exists there) with
+   `sendUpdates: 'none'` and stop tracking
    it.
 2. **Per resolved task, in order**:
    - If the task is `empty` (a spacer) or `disabled`: if it was previously
@@ -1113,17 +1142,22 @@ are also updated in parallel.
      task id; otherwise take any other not-yet-reused one from that pool
      (so if blocks were reordered/renamed, existing events get relabeled
      rather than orphaned). If a candidate exists and it still actually
-     exists on Google, `patch` it with the new title/start/end and re-tag
+     exists on Google, `patch` it with the new title/start/end/`attendees`
+     (`sendUpdates: 'none'`) and re-tag
      it as tracking this task id (counts as an "update"). If a candidate
      existed in tracking but was deleted on the Google side, forget it and
      fall through to creating a new one. If no candidate exists, `insert`
      a new event (title = task title, start/end = resolved times, fixed
-     description string) and track it (counts as a "create").
+     description string, `attendees` from this group+calendar's chip list)
+     with `sendUpdates: 'none'` and track it (counts as a "create").
+     Guests are written onto the events but Google does **not** email them
+     — not for Add, not for later title/time updates, and not when the
+     guest list changes.
    - Never reuse an event tracked for a *different* day or group, even if a
      task id happens to match (ids aren't recycled across days).
 3. **Leftover previously-tracked events** for this exact group+day+calendar
    that weren't reused by any task this pass (e.g. the list got shorter)
-   get deleted from Google (if still present) and untracked (counts as a
+   get deleted from Google (if still present, `sendUpdates: 'none'`) and untracked (counts as a
    "remove").
 4. Any individual Google API failure during any of the above is caught,
    recorded (which task, which action — create/update/remove — and a
@@ -1170,9 +1204,10 @@ touch the in-app plan/tasks at all — it only removes calendar-side events.
 
 | Data | Storage | Synced across devices? |
 | --- | --- | --- |
-| Plan (groups/tasks/anchors/checkpoints/intendedEndAt) | Firestore `users/{uid}.plan` | Yes |
+| Plan (groups/tasks/anchors/checkpoints/intendedEndAt/calendarGuests) | Firestore `users/{uid}.plan` | Yes |
 | Block library | Firestore `users/{uid}.blockLibrary` | Yes |
 | Archived plans | Firestore `users/{uid}.planArchive` | Yes |
+| Saved calendar users | Firestore `users/{uid}.savedCalendarUsers` | Yes |
 | Target calendar id | Firestore `users/{uid}.targetCalendarId` | Yes |
 | Executing group id | Firestore `users/{uid}.executingGroupId` | Yes |
 | Calendar push history (events + snapshots) | Firestore `users/{uid}.pushedEvents` / `.pushSnapshots` | Yes |

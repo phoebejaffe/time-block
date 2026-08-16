@@ -530,7 +530,7 @@ function CategorySection({
             open={menuOpen}
             dropdownRef={menu.dropdownRef}
             style={menu.style}
-            className="task-new-menu-dropdown"
+            className="task-new-menu-dropdown is-over-modal"
           >
               <button
                 type="button"

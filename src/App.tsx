@@ -37,6 +37,7 @@ import {
   shiftAnchor,
   shouldAutoEndExecution,
   startOfLocalDay,
+  type CalendarGuest,
   type StackAnchor,
   type Task,
   type TaskEditPreview,
@@ -460,6 +461,7 @@ export default function App() {
   async function handleCommit(
     groupId: string,
     calendarIds: string[],
+    guestsByCalendar: Record<string, CalendarGuest[]> = {},
   ): Promise<boolean> {
     const group = plan.plan.groups.find((g) => g.id === groupId)
     if (!group) return false
@@ -493,6 +495,7 @@ export default function App() {
         pushedEvents,
         pushSnapshots,
         removedCalendarIds,
+        successfulCalendarIds,
       } = await syncGroupToCalendars(
         calendarIds,
         groupId,
@@ -501,7 +504,15 @@ export default function App() {
         userData.pushedEvents,
         userData.firebaseUser?.uid ?? null,
         setCommitProgress,
+        guestsByCalendar,
       )
+      if (successfulCalendarIds.length > 0) {
+        const persisted: Record<string, CalendarGuest[]> = {}
+        for (const calendarId of successfulCalendarIds) {
+          persisted[calendarId] = guestsByCalendar[calendarId] ?? []
+        }
+        plan.setCalendarGuests(groupId, persisted)
+      }
       userData.applyCalendarSync(
         pushedEvents,
         pushSnapshots,
@@ -818,6 +829,8 @@ export default function App() {
             onAddArchivedToHome={handleAddArchivedToHome}
             onShowNotice={(text, options) => show('info', text, options)}
             onClearNotice={clear}
+            savedCalendarUsers={userData.savedCalendarUsers}
+            onReplaceSavedCalendarUsers={userData.replaceSavedCalendarUsers}
           />
 
           <SidebarResizeHandle
@@ -903,6 +916,8 @@ export default function App() {
             onAddArchivedToHome={handleAddArchivedToHome}
             onShowNotice={(text, options) => show('info', text, options)}
             onClearNotice={clear}
+            savedCalendarUsers={userData.savedCalendarUsers}
+            onReplaceSavedCalendarUsers={userData.replaceSavedCalendarUsers}
             onClose={() => setExecutionModalOpen(false)}
             onEndExecution={handleEndExecution}
             splitStyle={splitStyle}

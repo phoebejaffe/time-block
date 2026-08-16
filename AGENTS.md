@@ -65,7 +65,7 @@ that's relevant to it.
 | `useGoogleSession` | `src/hooks/useGoogleSession.ts` | Google OAuth session (sign in/out, token refresh, ready/busy/error) |
 | `useCalendarEvents` | `src/hooks/useCalendarEvents.ts` | Google Calendar list + events for the visible date range, visible-calendar toggles |
 | `usePlan` | `src/hooks/usePlan.ts` | In-memory CRUD for the Plan (groups/tasks) — the local editing buffer |
-| `useUserData` | `src/hooks/useUserData.ts` | Everything synced via Firestore: plan (via a callback into `usePlan`), block library, archived plans, target calendar id, push history, executing group id |
+| `useUserData` | `src/hooks/useUserData.ts` | Everything synced via Firestore: plan (via a callback into `usePlan`), block library, archived plans, saved calendar users, target calendar id, push history, executing group id |
 | `useNotice` | `src/hooks/useNotice.ts` | Bottom-of-screen toast state |
 | `useSidebarWidth` / `useMobileSplit` | `src/hooks/*` | Persisted desktop sidebar width / mobile split percentage |
 | `useCalendarZoom` / `useTaskStackDrag` | `src/hooks/*` | Calendar-only interaction helpers (pinch/scroll zoom; drag-a-whole-stack visuals) |
@@ -75,7 +75,7 @@ Domain model + pure logic (no React) lives in `src/lib/`:
 | File | Contents |
 | --- | --- |
 | `src/lib/tasks.ts` | `Task`, `BlockGroup`, `BlockGroupCheckpoint`, `BlockLibrary` types; stack resolution (`resolveStack`); plan/group/task/checkpoint mutators; date/formatting helpers |
-| `src/lib/planArchive.ts` | Archived whole-plan templates + folders (`PlanArchive`); snapshot/clone helpers; Home copies get new ids |
+| `src/lib/savedCalendarUsers.ts` | Address book (`SavedCalendarUser`) and per-calendar guests (`CalendarGuest`); normalize/label helpers |
 | `src/lib/calendarApi.ts` | Google Calendar API calls (list/create/update/delete) and the push/sync algorithm (`syncTasksToCalendar`, `deleteGroupFromCalendar`) |
 | `src/lib/pushedEvents.ts` | `PushedEvent`/`PushSnapshot` tracking — what's been pushed to Google, for idempotent "Add"/"Update" and drift detection |
 | `src/lib/google.ts` | GIS/`gapi` bootstrap, OAuth code exchange, token refresh/scope logic |

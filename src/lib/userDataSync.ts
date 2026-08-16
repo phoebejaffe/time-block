@@ -16,6 +16,10 @@ import {
   normalizePushSnapshots,
   normalizePushedEvents,
 } from './pushedEvents'
+import {
+  normalizeSavedCalendarUsers,
+  type SavedCalendarUser,
+} from './savedCalendarUsers'
 import { getFirestoreDb } from './firebase'
 
 /**
@@ -33,6 +37,7 @@ export type SyncPayload = {
   pushSnapshots: PushSnapshot[]
   /** Group currently being executed, if any. */
   executingGroupId: string | null
+  savedCalendarUsers: SavedCalendarUser[]
 }
 
 class UserDataSyncError extends Error {
@@ -83,6 +88,7 @@ export function subscribeUserState(
           typeof data.executingGroupId === 'string' && data.executingGroupId
             ? data.executingGroupId
             : null,
+        savedCalendarUsers: normalizeSavedCalendarUsers(data.savedCalendarUsers),
       })
     },
     (err) => onError(err instanceof Error ? err : new Error(String(err))),

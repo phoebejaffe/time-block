@@ -9,9 +9,11 @@ import type { GoogleCalendar, SyncProgress } from '../lib/calendarApi'
 import type {
   BlockGroup,
   BlockLibrary,
+  CalendarGuest,
   StackAnchor,
   Task,
 } from '../lib/tasks'
+import type { SavedCalendarUser } from '../lib/savedCalendarUsers'
 import {
   blockLibraryKey,
   DEFAULT_GROUP_COLOR,
@@ -48,6 +50,7 @@ import {
 import { useFixedMenu } from '../hooks/useFixedMenu'
 import { FixedMenuPortal } from './FixedMenuPortal'
 import { SettingsMenu } from './SettingsMenu'
+import { CommitCalendarInvite } from './CommitCalendarInvite'
 import { BlockLibraryModal } from './BlockLibraryModal'
 import { TaskFieldsForm } from './TaskFieldsForm'
 import {
@@ -121,7 +124,11 @@ type TaskSidebarProps = {
   onSetGroupEnabled: (groupId: string, enabled: boolean) => void
   onSetGroupName: (groupId: string, name: string) => void
   onSetGroupColor: (groupId: string, color: string | undefined) => void
-  onCommit: (groupId: string, calendarIds: string[]) => Promise<boolean>
+  onCommit: (
+    groupId: string,
+    calendarIds: string[],
+    guestsByCalendar: Record<string, CalendarGuest[]>,
+  ) => Promise<boolean>
   onDeleteFromCalendar: (groupId: string) => Promise<void>
   onTaskEditPreview: (preview: {
     groupId: string
@@ -153,6 +160,8 @@ type TaskSidebarProps = {
   onAddArchivedToHome: (plan: ArchivedPlan) => string
   onShowNotice?: (text: string, options?: NoticeOptions) => void
   onClearNotice?: () => void
+  savedCalendarUsers: SavedCalendarUser[]
+  onReplaceSavedCalendarUsers: (users: SavedCalendarUser[]) => void
 }
 
 export function TaskSidebar({
@@ -205,6 +214,8 @@ export function TaskSidebar({
   onAddArchivedToHome,
   onShowNotice,
   onClearNotice,
+  savedCalendarUsers,
+  onReplaceSavedCalendarUsers,
 }: TaskSidebarProps) {
   const [groupNameInput, setGroupNameInput] = useState('')
   const [modal, setModal] = useState<ModalKind | null>(null)
@@ -222,6 +233,12 @@ export function TaskSidebar({
   const [selectedCommitIds, setSelectedCommitIds] = useState<string[]>([])
   /** Snapshot of calendar order when the commit modal opens (selected first). */
   const [commitCalendarOrder, setCommitCalendarOrder] = useState<string[]>([])
+  const [commitGuestsByCalendar, setCommitGuestsByCalendar] = useState<
+    Record<string, CalendarGuest[]>
+  >({})
+  const [commitLastGuestsByCalendar, setCommitLastGuestsByCalendar] = useState<
+    Record<string, CalendarGuest[]>
+  >({})
 
   const defaultCommitCalendarId = useMemo(() => {
     if (
@@ -306,6 +323,8 @@ export function TaskSidebar({
           })
           .map((calendar) => calendar.id),
       )
+      setCommitGuestsByCalendar({ ...(group?.calendarGuests ?? {}) })
+      setCommitLastGuestsByCalendar({ ...(group?.calendarGuests ?? {}) })
     }
     setModal(kind)
   }
@@ -314,11 +333,13 @@ export function TaskSidebar({
     setModal(null)
     setModalGroupId(null)
     setCommitCalendarOrder([])
+    setCommitGuestsByCalendar({})
+    setCommitLastGuestsByCalendar({})
   }
 
   async function handleCommit() {
     if (selectedCommitIds.length === 0 || !modalGroupId) return
-    const ok = await onCommit(modalGroupId, selectedCommitIds)
+    const ok = await onCommit(modalGroupId, selectedCommitIds, commitGuestsByCalendar)
     if (ok) {
       if (selectedCommitIds[0]) {
         onTargetCalendarChange(selectedCommitIds[0])
@@ -381,6 +402,8 @@ export function TaskSidebar({
               onOpenArchivedPlans={() => setArchivedPlansOpen(true)}
               onShowNotice={onShowNotice}
               onClearNotice={onClearNotice}
+              savedCalendarUsers={savedCalendarUsers}
+              onReplaceSavedCalendarUsers={onReplaceSavedCalendarUsers}
             />
           </div>
         </div>
@@ -494,23 +517,36 @@ export function TaskSidebar({
                   Sign in to choose calendars
                 </p>
               ) : (
-                commitCalendars.map((calendar) => (
-                  <label key={calendar.id} className="checkbox-row">
-                    <input
-                      type="checkbox"
-                      checked={selectedCommitIds.includes(calendar.id)}
-                      disabled={busy}
-                      onChange={(e) => {
+                commitCalendars.map((calendar) => {
+                  const checked = selectedCommitIds.includes(calendar.id)
+                  return (
+                    <CommitCalendarInvite
+                      key={calendar.id}
+                      calendarId={calendar.id}
+                      summary={calendar.summary}
+                      checked={checked}
+                      busy={busy}
+                      savedUsers={savedCalendarUsers}
+                      guests={commitGuestsByCalendar[calendar.id] ?? []}
+                      lastGuests={
+                        commitLastGuestsByCalendar[calendar.id] ?? []
+                      }
+                      onToggle={(nextChecked) => {
                         setSelectedCommitIds((current) =>
-                          e.target.checked
+                          nextChecked
                             ? [...current, calendar.id]
                             : current.filter((id) => id !== calendar.id),
                         )
                       }}
+                      onGuestsChange={(guests) => {
+                        setCommitGuestsByCalendar((current) => ({
+                          ...current,
+                          [calendar.id]: guests,
+                        }))
+                      }}
                     />
-                    <span>{calendar.summary}</span>
-                  </label>
-                ))
+                  )
+                })
               )}
             </div>
             {busy && commitProgress && (
