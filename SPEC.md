@@ -299,7 +299,7 @@ blocks from the library into a group, the user multi-selects blocks (in the
 picker they're numbered in selection order) and they get appended to the
 group in that order as brand-new `Task`s (fresh ids, including any `note`).
 Library rows (and the picker) show a note icon when the saved block has a
-note.
+note; hovering the icon shows the note text.
 
 ### 4.8 Calendar-push tracking (making "Add"/"Update" idempotent and drift-aware)
 
@@ -633,7 +633,8 @@ Top to bottom:
        was last pushed, or a "calendar" glyph if it's out of sync since
        the last push; then a **disable** icon-button and a "···" overflow
        menu (always reserved space so long titles can't crowd them out).
-       A note icon appears after the duration when the block has a `note`.
+       A note icon appears after the duration when the block has a `note`
+       (hover shows the note text).
        The menu has **Edit** / **Add note** (label swaps to **Edit note**
        when the block already has a note) / **Add to library** (omitted on delay spacers
        and when an identical title/duration/`empty`/`note` block already exists in

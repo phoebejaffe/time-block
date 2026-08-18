@@ -1773,6 +1773,7 @@ function BlockGroupPanel({
             dragIndex !== null &&
             dropLineIndex !== dragIndex &&
             dropLineIndex !== dragIndex + 1
+          const note = optionalNote(task.note)
 
           function toggleTaskDone() {
             if (suppressClickRef.current || isTaskDelay(task)) return
@@ -1873,10 +1874,10 @@ function BlockGroupPanel({
                       <span className="muted task-duration">
                         · {formatDurationMinutes(task.durationMinutes)}
                       </span>
-                      {optionalNote(task.note) && (
+                      {note && (
                         <span
                           className="task-note-icon"
-                          title="Has a note"
+                          title={note}
                           aria-hidden
                         >
                           <NoteIcon />
@@ -2023,6 +2024,7 @@ function BlockGroupPanel({
                                   )
                                   const order = librarySelection.indexOf(key)
                                   const selected = order >= 0
+                                  const note = optionalNote(block.note)
                                   return (
                                     <button
                                       key={block.id}
@@ -2051,20 +2053,22 @@ function BlockGroupPanel({
                                       <span className="block-library-picker-title">
                                         {block.title}
                                       </span>
-                                      <span className="muted block-library-picker-duration">
-                                        {formatDurationMinutes(
-                                          block.durationMinutes,
+                                      <span className="block-library-picker-meta">
+                                        {note && (
+                                          <span
+                                            className="task-note-icon"
+                                            title={note}
+                                            aria-hidden
+                                          >
+                                            <NoteIcon />
+                                          </span>
                                         )}
-                                      </span>
-                                      {optionalNote(block.note) && (
-                                        <span
-                                          className="task-note-icon"
-                                          title="Has a note"
-                                          aria-hidden
-                                        >
-                                          <NoteIcon />
+                                        <span className="muted block-library-picker-duration">
+                                          {formatDurationMinutes(
+                                            block.durationMinutes,
+                                          )}
                                         </span>
-                                      )}
+                                      </span>
                                     </button>
                                   )
                                 })}

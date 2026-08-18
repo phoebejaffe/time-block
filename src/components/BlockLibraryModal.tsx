@@ -601,6 +601,7 @@ function CategorySection({
             dragIndex !== null &&
             dropLineIndex !== dragIndex &&
             dropLineIndex !== dragIndex + 1
+          const note = optionalNote(block.note)
 
           return (
             <li
@@ -651,10 +652,10 @@ function CategorySection({
                       <span className="muted task-duration">
                         · {formatDurationMinutes(block.durationMinutes)}
                       </span>
-                      {optionalNote(block.note) && (
+                      {note && (
                         <span
                           className="task-note-icon"
-                          title="Has a note"
+                          title={note}
                           aria-hidden
                         >
                           <NoteIcon />
