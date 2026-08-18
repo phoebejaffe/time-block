@@ -42,6 +42,16 @@ export function timeblockEventDescription(
   return `Added via Time Block, with love ${pickLoveEmoji(uid)}`
 }
 
+/** Google Calendar description: optional block note, then the Time Block stamp. */
+export function calendarEventDescription(
+  uid: string | null | undefined,
+  note?: string,
+): string {
+  const stamp = timeblockEventDescription(uid)
+  const text = note?.trim()
+  return text ? `${text}\n\n${stamp}` : stamp
+}
+
 export type PushedEvent = {
   calendarId: string
   eventId: string
@@ -280,6 +290,7 @@ export function stackPushFingerprint(
     end: Date
     empty?: boolean
     disabled?: boolean
+    note?: string
   }[],
 ): string {
   return JSON.stringify({
@@ -287,12 +298,17 @@ export function stackPushFingerprint(
     at: anchor.at,
     items: resolved
       .filter((t) => t.empty !== true && t.disabled !== true)
-      .map((t) => [
-      t.id,
-      t.title,
-      t.start.toISOString(),
-      t.end.toISOString(),
-    ]),
+      .map((t) => {
+        const item: string[] = [
+          t.id,
+          t.title,
+          t.start.toISOString(),
+          t.end.toISOString(),
+        ]
+        const note = t.note?.trim()
+        if (note) item.push(note)
+        return item
+      }),
   })
 }
 

@@ -2,6 +2,7 @@ import {
   anchorOnDay,
   createBlockGroup,
   createTask,
+  optionalNote,
   type BlockGroup,
   type BlockGroupCheckpoint,
   type CalendarGuest,
@@ -16,6 +17,7 @@ export type ArchivedPlanTask = {
   empty?: boolean
   delay?: boolean
   disabled?: boolean
+  note?: string
 }
 
 export type ArchivedPlan = {
@@ -54,6 +56,7 @@ function snapshotTasks(tasks: Task[]): ArchivedPlanTask[] {
     ...(t.empty || t.delay ? { empty: true } : {}),
     ...(t.delay ? { delay: true } : {}),
     ...(t.disabled ? { disabled: true } : {}),
+    ...(optionalNote(t.note) ? { note: optionalNote(t.note) } : {}),
   }))
 }
 
@@ -67,6 +70,7 @@ function cloneCheckpoint(
       ...(t.empty || t.delay ? { empty: true } : {}),
       ...(t.delay ? { delay: true } : {}),
       ...(t.disabled ? { disabled: true } : {}),
+      ...(optionalNote(t.note) ? { note: optionalNote(t.note) } : {}),
     })),
     savedAt: checkpoint.savedAt,
     ...(checkpoint.anchor
@@ -104,6 +108,7 @@ export function blockGroupFromArchivedPlan(
         ...(t.empty || t.delay ? { empty: true } : {}),
         ...(t.delay ? { delay: true } : {}),
         ...(t.disabled ? { disabled: true } : {}),
+        ...(optionalNote(t.note) ? { note: optionalNote(t.note) } : {}),
       }),
     ),
     anchor: anchorOnDay(archived.anchor, day),
@@ -163,12 +168,14 @@ function normalizeArchivedTask(raw: unknown): ArchivedPlanTask | null {
     return null
   }
   const delay = t.delay === true
+  const note = optionalNote(t.note)
   return {
     title: t.title,
     durationMinutes: Math.max(1, Math.round(t.durationMinutes) || 1),
     ...(t.empty || delay ? { empty: true } : {}),
     ...(delay ? { delay: true } : {}),
     ...(t.disabled === true ? { disabled: true } : {}),
+    ...(note ? { note } : {}),
   }
 }
 

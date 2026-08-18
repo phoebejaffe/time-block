@@ -33,6 +33,7 @@ import {
   isTaskInBlockLibrary,
   localDateKey,
   groupMatchesCheckpoint,
+  optionalNote,
   resolveSavedBlocksFromKeys,
   resolveStack,
   stackDurationMinutes,
@@ -62,6 +63,7 @@ import {
   DisableBlockIcon,
   FinishedCheckIcon,
   LibraryIcon,
+  NoteIcon,
   PendingIcon,
 } from './icons'
 import type { NoticeOptions } from '../lib/notice'
@@ -788,6 +790,7 @@ export function TaskSidebar({
       title: task.title,
       durationMinutes: task.durationMinutes,
       empty: isTaskEmpty(task) || undefined,
+      note: optionalNote(task.note),
     })
     onReplaceBlockLibrary(
       touchBlockLibrary(
@@ -932,6 +935,7 @@ function BlockGroupPanel({
   const [listMenuOpen, setListMenuOpen] = useState(false)
   const [libraryOpen, setLibraryOpen] = useState(false)
   const [librarySelection, setLibrarySelection] = useState<string[]>([])
+  const [focusNoteOnEdit, setFocusNoteOnEdit] = useState(false)
 
   const listRef = useRef<HTMLUListElement>(null)
   const listMenuRef = useRef<HTMLDivElement>(null)
@@ -1802,13 +1806,18 @@ function BlockGroupPanel({
                   initialTitle={task.title}
                   initialDuration={task.durationMinutes}
                   initialEmpty={task.empty === true}
+                  initialNote={task.note ?? ''}
+                  autoFocusNote={focusNoteOnEdit}
                   stepMinutes={timeStepMinutes}
                   submitLabel="Save"
                   busy={busy}
                   previewGroupId={group.id}
                   previewTaskId={task.id}
                   onTaskEditPreview={onTaskEditPreview}
-                  onCancel={() => onEditingIdChange(null)}
+                  onCancel={() => {
+                    setFocusNoteOnEdit(false)
+                    onEditingIdChange(null)
+                  }}
                   onSubmit={(next) => {
                     const updated: Task = {
                       ...task,
@@ -1817,7 +1826,10 @@ function BlockGroupPanel({
                     }
                     if (next.empty) updated.empty = true
                     else delete updated.empty
+                    if (next.note) updated.note = next.note
+                    else delete updated.note
                     onUpdate(updated)
+                    setFocusNoteOnEdit(false)
                     onEditingIdChange(null)
                   }}
                 />
@@ -1852,6 +1864,7 @@ function BlockGroupPanel({
                     onPointerDown={(e) => beginTaskDrag(e, index)}
                     onClick={() => {
                       if (suppressClickRef.current) return
+                      setFocusNoteOnEdit(false)
                       onEditingIdChange(task.id)
                     }}
                   >
@@ -1860,6 +1873,15 @@ function BlockGroupPanel({
                       <span className="muted task-duration">
                         · {formatDurationMinutes(task.durationMinutes)}
                       </span>
+                      {optionalNote(task.note) && (
+                        <span
+                          className="task-note-icon"
+                          title="Has a note"
+                          aria-hidden
+                        >
+                          <NoteIcon />
+                        </span>
+                      )}
                       {pushed &&
                         (synced ? (
                           <TaskSyncedCheckIcon title="Matches Google Calendar" />
@@ -1904,7 +1926,14 @@ function BlockGroupPanel({
                         !isTaskDelay(task) &&
                         !isTaskInBlockLibrary(blockLibrary, task)
                       }
-                      onEdit={() => onEditingIdChange(task.id)}
+                      onEdit={() => {
+                        setFocusNoteOnEdit(false)
+                        onEditingIdChange(task.id)
+                      }}
+                      onAddNote={() => {
+                        setFocusNoteOnEdit(true)
+                        onEditingIdChange(task.id)
+                      }}
                       onAddToLibrary={() => onAddToLibrary(task)}
                       onRemove={() => onRemove(task.id)}
                       onOpen={() => {
@@ -2027,6 +2056,15 @@ function BlockGroupPanel({
                                           block.durationMinutes,
                                         )}
                                       </span>
+                                      {optionalNote(block.note) && (
+                                        <span
+                                          className="task-note-icon"
+                                          title="Has a note"
+                                          aria-hidden
+                                        >
+                                          <NoteIcon />
+                                        </span>
+                                      )}
                                     </button>
                                   )
                                 })}
@@ -2149,6 +2187,7 @@ function TaskBlockMenu({
   task,
   showAddToLibrary,
   onEdit,
+  onAddNote,
   onAddToLibrary,
   onRemove,
   onOpen,
@@ -2157,6 +2196,7 @@ function TaskBlockMenu({
   task: Task
   showAddToLibrary: boolean
   onEdit: () => void
+  onAddNote: () => void
   onAddToLibrary: () => void
   onRemove: () => void
   onOpen?: () => void
@@ -2208,6 +2248,17 @@ function TaskBlockMenu({
           }}
         >
           Edit
+        </button>
+        <button
+          type="button"
+          role="menuitem"
+          className="calendar-menu-item"
+          onClick={() => {
+            setMenuOpen(false)
+            onAddNote()
+          }}
+        >
+          {optionalNote(task.note) ? 'Edit note' : 'Add note'}
         </button>
         {showAddToLibrary && (
           <button

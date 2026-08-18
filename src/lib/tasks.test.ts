@@ -214,6 +214,28 @@ describe('migratePlan', () => {
     })
   })
 
+  it('preserves block notes when loading a plan', () => {
+    const plan = migratePlan({
+      groups: [
+        {
+          id: 'g1',
+          tasks: [
+            {
+              id: '1',
+              title: 'Write',
+              durationMinutes: 25,
+              note: '  bring laptop  ',
+            },
+            { id: '2', title: 'Walk', durationMinutes: 10, note: '   ' },
+          ],
+          anchor: { kind: 'start', at: '2026-07-18T08:00:00.000Z' },
+        },
+      ],
+    })
+    expect(plan!.groups[0]!.tasks[0]!.note).toBe('bring laptop')
+    expect(plan!.groups[0]!.tasks[1]!).not.toHaveProperty('note')
+  })
+
   it('preserves calendar guests when loading a plan', () => {
     const plan = migratePlan({
       groups: [
@@ -528,6 +550,31 @@ describe('block library', () => {
     expect(tasks[0]!.empty).toBe(true)
   })
 
+  it('preserves notes on saved blocks through normalize and task create', () => {
+    const library = normalizeBlockLibrary({
+      categories: [
+        {
+          id: 'cat-a',
+          name: 'Routine',
+          blocks: [
+            {
+              id: 'b1',
+              title: 'Wake',
+              durationMinutes: 5,
+              note: '  open blinds  ',
+            },
+            { id: 'b2', title: 'Walk', durationMinutes: 10, note: '  ' },
+          ],
+        },
+      ],
+    })
+    expect(library.categories[0]!.blocks[0]!.note).toBe('open blinds')
+    expect(library.categories[0]!.blocks[1]!).not.toHaveProperty('note')
+    const tasks = tasksFromSavedBlocks(library.categories[0]!.blocks)
+    expect(tasks[0]!.note).toBe('open blinds')
+    expect(tasks[1]!).not.toHaveProperty('note')
+  })
+
   it('normalizes invalid library payloads to empty categories', () => {
     expect(normalizeBlockLibrary(null).categories).toEqual([])
     expect(normalizeBlockLibrary({ categories: 'nope' }).categories).toEqual([])
@@ -619,6 +666,31 @@ describe('checkpoints', () => {
           withDisabled[0]!,
           { id: 'skip', title: 'Skip', durationMinutes: 20 },
         ],
+        checkpoint,
+      ),
+    ).toBe(false)
+  })
+
+  it('preserves notes through save and restore and treats note edits as drift', () => {
+    const withNote: Task[] = [
+      { id: 'a', title: 'A', durationMinutes: 30, note: 'bring keys' },
+      { id: 'b', title: 'B', durationMinutes: 15 },
+    ]
+    const checkpoint = createCheckpoint(withNote, anchor)
+    expect(checkpoint.tasks[0]!.note).toBe('bring keys')
+    expect(checkpoint.tasks[1]!).not.toHaveProperty('note')
+    const rebuilt = tasksFromCheckpoint(checkpoint)
+    expect(rebuilt[0]!.note).toBe('bring keys')
+    expect(tasksMatchCheckpoint(withNote, checkpoint)).toBe(true)
+    expect(
+      tasksMatchCheckpoint(
+        [{ ...withNote[0]!, note: 'changed' }, withNote[1]!],
+        checkpoint,
+      ),
+    ).toBe(false)
+    expect(
+      tasksMatchCheckpoint(
+        [{ id: 'a', title: 'A', durationMinutes: 30 }, withNote[1]!],
         checkpoint,
       ),
     ).toBe(false)

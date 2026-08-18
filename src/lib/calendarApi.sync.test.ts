@@ -11,6 +11,7 @@ type FakeEvent = {
   summary: string
   start: string
   end: string
+  description?: string
   attendees?: { email: string; displayName?: string }[]
 }
 
@@ -54,6 +55,7 @@ function mockGapiCalendar(options?: { failInsertOn?: string[] }) {
       sendUpdates?: string
       resource: {
         summary?: string
+        description?: string
         start?: { dateTime?: string }
         end?: { dateTime?: string }
         attendees?: { email: string; displayName?: string }[]
@@ -70,6 +72,7 @@ function mockGapiCalendar(options?: { failInsertOn?: string[] }) {
       store.set(eventId, {
         ...event,
         summary: resource.summary ?? event.summary,
+        description: resource.description ?? event.description,
         start: resource.start?.dateTime ?? event.start,
         end: resource.end?.dateTime ?? event.end,
         attendees: resource.attendees ?? event.attendees,
@@ -85,6 +88,7 @@ function mockGapiCalendar(options?: { failInsertOn?: string[] }) {
       sendUpdates?: string
       resource: {
         summary?: string
+        description?: string
         start?: { dateTime?: string }
         end?: { dateTime?: string }
         attendees?: { email: string; displayName?: string }[]
@@ -103,6 +107,7 @@ function mockGapiCalendar(options?: { failInsertOn?: string[] }) {
       store.set(id, {
         id,
         summary: resource.summary ?? '',
+        description: resource.description,
         start: resource.start?.dateTime ?? '',
         end: resource.end?.dateTime ?? '',
         attendees: resource.attendees,
@@ -666,6 +671,31 @@ describe('syncTasksToCalendar — attendees', () => {
         attendees: [{ email: 'ada@example.com', displayName: 'Ada' }],
       },
     ])
+  })
+
+  it('writes the block note into the Google event description', async () => {
+    const { store } = mockGapiCalendar()
+    const result = await syncTasksToCalendar(
+      'cal-a',
+      'group-1',
+      [
+        {
+          id: 't1',
+          title: 'Focus',
+          durationMinutes: 60,
+          note: 'bring keys',
+        },
+      ],
+      {
+        kind: 'start',
+        at: new Date('2026-07-23T15:00:00.000Z').toISOString(),
+      },
+      [],
+    )
+    const event = store.get(result.pushedEvents[0]!.eventId)
+    expect(event?.description).toBe(
+      'bring keys\n\nAdded via Time Block, with love ❤️',
+    )
   })
 })
 

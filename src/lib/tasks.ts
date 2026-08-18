@@ -27,6 +27,8 @@ export type Task = {
   disabled?: boolean
   /** Finished during execution. Not part of checkpoints; cleared when execution ends. */
   done?: boolean
+  /** Optional note; pushed as the Google Calendar event description. */
+  note?: string
 }
 
 /**
@@ -40,6 +42,7 @@ export type BlockGroupCheckpoint = {
     empty?: boolean
     delay?: boolean
     disabled?: boolean
+    note?: string
   }>
   savedAt: string
   /** Anchor at save time; older checkpoints may omit this. */
@@ -72,6 +75,12 @@ export type BlockGroup = {
 
 export const DEFAULT_GROUP_COLOR = '#0f6e56'
 export const DEFAULT_GROUP_BORDER = '#0b5341'
+
+/** Trimmed note, or undefined when blank. */
+export function optionalNote(note: string | undefined | null): string | undefined {
+  const trimmed = note?.trim()
+  return trimmed ? trimmed : undefined
+}
 
 function darkenHex(hex: string, amount = 0.28): string {
   const raw = hex.replace('#', '')
@@ -364,6 +373,7 @@ export function createCheckpoint(
       ...(t.empty || t.delay ? { empty: true } : {}),
       ...(t.delay ? { delay: true } : {}),
       ...(t.disabled ? { disabled: true } : {}),
+      ...(optionalNote(t.note) ? { note: optionalNote(t.note) } : {}),
     })),
     savedAt: new Date().toISOString(),
     anchor: { kind: anchor.kind, at: anchor.at },
@@ -379,13 +389,14 @@ export function tasksFromCheckpoint(checkpoint: BlockGroupCheckpoint): Task[] {
       ...(t.empty || t.delay ? { empty: true } : {}),
       ...(t.delay ? { delay: true } : {}),
       ...(t.disabled ? { disabled: true } : {}),
+      ...(optionalNote(t.note) ? { note: optionalNote(t.note) } : {}),
     }),
   )
 }
 
 /**
  * True when the group's current blocks match its checkpoint — compares
- * title, duration, order, empty-state, delay, and disabled (not ids or timing).
+ * title, duration, order, empty-state, delay, disabled, and note (not ids or timing).
  */
 export function tasksMatchCheckpoint(
   tasks: Task[],
@@ -399,7 +410,8 @@ export function tasksMatchCheckpoint(
       task.durationMinutes === saved.durationMinutes &&
       isTaskEmpty(task) === (saved.empty === true || saved.delay === true) &&
       isTaskDelay(task) === (saved.delay === true) &&
-      isTaskDisabled(task) === (saved.disabled === true)
+      isTaskDisabled(task) === (saved.disabled === true) &&
+      (optionalNote(task.note) ?? '') === (optionalNote(saved.note) ?? '')
     )
   })
 }
@@ -478,6 +490,7 @@ function normalizeTasks(raw: unknown): Task[] {
     )
     .map((t) => {
       const delay = t.delay === true
+      const note = optionalNote(t.note)
       return {
         id: t.id,
         title: t.title,
@@ -486,6 +499,7 @@ function normalizeTasks(raw: unknown): Task[] {
         ...(delay ? { delay: true } : {}),
         ...(t.disabled === true ? { disabled: true } : {}),
         ...(t.done === true ? { done: true } : {}),
+        ...(note ? { note } : {}),
       }
     })
 }
@@ -520,6 +534,7 @@ function normalizeCheckpoint(raw: unknown): BlockGroupCheckpoint | undefined {
         empty?: boolean
         delay?: boolean
         disabled?: boolean
+        note?: string
       } =>
         Boolean(t) &&
         typeof t === 'object' &&
@@ -529,12 +544,16 @@ function normalizeCheckpoint(raw: unknown): BlockGroupCheckpoint | undefined {
     )
     .map((t) => {
       const delay = t.delay === true
+      const note = optionalNote(
+        typeof t.note === 'string' ? t.note : undefined,
+      )
       return {
         title: t.title,
         durationMinutes: Math.max(1, Math.round(t.durationMinutes) || 1),
         ...(t.empty === true || delay ? { empty: true } : {}),
         ...(delay ? { delay: true } : {}),
         ...(t.disabled === true ? { disabled: true } : {}),
+        ...(note ? { note } : {}),
       }
     })
   const anchor =
@@ -713,6 +732,7 @@ export function createTask(
   input: Omit<Task, 'id'> & { id?: string },
 ): Task {
   const delay = input.delay === true
+  const note = optionalNote(input.note)
   return {
     id: input.id ?? newId(),
     title: input.title.trim() || 'Untitled',
@@ -721,6 +741,7 @@ export function createTask(
     ...(delay ? { delay: true } : {}),
     ...(input.disabled === true ? { disabled: true } : {}),
     ...(input.done === true ? { done: true } : {}),
+    ...(note ? { note } : {}),
   }
 }
 
@@ -1199,6 +1220,7 @@ export type SavedBlock = {
   title: string
   durationMinutes: number
   empty?: boolean
+  note?: string
 }
 
 export type BlockLibraryCategory = {
@@ -1215,11 +1237,13 @@ export type BlockLibrary = {
 export function createSavedBlock(
   input: Omit<SavedBlock, 'id'> & { id?: string },
 ): SavedBlock {
+  const note = optionalNote(input.note)
   return {
     id: input.id ?? newId(),
     title: input.title.trim(),
     durationMinutes: Math.max(1, Math.round(input.durationMinutes) || 1),
     ...(input.empty ? { empty: true } : {}),
+    ...(note ? { note } : {}),
   }
 }
 
@@ -1234,6 +1258,7 @@ function normalizeSavedBlock(raw: unknown): SavedBlock | null {
     title: b.title,
     durationMinutes: b.durationMinutes,
     empty: b.empty === true,
+    note: typeof b.note === 'string' ? b.note : undefined,
   })
 }
 
@@ -1313,23 +1338,26 @@ export function tasksFromSavedBlocks(blocks: SavedBlock[]): Task[] {
       title: b.title,
       durationMinutes: b.durationMinutes,
       ...(b.empty ? { empty: true } : {}),
+      ...(optionalNote(b.note) ? { note: optionalNote(b.note) } : {}),
     }),
   )
 }
 
-/** True if any library block matches title/duration/empty (ids ignored). */
+/** True if any library block matches title/duration/empty/note (ids ignored). */
 export function isTaskInBlockLibrary(
   library: BlockLibrary,
-  task: Pick<Task, 'title' | 'durationMinutes' | 'empty'>,
+  task: Pick<Task, 'title' | 'durationMinutes' | 'empty' | 'note'>,
 ): boolean {
   const title = task.title.trim()
   const empty = task.empty === true
+  const note = optionalNote(task.note) ?? ''
   for (const category of library.categories) {
     for (const block of category.blocks) {
       if (
         block.title.trim() === title &&
         block.durationMinutes === task.durationMinutes &&
-        (block.empty === true) === empty
+        (block.empty === true) === empty &&
+        (optionalNote(block.note) ?? '') === note
       ) {
         return true
       }

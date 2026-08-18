@@ -8,10 +8,11 @@ import {
   createSavedBlock,
   formatDurationMinutes,
   isTaskEmpty,
+  optionalNote,
   touchBlockLibrary,
 } from '../lib/tasks'
 import { TaskFieldsForm } from './TaskFieldsForm'
-import { EditIcon, TrashIcon } from './icons'
+import { EditIcon, NoteIcon, TrashIcon } from './icons'
 import { FixedMenuPortal } from './FixedMenuPortal'
 import type { NoticeOptions } from '../lib/notice'
 import { undoNoticeOptions } from '../lib/notice'
@@ -142,6 +143,7 @@ export function BlockLibraryModal({
               title: next.title,
               durationMinutes: next.durationMinutes,
               empty: next.empty,
+              note: next.note,
             })
           : b,
       ),
@@ -621,6 +623,7 @@ function CategorySection({
                   initialTitle={block.title}
                   initialDuration={block.durationMinutes}
                   initialEmpty={block.empty === true}
+                  initialNote={block.note ?? ''}
                   submitLabel="Save"
                   onCancel={() => {
                     if (!block.title.trim()) onDiscardBlock(block.id)
@@ -648,6 +651,15 @@ function CategorySection({
                       <span className="muted task-duration">
                         · {formatDurationMinutes(block.durationMinutes)}
                       </span>
+                      {optionalNote(block.note) && (
+                        <span
+                          className="task-note-icon"
+                          title="Has a note"
+                          aria-hidden
+                        >
+                          <NoteIcon />
+                        </span>
+                      )}
                     </span>
                   </div>
                   <div className="task-card-icons">

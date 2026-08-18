@@ -1,8 +1,8 @@
 import { formatError } from './errors'
 import {
+  calendarEventDescription,
   prunePushedEvents,
   stackPushFingerprint,
-  timeblockEventDescription,
   type PushSnapshot,
   type PushedEvent,
 } from './pushedEvents'
@@ -206,13 +206,14 @@ function eventResource(
     title: string
     start: Date
     end: Date
+    note?: string
   },
   userId: string | null | undefined,
   guests: CalendarGuest[] = [],
 ): gapi.client.calendar.Event {
   return {
     summary: task.title,
-    description: timeblockEventDescription(userId),
+    description: calendarEventDescription(userId, task.note),
     start: { dateTime: task.start.toISOString() },
     end: { dateTime: task.end.toISOString() },
     attendees: guests.map((guest) => ({

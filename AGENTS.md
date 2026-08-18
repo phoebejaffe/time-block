@@ -131,7 +131,7 @@ testing.
   renders it collapsed.
 - **Checkpoints are per-group, inline, single-slot.** `BlockGroup.checkpoint`
   holds at most one saved snapshot (tasks + anchor); "drift" is computed by
-  comparing title/duration/empty/delay/disabled in order plus anchor
+  comparing title/duration/empty/delay/disabled/note in order plus anchor
   kind/clock time (ids don't count). UI label is **Save as default** until
   one exists, then **Update default**. Toggling Starts/Ends shifts `anchor.at`
   by the stack duration so blocks keep their calendar position.
@@ -150,8 +150,10 @@ testing.
   app-wide (picker + commit modal). Overlay checkboxes persist as
   `visibleCalendarIds` (synced; empty means none shown). Time step is 1, 2, 5, or 15 minutes.
   Quick/Major undo seconds (`0` disables undo) feed `undoNoticeOptions`.
-- **Plan block rows** — disable icon stays on the row; Edit / Add to library /
-  Delete live in a per-block ··· menu (`TaskBlockMenu` in `TaskSidebar.tsx`).
+- **Plan block rows** — disable icon stays on the row; Edit / Add note /
+  Add to library / Delete live in a per-block ··· menu (`TaskBlockMenu` in
+  `TaskSidebar.tsx`). Optional `Task.note` is pushed as the Google Calendar
+  event description (above the Time Block stamp).
 - **Firestore sync is last-write-wins at the whole-document level** (one doc
   per user at `users/{uid}`, no field-level merge). Local edits debounce
   ~2s before writing. Archived plans live in `planArchive` on that doc,

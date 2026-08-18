@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Task } from '../lib/tasks'
 import {
   combineDurationMinutes,
+  optionalNote,
   splitDurationMinutes,
   stepDurationMinutes,
 } from '../lib/tasks'
+import { NoteIcon } from './icons'
 
 const SCRUB_PX = 25
 const SCRUB_ACTIVATE_PX = 8
@@ -92,6 +94,8 @@ export function TaskFieldsForm({
   initialTitle,
   initialDuration,
   initialEmpty = false,
+  initialNote = '',
+  autoFocusNote = false,
   submitLabel,
   busy,
   previewGroupId,
@@ -104,6 +108,8 @@ export function TaskFieldsForm({
   initialTitle: string
   initialDuration: number
   initialEmpty?: boolean
+  initialNote?: string
+  autoFocusNote?: boolean
   submitLabel: string
   busy?: boolean
   previewGroupId?: string
@@ -126,6 +132,11 @@ export function TaskFieldsForm({
   const [hours, setHours] = useState<number | ''>(initialSplit.hours)
   const [minutes, setMinutes] = useState<number | ''>(initialSplit.minutes)
   const [empty, setEmpty] = useState(initialEmpty)
+  const [note, setNote] = useState(initialNote)
+  const [noteOpen, setNoteOpen] = useState(
+    () => autoFocusNote || Boolean(initialNote.trim()),
+  )
+  const noteRef = useRef<HTMLTextAreaElement>(null)
 
   function resolveTotalMinutes(h: number | '', m: number | ''): number {
     if (h === '' && m === '') return initialDuration
@@ -152,6 +163,11 @@ export function TaskFieldsForm({
     initialTitle,
     initialDuration,
   ])
+
+  useEffect(() => {
+    if (!autoFocusNote) return
+    noteRef.current?.focus()
+  }, [autoFocusNote])
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -278,6 +294,7 @@ export function TaskFieldsForm({
         normalized.minutes,
       ),
       ...(empty ? { empty: true } : {}),
+      ...(optionalNote(note) ? { note: optionalNote(note) } : {}),
     })
   }
 
@@ -290,8 +307,19 @@ export function TaskFieldsForm({
         placeholder="Event Name"
         aria-label="Event name"
         required
-        autoFocus
+        autoFocus={!autoFocusNote}
       />
+      {noteOpen && (
+        <textarea
+          ref={noteRef}
+          className="task-form-note"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="Note"
+          aria-label="Note"
+          rows={3}
+        />
+      )}
       <div className="task-form-row">
         <div className="task-form-duration">
           <input
@@ -372,6 +400,30 @@ export function TaskFieldsForm({
           onClick={() => setEmpty((current) => !current)}
         >
           ∅
+        </button>
+        <button
+          type="button"
+          className={[
+            'btn',
+            'btn-ghost',
+            'btn-sm',
+            'task-note-toggle',
+            noteOpen || Boolean(note.trim()) ? 'is-active' : '',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+          aria-pressed={noteOpen}
+          aria-label={note.trim() ? 'Edit note' : 'Add note'}
+          title={note.trim() ? 'Edit note' : 'Add note'}
+          onClick={() => {
+            setNoteOpen((open) => {
+              if (open) return false
+              queueMicrotask(() => noteRef.current?.focus())
+              return true
+            })
+          }}
+        >
+          <NoteIcon />
         </button>
         <button
           type="button"

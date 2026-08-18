@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  calendarEventDescription,
   canUpdateCalendar,
   hasPushedGroupOnDay,
   hasPushedTaskOnDay,
@@ -181,6 +182,39 @@ describe('pushedEvents', () => {
       'Added via Time Block, with love ❤️',
     )
     expect(pickLoveEmoji(undefined)).toBe('❤️')
+  })
+
+  it('puts a block note above the Time Block stamp in the Google description', () => {
+    expect(calendarEventDescription(null)).toBe(
+      'Added via Time Block, with love ❤️',
+    )
+    expect(calendarEventDescription(null, '  bring keys  ')).toBe(
+      'bring keys\n\nAdded via Time Block, with love ❤️',
+    )
+    expect(calendarEventDescription(null, '   ')).toBe(
+      'Added via Time Block, with love ❤️',
+    )
+  })
+
+  it('includes notes in the stack fingerprint only when present', () => {
+    const start = new Date('2026-07-18T09:00:00.000Z')
+    const end = new Date('2026-07-18T10:00:00.000Z')
+    const withoutNote = stackPushFingerprint(
+      { kind: 'start', at: start.toISOString() },
+      [{ id: 't1', title: 'Focus', start, end }],
+    )
+    const withBlank = stackPushFingerprint(
+      { kind: 'start', at: start.toISOString() },
+      [{ id: 't1', title: 'Focus', start, end, note: '  ' }],
+    )
+    const withNote = stackPushFingerprint(
+      { kind: 'start', at: start.toISOString() },
+      [{ id: 't1', title: 'Focus', start, end, note: 'bring keys' }],
+    )
+    expect(withoutNote).toBe(withBlank)
+    expect(withNote).not.toBe(withoutNote)
+    expect(JSON.parse(withNote).items[0]).toHaveLength(5)
+    expect(JSON.parse(withoutNote).items[0]).toHaveLength(4)
   })
 
   it('picks from the special emoji pool for allowlisted Firebase UIDs', () => {

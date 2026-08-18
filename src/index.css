@@ -337,7 +337,8 @@ body.is-sidebar-resizing .main-panel {
 
 .task-sidebar-execution .block-group .stack-anchor input,
 .task-sidebar-execution .block-group .task-form input,
-.task-sidebar-execution .block-group .task-form select {
+.task-sidebar-execution .block-group .task-form select,
+.task-sidebar-execution .block-group .task-form textarea {
   background: #ffffff;
 }
 
@@ -400,10 +401,27 @@ body.is-sidebar-resizing .main-panel {
   min-width: 3.025rem;
 }
 
-.task-empty-toggle.is-active {
+.task-empty-toggle.is-active,
+.task-note-toggle.is-active {
   background: color-mix(in srgb, var(--accent) 12%, transparent);
   color: var(--accent);
   box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.task-note-toggle {
+  padding-inline: 0.4rem;
+}
+
+.task-note-toggle svg {
+  display: block;
+}
+
+.task-form-note {
+  width: 100%;
+  min-height: 4.25rem;
+  resize: vertical;
+  font: inherit;
+  line-height: 1.35;
 }
 
 .stack-anchor {
@@ -716,7 +734,8 @@ body.is-sidebar-resizing .main-panel {
 
 .stack-anchor input,
 .task-form input,
-.task-form select {
+.task-form select,
+.task-form textarea {
   border: 1px solid var(--line);
   background: #fffdf8;
   border-radius: 10px;
@@ -2316,7 +2335,8 @@ body.is-datetime-scrubbing .task-form-duration input {
 
 .block-group .stack-anchor input,
 .block-group .task-form input,
-.block-group .task-form select {
+.block-group .task-form select,
+.block-group .task-form textarea {
   background: var(--group-ink-wash);
 }
 
@@ -2565,6 +2585,19 @@ body.is-task-reordering .task-sidebar {
   flex-shrink: 0;
   align-self: center;
   margin-left: 0.3rem;
+}
+
+.task-note-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-self: center;
+  margin-left: 0.3rem;
+  color: var(--ink-muted);
+}
+
+.task-note-icon svg {
+  width: 12px;
+  height: 12px;
 }
 
 .task-synced-icon svg {

@@ -114,6 +114,8 @@ type Task = {
                             // the sidebar; included in checkpoints
   done?: boolean           // finished during execution; not in checkpoints;
                             // cleared when execution ends
+  note?: string            // optional; trimmed; omitted when blank;
+                            // pushed as the Google Calendar event description
 }
 ```
 
@@ -138,6 +140,13 @@ type Task = {
 - **`done`** marks a block finished during execution (§7.9). It starts unset
   (pending). It is not part of checkpoints and does not affect calendar push.
   Ending execution clears `done` on that group's tasks.
+- **`note`** is optional free text on the block. Blank/whitespace is stored
+  as omitted. It is included in checkpoints, the block library, archive,
+  and duplicate. On Google Calendar push (§8.5.1) it becomes the event
+  **description** (above the fixed "Added via Time Block…" stamp). Empty
+  and disabled blocks are still never pushed, so their notes stay in-app
+  only. Edit via **Add note** / **Edit note** on the block ··· menu, or
+  the note-icon button on the inline editor (§7.3).
 
 ### 4.2 StackAnchor
 
@@ -233,6 +242,7 @@ type BlockGroupCheckpoint = {
     empty?: boolean
     delay?: boolean
     disabled?: boolean
+    note?: string
   }>
   savedAt: string  // ISO
   anchor?: StackAnchor  // saved with newer checkpoints; omitted on legacy ones
@@ -246,7 +256,7 @@ making one-off adjustments (e.g. a daily routine that gets tweaked day to
 day but should be easy to reset).
 
 - **Save as default** / **Update default** snapshots the group's current
-  tasks (title, duration, `empty`/`delay`/`disabled` flags, and order — no
+  tasks (title, duration, `empty`/`delay`/`disabled` flags, `note`, and order — no
   ids) and its current anchor (kind + datetime) as the checkpoint,
   overwriting any previous one. The menu label is **Save as default** when
   there is no checkpoint yet, and **Update default** once one exists
@@ -255,7 +265,7 @@ day but should be easy to reset).
   first. Only offered while the group is enabled, and only when there either
   is no checkpoint yet or the current group has "drifted" from it.
 - **Drift** is computed by comparing the group's current tasks against the
-  checkpoint's tasks, in order, by title/duration/empty-state/delay/disabled
+  checkpoint's tasks, in order, by title/duration/empty-state/delay/disabled/`note`
   (ids ignored; differing lengths always count as drifted), **and** — when
   the checkpoint includes an `anchor` — by comparing anchor `kind` and local
   clock time (`HH:mm`). Changing Starts/Ends or the anchor time therefore
@@ -272,7 +282,7 @@ day but should be easy to reset).
 ### 4.7 Block library (reusable individual blocks, organized by category)
 
 ```ts
-type SavedBlock = { id: string; title: string; durationMinutes: number; empty?: boolean }
+type SavedBlock = { id: string; title: string; durationMinutes: number; empty?: boolean; note?: string }
 type BlockLibraryCategory = { id: string; name: string; blocks: SavedBlock[] }
 type BlockLibrary = { categories: BlockLibraryCategory[]; updatedAt: string }
 ```
@@ -284,10 +294,12 @@ restoring the whole list). Users create categories, add/edit/delete/
 reorder blocks within a category via drag, and rename/reorder/delete whole
 categories, from a dedicated "Block library" modal (opened from the app
 menu). A plan-row **Add to library** menu item can also append the
-current block (title/duration/`empty`) into a chosen category. When adding
+current block (title/duration/`empty`/`note`) into a chosen category. When adding
 blocks from the library into a group, the user multi-selects blocks (in the
 picker they're numbered in selection order) and they get appended to the
-group in that order as brand-new `Task`s (fresh ids).
+group in that order as brand-new `Task`s (fresh ids, including any `note`).
+Library rows (and the picker) show a note icon when the saved block has a
+note.
 
 ### 4.8 Calendar-push tracking (making "Add"/"Update" idempotent and drift-aware)
 
@@ -323,9 +335,11 @@ type PushSnapshot = {
   push, so the UI can tell whether the current in-app stack still matches
   what's on the calendar (see §8.3) without re-fetching from Google.
 - `fingerprint` = `JSON.stringify({ kind, at, items: [[taskId, title,
-  startISO, endISO], ...] })` for every non-empty resolved task, built from
+  startISO, endISO, note?], ...] })` for every non-empty resolved task, built from
   the *anchor* and the resolved tasks (so it changes if the anchor time,
-  any title, or any duration/order changes).
+  any title, duration/order, or a non-blank `note` changes). The optional
+  fifth `note` element is omitted when the block has no note, so stacks
+  without notes keep matching older four-element fingerprints.
 
 ### 4.9 Archived plans (whole-group templates, off Home)
 
@@ -340,6 +354,7 @@ type ArchivedPlanTask = {
   empty?: boolean
   delay?: boolean
   disabled?: boolean
+  note?: string
 }
 
 type ArchivedPlan = {
@@ -368,7 +383,7 @@ type PlanArchive = { folders: ArchiveFolder[]; updatedAt: string }
   with Move up / Move down.
 - **Archive** (plan ··· menu) takes the live group off Home and writes a
   snapshot into Unfiled: name, color, tasks (title/duration/empty/delay/
-  disabled — no live ids, no `done`), optional checkpoint, calendar guests
+  disabled/`note` — no live ids, no `done`), optional checkpoint, calendar guests
   per Google calendar, and anchor kind +
   clock time. Google events already pushed for that group are left alone
   (same as collapsing a group). Disabled on the last remaining Home group
@@ -496,9 +511,10 @@ token is applied.
   draggable, or resizable) — they exist purely as visual overlay context.
 - **Create/update/delete events** (write path, used only when pushing the
   user's plan — see §8) via `events.insert` / `events.update` /
-  `events.delete`. Every event created by this app carries a fixed
-  description string identifying it as app-created (e.g. "Added via
-  Time Block, with love ❤️"). Most accounts get a heart; a small Firebase
+  `events.delete`. Every event created by this app carries a description
+  identifying it as app-created (e.g. "Added via Time Block, with love ❤️").
+  If the block has a `note`, that text is placed **above** the stamp
+  (separated by a blank line). Most accounts get a heart; a small Firebase
   Auth UID allowlist gets a weighted random love/seasonal emoji instead.
   Purely informational, not used for matching (matching is done via the
   tracked `PushedEvent` records instead, see §8).
@@ -617,12 +633,16 @@ Top to bottom:
        was last pushed, or a "calendar" glyph if it's out of sync since
        the last push; then a **disable** icon-button and a "···" overflow
        menu (always reserved space so long titles can't crowd them out).
-       The menu has **Edit** / **Add to library** (omitted on delay spacers
-       and when an identical title/duration/`empty` block already exists in
-       the library) / — separator — / **Delete**. **Add to library** opens
+       A note icon appears after the duration when the block has a `note`.
+       The menu has **Edit** / **Add note** (label swaps to **Edit note**
+       when the block already has a note) / **Add to library** (omitted on delay spacers
+       and when an identical title/duration/`empty`/`note` block already exists in
+       the library) / — separator — / **Delete**. **Add note** / **Edit note**
+       opens the inline editor with the note field shown and focused.
+       **Add to library** opens
        a small modal to pick a target category (or create one if the library
        is empty), with **Add** and **Add and open library**; saves
-       title/duration/`empty` into that category. **Add and open library**
+       title/duration/`empty`/`note` into that category. **Add and open library**
        then opens the block library modal scrolled to the new block, which
        is highlighted in green for 4 seconds then fades over 2 seconds. The
        disable control (bell-with-X) toggles `disabled` —
@@ -633,14 +653,17 @@ Top to bottom:
        (other than the trailing controls) opens that task for inline
        editing.
      - **Inline task editor** (replaces a row, or appears as a fresh row at
-       the bottom when adding): a text input for the title, separate hours
+       the bottom when adding): a text input for the title, an optional note
+       textarea (toggled by a notebook-icon button next to the empty
+       toggle; shown automatically when the block already has a note, or
+       when opened via **Add note**), separate hours
        and minutes duration fields, a toggle button for the "empty/spacer"
        flag, and Cancel/Save (or Cancel/Add) buttons. See §7.7 for its
        interaction details.
      - **"Add new" row** (bottom of the list, when not actively adding or
        editing): two side-by-side triggers — **"Library block"** opens a
        **block library picker** dropdown (grouped by category, each block
-       showing its title + duration, multi-selectable with a running numeric
+       showing its title + duration and a note icon when it has a note, multi-selectable with a running numeric
        selection order, plus an "Add N block(s)" confirm button; shows an
        empty-state message pointing at the header menu → Block library if the
        library has no categories yet) and **"Custom"** opens the inline
@@ -730,7 +753,9 @@ library, etc.) sit above those; toasts sit above nested dialogs. Modals used:
   / Move up / Move down (either omitted if not applicable) / — separator
   — / Delete category, which asks for confirmation via a native dialog
   first), its own reorderable list of blocks using the same task-row/
-  task-editor UI as the sidebar (with shared edit/delete icon buttons), and
+  task-editor UI as the sidebar (including the note-icon button; rows show
+  a note icon when the saved block has a `note`; library rows keep
+  edit/delete icon buttons rather than the plan-row ··· menu), and
   an "New block +" button; plus a "New category +" button below the list.
   Closed via its header's "×" button, clicking outside, or Escape. Shows an
   empty-state message if there are no categories. A freshly-added block
@@ -1174,15 +1199,16 @@ are also updated in parallel.
      task id; otherwise take any other not-yet-reused one from that pool
      (so if blocks were reordered/renamed, existing events get relabeled
      rather than orphaned). If a candidate exists and it still actually
-     exists on Google, `update` it with the new title/start/end/`attendees`
-     (`sendUpdates: 'none'`) and re-tag
+     exists on Google, `update` it with the new title/start/end/`attendees`/
+     description (`sendUpdates: 'none'`) and re-tag
      it as tracking this task id (counts as an "update"). The attendees
      list replaces the previous guests, so removing a chip uninvites that
      person (still without a Google email). If a candidate
      existed in tracking but was deleted on the Google side, forget it and
      fall through to creating a new one. If no candidate exists, `insert`
-     a new event (title = task title, start/end = resolved times, fixed
-     description string, `attendees` from this group+calendar's chip list)
+     a new event (title = task title, start/end = resolved times,
+     description = optional block `note` above the Time Block stamp,
+     `attendees` from this group+calendar's chip list)
      with `sendUpdates: 'none'` and track it (counts as a "create").
      Guests are written onto the events but Google does **not** email them
      — not for Add, not for later title/time updates, and not when the

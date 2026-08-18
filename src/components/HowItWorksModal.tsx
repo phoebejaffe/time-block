@@ -61,7 +61,9 @@ export function HowItWorksModal({ onClose }: HowItWorksModalProps) {
             quick tap still opens the usual picker). Drag a block&apos;s title to
             reorder. Tap a block—or one of your events on the calendar—to edit
             length and title. Each block row also has a disable icon and a{' '}
-            <strong>···</strong> menu for Edit, Add to library, and Delete.
+            <strong>···</strong> menu for Edit, Add note, Add to library, and Delete.
+            The custom-event editor has a notebook-icon button for a note that
+            is written onto the Google Calendar event as its description.
           </p>
           <p>
             Need a gap that isn&apos;t a real task? Mark a block empty so it holds
@@ -94,7 +96,8 @@ export function HowItWorksModal({ onClose }: HowItWorksModalProps) {
             save them in the <strong>Block library</strong> (from the app menu).
             Organize them into categories, then when you&apos;re building a day,
             tap <strong>Library block</strong> to drop one or more into your list
-            without retyping titles and lengths each time. You can also add a
+            without retyping titles, lengths, or notes each time. Library items
+            show a note icon when they have a note. You can also add a
             block from its row ··· menu; if it&apos;s already in the library, that
             option is hidden.
           </p>

@@ -89,6 +89,7 @@ export function usePlan(options?: { getDefaultAnchor?: () => StackAnchor }) {
               ...(task.empty || task.delay ? { empty: true } : {}),
               ...(task.delay ? { delay: true } : {}),
               ...(task.disabled ? { disabled: true } : {}),
+              ...(task.note ? { note: task.note } : {}),
             }),
           ),
           anchor: { ...source.anchor },

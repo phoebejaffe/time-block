@@ -53,6 +53,26 @@ describe('plan archive', () => {
     expect(archived.checkpoint?.tasks).toHaveLength(2)
   })
 
+  it('copies block notes through archive and home stamp', () => {
+    const withNotes = {
+      ...group,
+      tasks: [
+        createTask({
+          title: 'Wake',
+          durationMinutes: 10,
+          note: '  open blinds  ',
+        }),
+        group.tasks[1]!,
+      ],
+    }
+    const archived = archivedPlanFromGroup(withNotes)
+    expect(archived.tasks[0]!.note).toBe('open blinds')
+    expect(archived.tasks[1]!).not.toHaveProperty('note')
+    const restored = blockGroupFromArchivedPlan(archived)
+    expect(restored.tasks[0]!.note).toBe('open blinds')
+    expect(restored.tasks[1]!).not.toHaveProperty('note')
+  })
+
   it('stamps a fresh home group remapped onto today', () => {
     const archived = archivedPlanFromGroup(group)
     const today = new Date(2026, 7, 14, 12, 0, 0)
