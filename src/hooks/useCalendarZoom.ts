@@ -6,8 +6,8 @@ import {
   type RefObject,
 } from 'react'
 
-const CAL_ZOOM_MIN = 0.95
-const CAL_ZOOM_MAX = 2.5
+export const CAL_ZOOM_MIN = 0.95
+export const CAL_ZOOM_MAX = 2.5
 
 function clampZoom(value: number): number {
   return Math.min(CAL_ZOOM_MAX, Math.max(CAL_ZOOM_MIN, value))
@@ -252,5 +252,12 @@ export function useCalendarZoom({
     }
   }, [bodyRef])
 
-  return { zoom, pinchingRef }
+  function setZoomUnanchored(next: number) {
+    const clamped = clampZoom(next)
+    if (clamped === zoomRef.current) return
+    pendingAnchorRef.current = null
+    setZoom(clamped)
+  }
+
+  return { zoom, pinchingRef, setZoomUnanchored }
 }

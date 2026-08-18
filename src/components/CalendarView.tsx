@@ -26,6 +26,7 @@ import {
   shiftAnchor,
 } from '../lib/tasks'
 import { useCalendarZoom } from '../hooks/useCalendarZoom'
+import { useFitEnabledPlans } from '../hooks/useFitEnabledPlans'
 import {
   TASK_STACK_CLASS,
   useTaskStackDrag,
@@ -328,29 +329,6 @@ export function CalendarView({
     () => buildResolvedTaskEvents(groups),
     [groups],
   )
-  const didScrollTasksIntoViewRef = useRef(false)
-
-  // Execution mode: once the grid has a real height and we have blocks, scroll
-  // so the stack sits in view (a bit of padding above the first block).
-  useEffect(() => {
-    if (!scrollTasksIntoViewOnMount || didScrollTasksIntoViewRef.current) return
-    if (calendarHeight < 2 || resolvedTaskEvents.length === 0) return
-    const api = calendarRef.current?.getApi()
-    if (!api) return
-
-    let earliest = resolvedTaskEvents[0]!.start
-    for (const task of resolvedTaskEvents) {
-      if (task.start.getTime() < earliest.getTime()) earliest = task.start
-    }
-    const padMs = 30 * 60_000
-    const scrollAt = new Date(earliest.getTime() - padMs)
-    api.scrollToTime({
-      hours: scrollAt.getHours(),
-      minutes: scrollAt.getMinutes(),
-      seconds: 0,
-    })
-    didScrollTasksIntoViewRef.current = true
-  }, [scrollTasksIntoViewOnMount, resolvedTaskEvents, calendarHeight])
   const groupColors = useMemo(() => {
     const map = new Map<string, ReturnType<typeof groupEventColors>>()
     for (const group of groups) {
@@ -401,7 +379,7 @@ export function CalendarView({
       onDragFrame: () => syncTaskEventTimes(),
     })
 
-  const { zoom, pinchingRef } = useCalendarZoom({
+  const { zoom, pinchingRef, setZoomUnanchored } = useCalendarZoom({
     bodyRef: calendarBodyRef,
     onZoomChange: () => {
       calendarRef.current?.getApi().updateSize()
@@ -415,6 +393,16 @@ export function CalendarView({
       syncTaskEventTimes()
       onStackShiftPreviewRef.current?.(null, null)
     },
+  })
+
+  useFitEnabledPlans({
+    groups,
+    bodyRef: calendarBodyRef,
+    zoom,
+    setZoomUnanchored,
+    pinchingRef,
+    calendarHeight,
+    fitOnMount: scrollTasksIntoViewOnMount,
   })
 
   /**

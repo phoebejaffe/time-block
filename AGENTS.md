@@ -69,7 +69,7 @@ that's relevant to it.
 | `useUserData` | `src/hooks/useUserData.ts` | Everything synced via Firestore: plan (via a callback into `usePlan`), block library, archived plans, settings, saved calendar users, target calendar id, push history, executing group id |
 | `useNotice` | `src/hooks/useNotice.ts` | Bottom-of-screen toast state |
 | `useSidebarWidth` / `useMobileSplit` | `src/hooks/*` | Persisted desktop sidebar width / mobile split percentage |
-| `useCalendarZoom` / `useTaskStackDrag` | `src/hooks/*` | Calendar-only interaction helpers (pinch/scroll zoom; drag-a-whole-stack visuals) |
+| `useCalendarZoom` / `useFitEnabledPlans` / `useTaskStackDrag` | `src/hooks/*` | Calendar-only interaction helpers (pinch/scroll zoom; scroll/zoom-out to keep enabled stacks in view; drag-a-whole-stack visuals) |
 
 Domain model + pure logic (no React) lives in `src/lib/`:
 
@@ -80,6 +80,7 @@ Domain model + pure logic (no React) lives in `src/lib/`:
 | `src/lib/planArchive.ts` | Archived plans + folders (`PlanArchive`); search, duplicate, move, reorder |
 | `src/lib/savedCalendarUsers.ts` | Address book (`SavedCalendarUser`) and per-calendar guests (`CalendarGuest`); normalize/merge/partition/label helpers |
 | `src/lib/calendarApi.ts` | Google Calendar API calls (list/create/update/delete), writable-calendar filter, and the push/sync algorithm (`syncTasksToCalendar`, `deleteGroupFromCalendar`) |
+| `src/lib/calendarFit.ts` | Enabled-plan time range + scroll/zoom-out fit math for the time grid |
 | `src/lib/pushedEvents.ts` | `PushedEvent`/`PushSnapshot` tracking — what's been pushed to Google, for idempotent "Add"/"Update" and drift detection |
 | `src/lib/google.ts` | GIS/`gapi` bootstrap, OAuth code exchange, token refresh/scope logic |
 | `src/lib/firebase.ts` / `src/lib/userDataSync.ts` | Firebase init + the Firestore read/write for the per-user sync document |
