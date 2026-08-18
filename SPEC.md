@@ -760,8 +760,9 @@ library, etc.) sit above those; toasts sit above nested dialogs. Modals used:
   Closed via header "×", click-outside, or Escape. Plans can be
   drag-reordered within a folder.
 - **How Time Block works** (help) — opens with why Time Block exists (visualizing
-  time for ADHD / time blindness), then a short narrative of planning and
-  execution flows; opened from the app menu.
+  time for ADHD / time blindness), then a short narrative of planning,
+  block library, execution, calendar, Settings, and layout; opened from the
+  app menu.
 
 ### 7.5 App menu (sidebar header)
 

@@ -22,10 +22,11 @@ ordered lists of "blocks" (title + duration) in a sidebar. Each list
 can drag a whole stack around the calendar, reorder/edit blocks, save a
 plan's blocks as a reusable "default" checkpoint, keep a personal library
 of reusable blocks, archive whole plans off Home and stamp them back as
-fresh copies, and push ("Add"/"Update") the resolved blocks as real
-events onto a chosen Google Calendar. Everything syncs across devices via
-Firestore, keyed by the signed-in user. Sign-in is mandatory — there's no
-local-only mode.
+fresh copies, invite guests when pushing to Google Calendar, tune synced
+Settings (defaults, hidden calendars, time step, undo windows, auto-end),
+and push ("Add"/"Update") the resolved blocks as real events onto a chosen
+Google Calendar. Everything syncs across devices via Firestore, keyed by the
+signed-in user. Sign-in is mandatory — there's no local-only mode.
 
 ## Stack at a glance
 
@@ -65,7 +66,7 @@ that's relevant to it.
 | `useGoogleSession` | `src/hooks/useGoogleSession.ts` | Google OAuth session (sign in/out, token refresh, ready/busy/error) |
 | `useCalendarEvents` | `src/hooks/useCalendarEvents.ts` | Google Calendar list + events for the visible date range, visible-calendar toggles |
 | `usePlan` | `src/hooks/usePlan.ts` | In-memory CRUD for the Plan (groups/tasks) — the local editing buffer |
-| `useUserData` | `src/hooks/useUserData.ts` | Everything synced via Firestore: plan (via a callback into `usePlan`), block library, archived plans, saved calendar users, target calendar id, push history, executing group id |
+| `useUserData` | `src/hooks/useUserData.ts` | Everything synced via Firestore: plan (via a callback into `usePlan`), block library, archived plans, settings, saved calendar users, target calendar id, push history, executing group id |
 | `useNotice` | `src/hooks/useNotice.ts` | Bottom-of-screen toast state |
 | `useSidebarWidth` / `useMobileSplit` | `src/hooks/*` | Persisted desktop sidebar width / mobile split percentage |
 | `useCalendarZoom` / `useTaskStackDrag` | `src/hooks/*` | Calendar-only interaction helpers (pinch/scroll zoom; drag-a-whole-stack visuals) |
@@ -74,20 +75,25 @@ Domain model + pure logic (no React) lives in `src/lib/`:
 
 | File | Contents |
 | --- | --- |
-| `src/lib/tasks.ts` | `Task`, `BlockGroup`, `BlockGroupCheckpoint`, `BlockLibrary` types; stack resolution (`resolveStack`); plan/group/task/checkpoint mutators; date/formatting helpers |
+| `src/lib/tasks.ts` | `Task`, `BlockGroup`, `BlockGroupCheckpoint`, `BlockLibrary` types; stack resolution (`resolveStack`); plan/group/task/checkpoint mutators; execution helpers (`prepareGroupForExecution`, `isGroupExecutableNow`, auto-end); date/formatting helpers |
+| `src/lib/userSettings.ts` | Synced `UserSettings` (`users/{uid}.settings`): defaults, time step (1/2/5/15 min), undo seconds, auto-end hours, hidden calendar ids |
+| `src/lib/planArchive.ts` | Archived plans + folders (`PlanArchive`); search, duplicate, move, reorder |
 | `src/lib/savedCalendarUsers.ts` | Address book (`SavedCalendarUser`) and per-calendar guests (`CalendarGuest`); normalize/merge/partition/label helpers |
-| `src/lib/calendarApi.ts` | Google Calendar API calls (list/create/update/delete) and the push/sync algorithm (`syncTasksToCalendar`, `deleteGroupFromCalendar`) |
+| `src/lib/calendarApi.ts` | Google Calendar API calls (list/create/update/delete), writable-calendar filter, and the push/sync algorithm (`syncTasksToCalendar`, `deleteGroupFromCalendar`) |
 | `src/lib/pushedEvents.ts` | `PushedEvent`/`PushSnapshot` tracking — what's been pushed to Google, for idempotent "Add"/"Update" and drift detection |
 | `src/lib/google.ts` | GIS/`gapi` bootstrap, OAuth code exchange, token refresh/scope logic |
 | `src/lib/firebase.ts` / `src/lib/userDataSync.ts` | Firebase init + the Firestore read/write for the per-user sync document |
-| `src/lib/errors.ts` / `src/lib/notice.ts` | Error-message normalization; toast/notice types |
+| `src/lib/errors.ts` / `src/lib/notice.ts` | Error-message normalization; toast/notice types + undo duration helpers |
 
 UI components live in `src/components/`; the two big ones are
 `TaskSidebar.tsx` (the whole "Plan" panel: groups, tasks, checkpoints,
-modals, block-library picker, archived plans) and `CalendarView.tsx` (FullCalendar wiring,
-event rendering/labels, the stack-drag visual). Everything else in that
-folder is a focused sub-piece (toolbar, toggles, modals, icons, small
-handles).
+modals, block-library picker, archived plans, block ··· menus) and
+`CalendarView.tsx` (FullCalendar wiring, event rendering/labels, the
+stack-drag visual). Notable modals/sheets: `SettingsModal.tsx` (synced
+prefs), `SettingsMenu.tsx` (app menu + opens settings/library/help),
+`BlockLibraryModal.tsx`, `ArchivedPlansModal.tsx`, `ExecutionModal.tsx`,
+`HowItWorksModal.tsx`. Overflow menus portal via `FixedMenuPortal` +
+`useFixedMenu` so they aren't clipped by sidebar/modal overflow.
 
 Tests live next to the code they cover (`*.test.ts`), mostly under
 `src/lib/`, and run against pure functions — there's little component
@@ -117,18 +123,34 @@ testing.
   + `BlockGroup.intendedEndAt` synced via Firestore). Calendar stack-drag is
   off while executing; planning Starts/Ends remains available after ending
   execution. Per-block `done` toggles (pending ↔ finished) live only in the
-  execution sidebar and clear when execution ends. A run auto-ends 2 hours
-  after the last non-disabled block (same as End run). Opening or reopening
-  a run expands the group; the execution sidebar never renders it collapsed.
+  execution sidebar and clear when execution ends. **`prepareGroupForExecution`**
+  flips to Starts if needed and writes the anchor onto **today's** local day
+  (same clock time) so Start eligibility and auto-end agree. A run auto-ends
+  N hours after the last non-disabled block (N from Settings, default 2).
+  Opening or reopening a run expands the group; the execution sidebar never
+  renders it collapsed.
 - **Checkpoints are per-group, inline, single-slot.** `BlockGroup.checkpoint`
   holds at most one saved snapshot (tasks + anchor); "drift" is computed by
   comparing title/duration/empty/delay/disabled in order plus anchor
-  kind/clock time (ids don't count). Toggling Starts/Ends shifts `anchor.at`
+  kind/clock time (ids don't count). UI label is **Save as default** until
+  one exists, then **Update default**. Toggling Starts/Ends shifts `anchor.at`
   by the stack duration so blocks keep their calendar position.
 - **Push tracking (`PushedEvent`/`PushSnapshot`) is what makes "Add" vs.
   "Update" and the synced/out-of-sync icons work** — it's how the app knows
   what it already wrote to Google without re-fetching. Any change to the
   sync algorithm in `calendarApi.ts` needs to keep this bookkeeping correct.
+- **Calendar guests** — `BlockGroup.calendarGuests` remembers last guests per
+  Google calendar id. Commit modal uses `savedCalendarUsers` + one-off emails;
+  updates use `events.update` with `sendUpdates: none`. Removing an Invited
+  chip before Update uninvites them; committing with no calendars selected on
+  Update deletes this group's events for that day everywhere they were pushed.
+- **Settings** — `targetCalendarId` is top-level on the user doc; everything
+  else lives in `settings`. Default target calendar is set only in Settings
+  (not overwritten on successful push). `hiddenCalendarIds` filters calendars
+  app-wide (picker + commit modal). Time step is 1, 2, 5, or 15 minutes.
+  Quick/Major undo seconds (`0` disables undo) feed `undoNoticeOptions`.
+- **Plan block rows** — disable icon stays on the row; Edit / Add to library /
+  Delete live in a per-block ··· menu (`TaskBlockMenu` in `TaskSidebar.tsx`).
 - **Firestore sync is last-write-wins at the whole-document level** (one doc
   per user at `users/{uid}`, no field-level merge). Local edits debounce
   ~2s before writing. Archived plans live in `planArchive` on that doc,

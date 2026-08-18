@@ -60,7 +60,8 @@ export function HowItWorksModal({ onClose }: HowItWorksModalProps) {
             Scrub the time by pressing and dragging on the field (on a phone, a
             quick tap still opens the usual picker). Drag a block&apos;s title to
             reorder. Tap a block—or one of your events on the calendar—to edit
-            length and title.
+            length and title. Each block row also has a disable icon and a{' '}
+            <strong>···</strong> menu for Edit, Add to library, and Delete.
           </p>
           <p>
             Need a gap that isn&apos;t a real task? Mark a block empty so it holds
@@ -69,50 +70,59 @@ export function HowItWorksModal({ onClose }: HowItWorksModalProps) {
           </p>
           <p>
             For a plan (a stack of blocks), tap the plan name to collapse it off
-            the calendar when you don&apos;t need it today. The ··· menu covers
-            naming, color, saving a default list, revert, archiving a plan off
-            Home, and deleting a plan. Restore a fresh copy anytime
-            from <strong>Archived plans</strong>.
+            the calendar when you don&apos;t need it today. The plan ··· menu
+            covers naming, color, <strong>Save as default</strong> (or{' '}
+            <strong>Update default</strong> once you have one), revert, archiving
+            a plan off Home, and deleting a plan. Restore a fresh copy anytime
+            from <strong>Archived plans</strong> with <strong>Duplicate plan</strong>.
           </p>
           <p>
             When your block list is done, you can save it as a default so you can
             make changes later, but easily return to this version of the list. You
             can also <strong>Add to calendar</strong> (or{' '}
             <strong>Update calendar</strong>) to add it to one or more of your
-            Google calendars. Matching blocks show a green check; a grey calendar
-            icon means something drifted since the last sync.
+            Google calendars. Matching blocks show a green check after the
+            duration; a grey calendar icon means something drifted since the last
+            sync. In the commit dialog, tap <strong>+ Invite users</strong> on a
+            calendar row to attach guests—no invite email is sent. People you add
+            often can live in your Saved users list in Settings.
           </p>
 
           <h3>Block library</h3>
           <p>
             For blocks you use frequently—morning routine, deep work, a commute—
-            save them in the <strong>Block library</strong> (from the settings
-            menu). Organize them into categories, then when you&apos;re building a
-            day, tap <strong>Library block</strong> to drop one or more into your
-            list without retyping titles and lengths each time.
+            save them in the <strong>Block library</strong> (from the app menu).
+            Organize them into categories, then when you&apos;re building a day,
+            tap <strong>Library block</strong> to drop one or more into your list
+            without retyping titles and lengths each time. You can also add a
+            block from its row ··· menu; if it&apos;s already in the library, that
+            option is hidden.
           </p>
 
           <h3>Run it</h3>
           <p>
             When you&apos;re ready, <strong>Start plan</strong> appears next to
-            the plan title if the current time is within an hour of that
-            plan. That opens a focused view of that one list beside the calendar
+            the plan title if the current time is within an hour of that plan on
+            today. That opens a focused view of that one list beside the calendar
             to help you stay on track.
           </p>
           <p>
             Watch <strong>Start</strong> and <strong>Intended End</strong>, and the
             strip that tells you whether you&apos;re ending on time, early, or late.
             Mark blocks finished as you go—tap the pending icon for a green
-            check; tap the row (or pencil) when you need to edit title or length.
+            check; tap the row to edit title or length.
           </p>
           <p>
             If you&apos;ve slipped, <strong>I&apos;m delayed</strong> inserts time
             so the rest of the list shifts later—then trim later blocks if you want
-            to catch up.
+            to catch up. <strong>Update calendar</strong> sits beside it when you
+            need to sync changes while running.
           </p>
           <p>
-            Close the view anytime; a banner keeps the run alive so you can jump
-            back in. <strong>End run</strong> when you&apos;re done. If
+            Close the view with <strong>← Plan mode</strong> anytime; a grey banner
+            keeps the run alive so you can jump back in. <strong>End run</strong>{' '}
+            when you&apos;re done. If you forget to end, the run closes on its own
+            a few hours after your last block (configurable in Settings). If
             you&apos;re signed in on another device, you can pick up the same run
             there.
           </p>
@@ -126,6 +136,36 @@ export function HowItWorksModal({ onClose }: HowItWorksModalProps) {
             and the calendar ··· menu for Day / 3 Day / Week, which calendars to
             show, and all-day events.
           </p>
+
+          <h3>Settings</h3>
+          <p>
+            Open <strong>Settings</strong> from the app menu. Preferences sync
+            across devices.
+          </p>
+          <ul>
+            <li>
+              <strong>Planning</strong> — default Starts/Ends and time for new
+              plans; default length when you add a Custom block.
+            </li>
+            <li>
+              <strong>Calendars</strong> — saved guest users; default calendar for
+              Add/Update; hide calendars you don&apos;t need (read-only ones show a
+              lock).
+            </li>
+            <li>
+              <strong>Interface</strong> — time and duration step (1, 2, 5, or 15
+              minutes); how long Undo stays on screen for everyday vs. big actions
+              (set to 0s to turn Undo off).
+            </li>
+            <li>
+              <strong>Running Plans</strong> — how many hours after the last block
+              before a forgotten run auto-ends.
+            </li>
+            <li>
+              <strong>App</strong> — export or import your block library and plans;
+              session diagnostics if something&apos;s wrong with sign-in.
+            </li>
+          </ul>
 
           <h3>Layout</h3>
           <p>
