@@ -1809,6 +1809,7 @@ function BlockGroupPanel({
                   initialEmpty={task.empty === true}
                   initialNote={task.note ?? ''}
                   autoFocusNote={focusNoteOnEdit}
+                  autoFocusDuration={!focusNoteOnEdit}
                   stepMinutes={timeStepMinutes}
                   submitLabel="Save"
                   busy={busy}

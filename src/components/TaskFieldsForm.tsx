@@ -96,6 +96,7 @@ export function TaskFieldsForm({
   initialEmpty = false,
   initialNote = '',
   autoFocusNote = false,
+  autoFocusDuration = false,
   submitLabel,
   busy,
   previewGroupId,
@@ -110,6 +111,8 @@ export function TaskFieldsForm({
   initialEmpty?: boolean
   initialNote?: string
   autoFocusNote?: boolean
+  /** Focus duration minutes when opening the editor (e.g. row tap on an existing block). */
+  autoFocusDuration?: boolean
   submitLabel: string
   busy?: boolean
   previewGroupId?: string
@@ -137,6 +140,7 @@ export function TaskFieldsForm({
     () => autoFocusNote || Boolean(initialNote.trim()),
   )
   const noteRef = useRef<HTMLTextAreaElement>(null)
+  const minutesRef = useRef<HTMLInputElement>(null)
 
   function resolveTotalMinutes(h: number | '', m: number | ''): number {
     if (h === '' && m === '') return initialDuration
@@ -168,6 +172,12 @@ export function TaskFieldsForm({
     if (!autoFocusNote) return
     noteRef.current?.focus()
   }, [autoFocusNote])
+
+  useEffect(() => {
+    if (autoFocusNote || !autoFocusDuration) return
+    minutesRef.current?.focus()
+    minutesRef.current?.select()
+  }, [autoFocusNote, autoFocusDuration])
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -307,7 +317,7 @@ export function TaskFieldsForm({
         placeholder="Event Name"
         aria-label="Event name"
         required
-        autoFocus={!autoFocusNote}
+        autoFocus={!autoFocusNote && !autoFocusDuration}
       />
       {noteOpen && (
         <textarea
@@ -351,6 +361,7 @@ export function TaskFieldsForm({
           />
           <span className="muted">h</span>
           <input
+            ref={minutesRef}
             type="number"
             inputMode="numeric"
             min={0}

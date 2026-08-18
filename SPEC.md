@@ -652,7 +652,8 @@ Top to bottom:
        Tasks with `empty: true` render in a visually muted/reduced style
        when not being edited. Clicking anywhere on a row's main area
        (other than the trailing controls) opens that task for inline
-       editing.
+       editing with the duration minutes field focused (title stays focused
+       when adding a new Custom block).
      - **Inline task editor** (replaces a row, or appears as a fresh row at
        the bottom when adding): a text input for the title, an optional note
        textarea (toggled by a notebook-icon button next to the empty
