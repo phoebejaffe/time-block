@@ -590,7 +590,7 @@ Top to bottom:
      showing the group's name (or a synthesized "Unnamed
      N" label) followed by its total duration in parens if it has any
      tasks (e.g. "Morning (1h 30m)"), and a small "···" overflow menu
-     (Rename / Move up / Move down / Duplicate / — separator — /
+     (Rename / Change color / Move up / Move down / Duplicate / — separator — /
      Archive / Delete) — expand it again by tapping
      the name. Archive is disabled on the last Home group and while
      that group is in a run. If this group is currently executing (§7.9),
@@ -604,12 +604,13 @@ Top to bottom:
        **Running**
        button when eligible (§7.9); and a "···" overflow menu on the far
        right — using the shared document-body portal that flips above/below
-       and clamps to the viewport (§7.5) — containing, when the group is enabled:
-       "Update default" (only shown while there's
+       and clamps to the viewport (§7.5) — containing, when the group is
+       enabled: "Update default" (only shown while there's
        no checkpoint yet — labeled **"Save as default"** — or the blocks
        have drifted from an existing checkpoint — labeled **"Update
        default"**; see §4.6) /
-       — separator — / Rename / a "Change color" swatch input / —
+       — separator —; then always: Rename / a "Change color" swatch
+       input / —
        separator — / Move up / Move down (either omitted if not
        applicable) / Duplicate / — separator — / **Archive** (disabled if
        it's the only remaining Home group, or while this group is in a

@@ -1116,13 +1116,11 @@ function BlockGroupPanel({
         >
           Rename
         </button>
-        {enabled && (
-          <GroupColorMenuItem
-            value={colorPickerValue}
-            disabled={busy}
-            onChange={handleColorChange}
-          />
-        )}
+        <GroupColorMenuItem
+          value={colorPickerValue}
+          disabled={busy}
+          onChange={handleColorChange}
+        />
         {(canMoveGroupUp || canMoveGroupDown) && (
           <>
             <div className="calendar-menu-sep" role="separator" />
