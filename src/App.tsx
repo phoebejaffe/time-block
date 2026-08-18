@@ -57,10 +57,6 @@ export default function App() {
   const plan = usePlan({
     getDefaultAnchor: () => defaultAnchorFromSettings(settingsRef.current),
   })
-  const calendars = useCalendarEvents({
-    signedIn: session.signedIn,
-    onError: (message) => session.setError(message),
-  })
   const userData = useUserData({
     signedIn: session.signedIn,
     plan: plan.plan,
@@ -73,6 +69,17 @@ export default function App() {
     () => hiddenCalendarIdSet(userData.settings),
     [userData.settings],
   )
+  const calendars = useCalendarEvents({
+    signedIn: session.signedIn,
+    onError: (message) => session.setError(message),
+    hiddenIds,
+    storedVisibleIds: userData.settings.visibleCalendarIds,
+    settingsReady: session.signedIn && !userData.loading,
+    onStoredVisibleIdsChange: (ids) => {
+      userData.patchSettings({ visibleCalendarIds: ids })
+    },
+  })
+
   const listedCalendars = useMemo(
     () => calendars.calendars.filter((c) => !hiddenIds.has(c.id)),
     [calendars.calendars, hiddenIds],
@@ -81,12 +88,6 @@ export default function App() {
     () => calendars.writableCalendars.filter((c) => !hiddenIds.has(c.id)),
     [calendars.writableCalendars, hiddenIds],
   )
-
-  const omitVisibleIds = calendars.omitVisibleIds
-  useEffect(() => {
-    if (hiddenIds.size === 0) return
-    omitVisibleIds(hiddenIds)
-  }, [hiddenIds, omitVisibleIds])
 
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
   const [commitBusy, setCommitBusy] = useState(false)

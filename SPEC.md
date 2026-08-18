@@ -709,7 +709,12 @@ library, etc.) sit above those; toasts sit above nested dialogs. Modals used:
     behind **Add user**); **Default target calendar** for Add/Update (set
     only here — not overwritten by a successful push); **Hide calendars**
     (applies across the entire app; unchecked = hidden; a lock marks
-    read-only calendars).
+    read-only calendars). Overlay visibility (toolbar calendar checkboxes)
+    is `visibleCalendarIds` in the same settings object, synced across
+    devices; a missing field seeds from Google’s selected/primary calendars
+    once, and an empty list means none shown. Hiding a calendar leaves it
+    out of the picker and overlay without clearing the overlay check, so
+    un-hiding restores it.
   - **Interface**: time & duration step (1, 2, 5, or 15 minutes for scrubbing /
     inputs); **Quick undo** and **Major undo** windows in seconds (`0s`
     disables undo).
@@ -1051,7 +1056,8 @@ whenever the calendar's visible date range changes.
   warning icon appears next to Today when the visible range is neither
   (since the whole app's mental model is "plan around now"); a calendars
   picker (checkboxes with each calendar's color swatch and name; visible
-  calendars determine which Google events are fetched/shown) and a general
+  calendars determine which Google events are fetched/shown, and that
+  choice syncs across devices in Settings — see §7.4) and a general
   overflow menu (show/hide all-day events; view switcher) — both portaled
   like other overflow menus (§7.5).
 - **Sync status indicators per task**: while the task's group has been
@@ -1073,7 +1079,8 @@ whenever the calendar's visible date range changes.
   invites; unique by lowercased email),
   `settings` (user preferences: default new-plan anchor, default Custom
   block minutes, time step, Quick/Major undo seconds (`0s` disables undo),
-  execution auto-end hours, hidden calendar ids — see §7.4).
+  execution auto-end hours, hidden calendar ids, visible overlay calendar
+  ids — see §7.4).
 - **On sign-in**, subscribe to that document in real time:
   - If it exists and its `updatedAt` is newer than the last value this tab
     itself wrote, replace all local state with the remote values
@@ -1085,7 +1092,7 @@ whenever the calendar's visible date range changes.
     subscription's own initial write as one to *ignore* when it echoes
     back (to avoid re-processing your own write as if it were a remote
     change).
-- **On local edits** (to plan, block library, archived plans, saved users, target calendar, push
+- **On local edits** (to plan, block library, archived plans, saved users, settings, target calendar, push
   history, or executing group id), debounce ~2 seconds of inactivity, then
   overwrite the
   whole document with a fresh `updatedAt` — last-write-wins at the
@@ -1242,7 +1249,7 @@ touch the in-app plan/tasks at all — it only removes calendar-side events.
 | Google OAuth session (access/refresh token, granted scopes) | `localStorage` (device) | No |
 | Sidebar width (desktop) | `localStorage` (device) | No |
 | Mobile split percentage | `localStorage` (device) | No |
-| Which calendars are toggled visible | in-memory only (hidden calendars from Settings are also omitted from the picker) | No (visibility toggles reset on reload; hide list syncs) |
+| Which calendars are toggled visible | Firestore `users/{uid}.settings.visibleCalendarIds` | Yes (missing = seed from Google selected/primary; hidden calendars from Settings are omitted from the picker) |
 | Live edit/drag previews | in-memory only | No |
 
 The app deliberately never persists "which day you're looking at" — every

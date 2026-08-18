@@ -471,7 +471,9 @@ export function SettingsModal({
                 </h3>
                 <p className="muted settings-section-hint">
                   Applies across the entire app. A lock marks read-only
-                  calendars.
+                  calendars. Overlay checks in the toolbar stay in sync
+                  across devices; hiding a calendar here does not forget
+                  that check.
                 </p>
                 {calendars.length === 0 ? (
                   <p className="muted settings-section-empty">

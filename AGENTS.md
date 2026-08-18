@@ -147,7 +147,8 @@ testing.
 - **Settings** — `targetCalendarId` is top-level on the user doc; everything
   else lives in `settings`. Default target calendar is set only in Settings
   (not overwritten on successful push). `hiddenCalendarIds` filters calendars
-  app-wide (picker + commit modal). Time step is 1, 2, 5, or 15 minutes.
+  app-wide (picker + commit modal). Overlay checkboxes persist as
+  `visibleCalendarIds` (synced; empty means none shown). Time step is 1, 2, 5, or 15 minutes.
   Quick/Major undo seconds (`0` disables undo) feed `undoNoticeOptions`.
 - **Plan block rows** — disable icon stays on the row; Edit / Add to library /
   Delete live in a per-block ··· menu (`TaskBlockMenu` in `TaskSidebar.tsx`).

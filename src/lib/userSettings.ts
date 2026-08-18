@@ -28,6 +28,12 @@ export type UserSettings = {
   executionAutoEndHours: number
   /** Google calendar ids omitted from calendars picker + commit modal. */
   hiddenCalendarIds: string[]
+  /**
+   * Overlay picker checks, synced across devices.
+   * `undefined` = not chosen yet (seed from Google selected/primary).
+   * `[]` = none shown.
+   */
+  visibleCalendarIds?: string[]
 }
 
 export function defaultUserSettings(): UserSettings {
@@ -75,15 +81,8 @@ export function normalizeUserSettings(raw: unknown): UserSettings {
     ? (s.timeStepMinutes as TimeStepMinutes)
     : d.timeStepMinutes
 
-  const hidden = Array.isArray(s.hiddenCalendarIds)
-    ? [
-        ...new Set(
-          s.hiddenCalendarIds.filter(
-            (id): id is string => typeof id === 'string' && id.length > 0,
-          ),
-        ),
-      ]
-    : d.hiddenCalendarIds
+  const hidden = normalizeIdList(s.hiddenCalendarIds) ?? d.hiddenCalendarIds
+  const visible = normalizeIdList(s.visibleCalendarIds)
 
   return {
     defaultAnchorKind: kind,
@@ -116,7 +115,45 @@ export function normalizeUserSettings(raw: unknown): UserSettings {
       d.executionAutoEndHours,
     ),
     hiddenCalendarIds: hidden,
+    ...(visible !== undefined ? { visibleCalendarIds: visible } : {}),
   }
+}
+
+function normalizeIdList(raw: unknown): string[] | undefined {
+  if (!Array.isArray(raw)) return undefined
+  return [
+    ...new Set(
+      raw.filter((id): id is string => typeof id === 'string' && id.length > 0),
+    ),
+  ]
+}
+
+export function googleDefaultVisibleCalendarIds(
+  list: { id: string; selected?: boolean; primary?: boolean }[],
+): string[] {
+  const initial = list.filter((c) => c.selected || c.primary).map((c) => c.id)
+  if (initial.length === 0 && list[0]) return [list[0].id]
+  return initial
+}
+
+export function pruneVisibleCalendarIds(
+  stored: string[] | undefined,
+  availableIds: Iterable<string>,
+): string[] | undefined {
+  if (!stored) return undefined
+  const available = new Set(availableIds)
+  return stored.filter((id) => available.has(id))
+}
+
+export function sameCalendarIdSet(
+  a: Iterable<string>,
+  b: Iterable<string>,
+): boolean {
+  const left = [...a]
+  const right = [...b]
+  if (left.length !== right.length) return false
+  const set = new Set(left)
+  return right.every((id) => set.has(id))
 }
 
 /** Build today's default stack anchor from settings. */
