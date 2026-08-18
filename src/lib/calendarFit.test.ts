@@ -3,13 +3,14 @@ import {
   CALENDAR_SLOT_MAX_MINUTES,
   CALENDAR_SLOT_MIN_MINUTES,
   CALENDAR_SLOT_MINUTES,
+  FIT_ZOOM_FILL,
   clockMinutes,
   contentYForMinutes,
   easeOut,
   enabledPlansFingerprint,
   enabledPlansTimeRange,
   fitAnimFrame,
-  nearestScrollTop,
+  fitScrollTop,
   planFit,
 } from './calendarFit'
 import { createBlockGroup, createTask } from './tasks'
@@ -129,7 +130,7 @@ describe('enabledPlansTimeRange', () => {
   })
 })
 
-describe('contentYForMinutes / nearestScrollTop', () => {
+describe('contentYForMinutes / fitScrollTop', () => {
   const slotH = 20
 
   it('maps 5am to y=0 and each 15 minutes to one slot', () => {
@@ -154,20 +155,37 @@ describe('contentYForMinutes / nearestScrollTop', () => {
   })
 
   it('is a no-op when the range is already fully visible', () => {
-    expect(nearestScrollTop(100, 400, 120, 300)).toBeNull()
+    expect(fitScrollTop(100, 400, 120, 300)).toBeNull()
+    // even if shifting would also show a fittable now bar
+    expect(fitScrollTop(0, 200, 50, 100, 240)).toBeNull()
   })
 
-  it('scrolls up to reveal a range above the view', () => {
-    expect(nearestScrollTop(400, 200, 50, 150)).toBe(50)
+  it('centers a range that is off-screen', () => {
+    // range 50–150 in a 200px view → extra 100 → scrollTop 0
+    expect(fitScrollTop(400, 200, 50, 150)).toBe(0)
+    // range 250–350 → extra 100 → scrollTop 200
+    expect(fitScrollTop(0, 200, 250, 350)).toBe(200)
   })
 
-  it('scrolls down to reveal a range below the view', () => {
-    expect(nearestScrollTop(0, 200, 250, 350)).toBe(150)
+  it('parks extra space on the now-bar side when now can fit', () => {
+    // now above (y=10), plans 100–180, view 200: union fits → plans at bottom
+    expect(fitScrollTop(400, 200, 100, 180, 10)).toBe(-20)
+    // now below (y=240), plans 50–100, view 200: union fits → plans at top
+    expect(fitScrollTop(400, 200, 50, 100, 240)).toBe(50)
+  })
+
+  it('centers when now sits inside the range', () => {
+    expect(fitScrollTop(400, 200, 50, 150, 100)).toBe(0)
+  })
+
+  it('centers when now cannot share the viewport', () => {
+    // plans 0–80, now at 400, view 200: union 400px > 200
+    expect(fitScrollTop(300, 200, 0, 80, 400)).toBe(-60)
   })
 
   it('parks an oversized range at its start', () => {
-    expect(nearestScrollTop(80, 200, 0, 800)).toBe(0)
-    expect(nearestScrollTop(0, 200, 0, 800)).toBeNull()
+    expect(fitScrollTop(80, 200, 0, 800)).toBe(0)
+    expect(fitScrollTop(0, 200, 0, 800)).toBeNull()
   })
 })
 
@@ -213,7 +231,40 @@ describe('planFit', () => {
     }
   })
 
-  it('zooms out when the stack is taller than the view', () => {
+  it('zooms out until the stack fills 90% of the view', () => {
+    const result = planFit({
+      ...base,
+      startMinutes: 9 * 60,
+      endMinutes: 15 * 60,
+      viewHeight: 400,
+      zoom: 2,
+      minZoom: 0.95,
+    })
+    expect(result.kind).toBe('zoom')
+    if (result.kind === 'zoom') {
+      const top =
+        contentYForMinutes(
+          9 * 60,
+          base.slotMinMinutes,
+          base.slotMaxMinutes,
+          base.slotMinutes,
+          20,
+        ) - 16
+      const bot =
+        contentYForMinutes(
+          15 * 60,
+          base.slotMinMinutes,
+          base.slotMaxMinutes,
+          base.slotMinutes,
+          20,
+        ) + 16
+      const expected = 2 * ((400 * FIT_ZOOM_FILL) / (bot - top))
+      expect(result.zoom).toBeCloseTo(expected)
+      expect(result.zoom).toBeGreaterThanOrEqual(0.95)
+    }
+  })
+
+  it('stops at min zoom when 90% fill would go smaller', () => {
     const result = planFit({
       ...base,
       startMinutes: 6 * 60,
@@ -224,8 +275,7 @@ describe('planFit', () => {
     })
     expect(result.kind).toBe('zoom')
     if (result.kind === 'zoom') {
-      expect(result.zoom).toBeLessThan(2)
-      expect(result.zoom).toBeGreaterThanOrEqual(0.95)
+      expect(result.zoom).toBe(0.95)
     }
   })
 
@@ -238,6 +288,58 @@ describe('planFit', () => {
       viewHeight: 800,
     })
     expect(result.kind).not.toBe('zoom')
+  })
+
+  it('centers the stack when now is far away', () => {
+    const result = planFit({
+      ...base,
+      scrollTop: 0,
+      viewHeight: 200,
+      nowMinutes: 22 * 60,
+    })
+    expect(result.kind).toBe('scroll')
+    if (result.kind === 'scroll') {
+      const top =
+        contentYForMinutes(
+          9 * 60,
+          base.slotMinMinutes,
+          base.slotMaxMinutes,
+          base.slotMinutes,
+          20,
+        ) - 16
+      const bot =
+        contentYForMinutes(
+          10 * 60,
+          base.slotMinMinutes,
+          base.slotMaxMinutes,
+          base.slotMinutes,
+          20,
+        ) + 16
+      expect(result.scrollTop).toBeCloseTo(top - (200 - (bot - top)) / 2)
+    }
+  })
+
+  it('keeps extra space on the now side when the now bar can fit', () => {
+    const result = planFit({
+      ...base,
+      startMinutes: 8 * 60,
+      endMinutes: 8 * 60 + 30,
+      scrollTop: 900,
+      viewHeight: 400,
+      nowMinutes: 12 * 60,
+    })
+    expect(result.kind).toBe('scroll')
+    if (result.kind === 'scroll') {
+      const top =
+        contentYForMinutes(
+          8 * 60,
+          base.slotMinMinutes,
+          base.slotMaxMinutes,
+          base.slotMinutes,
+          20,
+        ) - 16
+      expect(result.scrollTop).toBeCloseTo(Math.max(0, top))
+    }
   })
 })
 

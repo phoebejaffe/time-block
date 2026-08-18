@@ -16,6 +16,8 @@ export const FIT_PADDING_PX = 16
 export const FIT_SCROLL_MS = 500
 export const FIT_DEBOUNCE_MS = 250
 export const FIT_VISIBLE_PX = 2
+/** When zooming out to fit, occupied stacks target this fraction of the view. */
+export const FIT_ZOOM_FILL = 0.9
 
 export function clockMinutes(date: Date): number {
   return (
@@ -110,16 +112,20 @@ export function contentYForMinutes(
 }
 
 /**
- * Smallest scrollTop that puts `[rangeTop, rangeBottom]` in view.
- * `null` when the range is already fully visible (or its start is already
- * parked at the top when the range is taller than the view).
+ * ScrollTop that puts `[rangeTop, rangeBottom]` in view.
+ * Centers the range, unless `nowY` can share the viewport — then extra
+ * space is kept on the now-indicator side so that bar stays visible.
+ * `null` when the range is already fully visible (or an oversized range
+ * is already parked at the top).
  */
-export function nearestScrollTop(
+export function fitScrollTop(
   scrollTop: number,
   viewHeight: number,
   rangeTop: number,
   rangeBottom: number,
+  nowY: number | null = null,
   epsilon = FIT_VISIBLE_PX,
+  nowPad = 0,
 ): number | null {
   const rangeHeight = rangeBottom - rangeTop
   if (rangeHeight <= viewHeight) {
@@ -130,8 +136,21 @@ export function nearestScrollTop(
     ) {
       return null
     }
-    if (rangeTop < scrollTop) return rangeTop
-    return rangeBottom - viewHeight
+
+    const extra = viewHeight - rangeHeight
+    const nowFits =
+      nowY != null &&
+      Math.max(rangeBottom, nowY + nowPad) -
+        Math.min(rangeTop, nowY - nowPad) <=
+        viewHeight + epsilon
+
+    if (nowFits && nowY < rangeTop - epsilon) {
+      return rangeBottom - viewHeight
+    }
+    if (nowFits && nowY > rangeBottom + epsilon) {
+      return rangeTop
+    }
+    return rangeTop - extra / 2
   }
   if (Math.abs(scrollTop - rangeTop) <= epsilon) return null
   return rangeTop
@@ -150,6 +169,8 @@ export type PlanFitInput = {
   minZoom: number
   paddingPx: number
   epsilon?: number
+  /** Local minutes from midnight of “now”; omitted when outside the grid. */
+  nowMinutes?: number
 }
 
 export type PlanFit =
@@ -178,6 +199,7 @@ export function planFit(input: PlanFitInput): PlanFit {
     minZoom,
     paddingPx,
     epsilon = FIT_VISIBLE_PX,
+    nowMinutes,
   } = input
 
   if (viewHeight <= 0 || slotHeight <= 0 || zoom <= 0) return { kind: 'visible' }
@@ -199,7 +221,8 @@ export function planFit(input: PlanFitInput): PlanFit {
   let nextZoom = zoom
   let nextSlotH = slotHeight
   if (rangeH > viewHeight + epsilon && zoom > minZoom + 1e-6) {
-    const fitted = Math.max(minZoom, zoom * (viewHeight / rangeH))
+    const fillH = viewHeight * FIT_ZOOM_FILL
+    const fitted = Math.max(minZoom, zoom * (fillH / rangeH))
     if (fitted < zoom - 1e-4) {
       nextZoom = fitted
       nextSlotH = slotHeight * (nextZoom / zoom)
@@ -213,7 +236,20 @@ export function planFit(input: PlanFitInput): PlanFit {
   const maxScroll = Math.max(0, contentH - viewHeight)
   const scale = nextSlotH / slotHeight
   const fromScroll = Math.max(0, Math.min(maxScroll, scrollTop * scale))
-  const raw = nearestScrollTop(fromScroll, viewHeight, top, bot, epsilon)
+  const nowOnGrid =
+    nowMinutes != null &&
+    nowMinutes >= slotMinMinutes &&
+    nowMinutes < slotMaxMinutes
+  const nowY = nowOnGrid ? y(nowMinutes, nextSlotH) : null
+  const raw = fitScrollTop(
+    fromScroll,
+    viewHeight,
+    top,
+    bot,
+    nowY,
+    epsilon,
+    paddingPx,
+  )
   const target =
     raw == null ? null : Math.max(0, Math.min(maxScroll, raw))
 

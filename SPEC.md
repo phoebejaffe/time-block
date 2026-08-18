@@ -1081,14 +1081,19 @@ whenever the calendar's visible date range changes.
 - **Fit enabled plans**: when a plan is enabled or disabled, or when
   enabled stacks' occupied times change (Starts/Ends clock, duration that
   moves the union range), the time grid scrolls so every enabled stack is
-  in view — 0.5s ease-out. If they already fit in the viewport, it does
-  not scroll. If they cannot fit at the current zoom, it zooms **out**
-  just enough (never in; still clamped to 0.95×). Scroll and zoom share
-  the same 0.5s ease-out; zoom is not animated when it does not change.
-  Debounced (~250ms) and skipped while the user is scrubbing a time, dragging a
-  stack, or pinching zoom, so it does not fight live interaction. Not run
-  on the main calendar's first layout (keeps FullCalendar's 6am
-  `scrollTime`); execution's calendar does fit on mount.
+  in view — 0.5s ease-out, **centered** in the time grid. If they already
+  fit in the viewport, it does not scroll. When it does scroll, if today's
+  current-time bar can share that viewport with the stacks, extra space is
+  kept on the now-bar side so the bar stays visible; otherwise the stacks
+  stay centered. The now-bar is not used to zoom extra or to trigger a
+  scroll on its own. If the stacks cannot fit at the current zoom, it
+  zooms **out** until they occupy about 90% of the time grid (never in;
+  still clamped to 0.95×). Scroll and zoom share the same 0.5s ease-out;
+  zoom is not animated when it does not change. Debounced (~250ms) and
+  skipped while the user is scrubbing a time, dragging a stack, or pinching
+  zoom, so it does not fight live interaction. Not run on the main
+  calendar's first layout (keeps FullCalendar's 6am `scrollTime`);
+  execution's calendar does fit on mount.
 - **View controls**: Day / 3-Day / Week view switch (Week hidden on narrow
   viewports); Previous/Next/Today navigation; a "not today or tomorrow"
   warning icon appears next to Today when the visible range is neither

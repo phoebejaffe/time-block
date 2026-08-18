@@ -11,6 +11,7 @@ import {
   FIT_DEBOUNCE_MS,
   FIT_PADDING_PX,
   FIT_SCROLL_MS,
+  clockMinutes,
   enabledPlansFingerprint,
   enabledPlansTimeRange,
   easeOut,
@@ -108,6 +109,8 @@ type UseFitEnabledPlansOptions = {
   calendarHeight: number
   /** When true (execution), fit on first layout instead of keeping scrollTime. */
   fitOnMount?: boolean
+  /** Now-bar bias only when today's column is on screen. */
+  includeNow?: boolean
 }
 
 /**
@@ -122,6 +125,7 @@ export function useFitEnabledPlans({
   pinchingRef,
   calendarHeight,
   fitOnMount = false,
+  includeNow = false,
 }: UseFitEnabledPlansOptions) {
   const fingerprint = enabledPlansFingerprint(groups)
   const skippedInitialRef = useRef(false)
@@ -199,6 +203,7 @@ export function useFitEnabledPlans({
         zoom: fromZoom,
         minZoom: CAL_ZOOM_MIN,
         paddingPx: FIT_PADDING_PX,
+        nowMinutes: includeNow ? clockMinutes(new Date()) : undefined,
       })
 
       if (fit.kind === 'visible') return 'done'
@@ -234,5 +239,12 @@ export function useFitEnabledPlans({
     return () => {
       if (timer) clearTimeout(timer)
     }
-  }, [fingerprint, calendarHeight, fitOnMount, bodyRef, pinchingRefStable])
+  }, [
+    fingerprint,
+    calendarHeight,
+    fitOnMount,
+    includeNow,
+    bodyRef,
+    pinchingRefStable,
+  ])
 }

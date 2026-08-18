@@ -403,6 +403,7 @@ export function CalendarView({
     pinchingRef,
     calendarHeight,
     fitOnMount: scrollTasksIntoViewOnMount,
+    includeNow: isOnToday,
   })
 
   /**
