@@ -894,6 +894,22 @@ function GroupColorMenuItem({
   )
 }
 
+/** Run on pointer down so a scroll-repositioned menu still activates. */
+function planMenuItemProps(run: () => void) {
+  return {
+    onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) => {
+      if (event.button !== 0) return
+      event.preventDefault()
+      run()
+    },
+    onKeyDown: (event: React.KeyboardEvent<HTMLButtonElement>) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return
+      event.preventDefault()
+      run()
+    },
+  }
+}
+
 function BlockGroupPanel({
   group,
   collapsedLabel,
@@ -952,6 +968,7 @@ function BlockGroupPanel({
   const listMenu = useFixedMenu({
     open: listMenuOpen,
     align: 'end',
+    constrainHeight: true,
     onClose: () => setListMenuOpen(false),
   })
   const libraryMenuRef = useRef<HTMLDivElement>(null)
@@ -1104,10 +1121,10 @@ function BlockGroupPanel({
               role="menuitem"
               className="calendar-menu-item"
               disabled={busy || tasks.length === 0}
-              onClick={() => {
+              {...planMenuItemProps(() => {
                 setListMenuOpen(false)
                 onSaveCheckpoint()
-              }}
+              })}
             >
               {group.checkpoint ? 'Update default' : 'Save as default'}
             </button>
@@ -1119,10 +1136,10 @@ function BlockGroupPanel({
           role="menuitem"
           className="calendar-menu-item"
           disabled={busy}
-          onClick={() => {
+          {...planMenuItemProps(() => {
             setListMenuOpen(false)
             onOpenName()
-          }}
+          })}
         >
           Rename
         </button>
@@ -1140,10 +1157,10 @@ function BlockGroupPanel({
                 role="menuitem"
                 className="calendar-menu-item"
                 disabled={busy}
-                onClick={() => {
+                {...planMenuItemProps(() => {
                   setListMenuOpen(false)
                   onMoveGroupUp()
-                }}
+                })}
               >
                 Move up
               </button>
@@ -1154,10 +1171,10 @@ function BlockGroupPanel({
                 role="menuitem"
                 className="calendar-menu-item"
                 disabled={busy}
-                onClick={() => {
+                {...planMenuItemProps(() => {
                   setListMenuOpen(false)
                   onMoveGroupDown()
-                }}
+                })}
               >
                 Move down
               </button>
@@ -1169,10 +1186,10 @@ function BlockGroupPanel({
           role="menuitem"
           className="calendar-menu-item"
           disabled={busy}
-          onClick={() => {
+          {...planMenuItemProps(() => {
             setListMenuOpen(false)
             onDuplicateGroup()
-          }}
+          })}
         >
           Duplicate
         </button>
@@ -1191,10 +1208,10 @@ function BlockGroupPanel({
                     ? 'Keep at least one plan.'
                     : undefined
               }
-              onClick={() => {
+              {...planMenuItemProps(() => {
                 setListMenuOpen(false)
                 onArchiveGroup()
-              }}
+              })}
             >
               Archive
             </button>
@@ -1203,10 +1220,10 @@ function BlockGroupPanel({
               role="menuitem"
               className="calendar-menu-item"
               disabled={busy || !canDeleteGroup}
-              onClick={() => {
+              {...planMenuItemProps(() => {
                 setListMenuOpen(false)
                 onDeleteGroup()
-              }}
+              })}
             >
               Delete
             </button>
@@ -1220,10 +1237,10 @@ function BlockGroupPanel({
               role="menuitem"
               className="calendar-menu-item"
               disabled={busy || !onCalendar}
-              onClick={() => {
+              {...planMenuItemProps(() => {
                 setListMenuOpen(false)
                 void onDeleteFromCalendar()
-              }}
+              })}
             >
               Delete from calendar
             </button>
@@ -1900,14 +1917,20 @@ function BlockGroupPanel({
                         ))}
                     </span>
                   </div>
-                  <div className="task-card-icons">
+                  <div
+                    className="task-card-icons"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <button
                       type="button"
                       className="icon-btn"
                       aria-label={
-                        isTaskDisabled(task)
-                          ? `Enable ${task.title}`
-                          : `Disable ${task.title}`
+                        isTaskDelay(task)
+                          ? 'Delays can’t be disabled'
+                          : isTaskDisabled(task)
+                            ? `Enable ${task.title}`
+                            : `Disable ${task.title}`
                       }
                       aria-pressed={isTaskDisabled(task)}
                       title={

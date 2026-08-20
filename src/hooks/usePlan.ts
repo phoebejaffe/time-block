@@ -7,6 +7,7 @@ import {
   defaultAnchor,
   defaultPlan,
   isTaskDelay,
+  moveGroupInList,
   prepareGroupForExecution,
   shiftAnchor,
   tasksFromCheckpoint,
@@ -137,15 +138,8 @@ export function usePlan(options?: { getDefaultAnchor?: () => StackAnchor }) {
   const moveGroup = useCallback(
     (groupId: string, direction: 'up' | 'down') => {
       updatePlan((prev) => {
-        const index = prev.groups.findIndex((g) => g.id === groupId)
-        if (index < 0) return prev
-        const target = direction === 'up' ? index - 1 : index + 1
-        if (target < 0 || target >= prev.groups.length) return prev
-        const groups = [...prev.groups]
-        const [moved] = groups.splice(index, 1)
-        if (!moved) return prev
-        groups.splice(target, 0, moved)
-        return { groups }
+        const groups = moveGroupInList(prev.groups, groupId, direction)
+        return groups === prev.groups ? prev : { groups }
       })
     },
     [updatePlan],

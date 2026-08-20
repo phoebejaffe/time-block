@@ -361,6 +361,23 @@ export function isGroupEnabled(group: BlockGroup): boolean {
   return group.enabled !== false
 }
 
+/** Reorder a group one slot toward the start (`up`) or end (`down`). */
+export function moveGroupInList(
+  groups: BlockGroup[],
+  groupId: string,
+  direction: 'up' | 'down',
+): BlockGroup[] {
+  const index = groups.findIndex((g) => g.id === groupId)
+  if (index < 0) return groups
+  const target = direction === 'up' ? index - 1 : index + 1
+  if (target < 0 || target >= groups.length) return groups
+  const next = [...groups]
+  const [moved] = next.splice(index, 1)
+  if (!moved) return groups
+  next.splice(target, 0, moved)
+  return next
+}
+
 /** Snapshot the group's current blocks + anchor as a revertible default. */
 export function createCheckpoint(
   tasks: Task[],

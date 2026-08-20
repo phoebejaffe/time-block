@@ -584,7 +584,9 @@ Top to bottom:
 1. **Header row** — app name/logo mark, plus a Menu button on the
    far side (an icon-only hamburger-style trigger opening a dropdown; see
    §7.5 for its menu contents).
-2. **A vertical list of "plan" panels**, one per group in the plan,
+2. **A vertical list of full-width "plan" panels**, one per group in the
+   plan (never wrapping into multiple columns, even when the sidebar is
+   wide),
    each independently either **expanded** or **collapsed**:
    - **Collapsed** group (its `enabled` flag is off): a single compact row
      showing the group's name (or a synthesized "Unnamed
@@ -818,10 +820,11 @@ Settings → App.
 Dropdowns and overflow menus (plan ···, block ···, block library picker, app menu,
 calendar menus, archive/library category menus) all portal to
 `document.body` so they are not clipped by sidebar or modal overflow; they
-flip above/below the trigger (6px gap) and clamp to the viewport. Compact
-overflow menus share one panel chrome (radius, padding, 12.5rem min width,
-0.9rem items); the block-library picker and calendars panel are the wider
-variant. They close on
+flip above or below the trigger (6px gap) and clamp to the viewport,
+scrolling inside the panel if the menu is taller than the remaining space.
+Compact overflow menus share one panel chrome (radius, padding, 12.5rem min
+width, 0.9rem items); the block-library picker and calendars panel are the
+wider variant. They close on
 Escape or on an outside `mousedown` in the capture phase; that outside
 press is cancelled so it does not activate the control underneath (the
 following `click` is swallowed too). While a

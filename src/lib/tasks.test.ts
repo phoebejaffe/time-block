@@ -21,6 +21,7 @@ import {
   localDateKey,
   markCommittedDay,
   migratePlan,
+  moveGroupInList,
   normalizeBlockLibrary,
   pickViewDate,
   resolveSavedBlocksFromKeys,
@@ -1109,5 +1110,34 @@ describe('commit-day keying', () => {
     expect(store.get(COMMITTED_DAYS_KEY)).toBe(
       JSON.stringify(['2026-07-18']),
     )
+  })
+})
+
+describe('moveGroupInList', () => {
+  const groups = [
+    createBlockGroup({ id: 'a', name: 'A' }),
+    createBlockGroup({ id: 'b', name: 'B' }),
+    createBlockGroup({ id: 'c', name: 'C' }),
+  ]
+
+  it('moves the last group up', () => {
+    expect(moveGroupInList(groups, 'c', 'up').map((g) => g.id)).toEqual([
+      'a',
+      'c',
+      'b',
+    ])
+  })
+
+  it('moves a middle group down into the last slot', () => {
+    expect(moveGroupInList(groups, 'b', 'down').map((g) => g.id)).toEqual([
+      'a',
+      'c',
+      'b',
+    ])
+  })
+
+  it('is a no-op at the ends', () => {
+    expect(moveGroupInList(groups, 'a', 'up')).toBe(groups)
+    expect(moveGroupInList(groups, 'c', 'down')).toBe(groups)
   })
 })
