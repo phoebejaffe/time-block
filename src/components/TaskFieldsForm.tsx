@@ -391,65 +391,67 @@ export function TaskFieldsForm({
           />
           <span className="muted">m</span>
         </div>
-        <button
-          type="button"
-          className={[
-            'btn',
-            'btn-ghost',
-            'btn-sm',
-            'task-empty-toggle',
-            empty ? 'is-active' : '',
-          ]
-            .filter(Boolean)
-            .join(' ')}
-          aria-pressed={empty}
-          title={
-            empty
-              ? 'Show on calendar'
-              : 'Empty block — hide from calendar, keep time gap'
-          }
-          onClick={() => setEmpty((current) => !current)}
-        >
-          ∅
-        </button>
-        <button
-          type="button"
-          className={[
-            'btn',
-            'btn-ghost',
-            'btn-sm',
-            'task-note-toggle',
-            noteOpen || Boolean(note.trim()) ? 'is-active' : '',
-          ]
-            .filter(Boolean)
-            .join(' ')}
-          aria-pressed={noteOpen}
-          aria-label={note.trim() ? 'Edit note' : 'Add note'}
-          title={note.trim() ? 'Edit note' : 'Add note'}
-          onClick={() => {
-            setNoteOpen((open) => {
-              if (open) return false
-              queueMicrotask(() => noteRef.current?.focus())
-              return true
-            })
-          }}
-        >
-          <NoteIcon />
-        </button>
-        <button
-          type="button"
-          className="btn btn-ghost btn-sm"
-          onClick={onCancel}
-        >
-          Cancel
-        </button>
-        <button
-          type="submit"
-          className="btn btn-primary btn-sm"
-          disabled={busy}
-        >
-          {submitLabel}
-        </button>
+        <div className="task-form-actions">
+          <button
+            type="button"
+            className={[
+              'btn',
+              'btn-ghost',
+              'btn-sm',
+              'task-empty-toggle',
+              empty ? 'is-active' : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
+            aria-pressed={empty}
+            title={
+              empty
+                ? 'Show on calendar'
+                : 'Empty block — hide from calendar, keep time gap'
+            }
+            onClick={() => setEmpty((current) => !current)}
+          >
+            ∅
+          </button>
+          <button
+            type="button"
+            className={[
+              'btn',
+              'btn-ghost',
+              'btn-sm',
+              'task-note-toggle',
+              noteOpen || Boolean(note.trim()) ? 'is-active' : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
+            aria-pressed={noteOpen}
+            aria-label={note.trim() ? 'Edit note' : 'Add note'}
+            title={note.trim() ? 'Edit note' : 'Add note'}
+            onClick={() => {
+              setNoteOpen((open) => {
+                if (open) return false
+                queueMicrotask(() => noteRef.current?.focus())
+                return true
+              })
+            }}
+          >
+            <NoteIcon />
+          </button>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={onCancel}
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            className="btn btn-primary btn-sm"
+            disabled={busy}
+          >
+            {submitLabel}
+          </button>
+        </div>
       </div>
     </form>
   )

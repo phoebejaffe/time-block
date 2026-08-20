@@ -364,6 +364,7 @@ body.is-sidebar-resizing .main-panel {
 
 .task-form-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.4rem;
 }
@@ -372,8 +373,31 @@ body.is-sidebar-resizing .main-panel {
   flex-shrink: 0;
 }
 
-.task-form-row .task-empty-toggle {
+.task-form-actions {
+  display: flex;
+  align-items: stretch;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  flex: 1 1 auto;
+  min-width: min-content;
   margin-left: auto;
+}
+
+.task-form-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.task-form-actions .task-empty-toggle,
+.task-form-actions .task-note-toggle {
+  width: 2.15rem;
+  height: 2.15rem;
+  padding: 0;
+  flex-shrink: 0;
+  align-self: center;
+  border-radius: 50%;
 }
 
 .task-form-duration {

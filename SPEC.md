@@ -662,9 +662,10 @@ Top to bottom:
        textarea (toggled by a notebook-icon button next to the empty
        toggle; shown automatically when the block already has a note, or
        when opened via **Add note**), separate hours
-       and minutes duration fields, a toggle button for the "empty/spacer"
-       flag, and Cancel/Save (or Cancel/Add) buttons. See §7.7 for its
-       interaction details.
+       and minutes duration fields on the first row, then empty/note toggles
+       plus Cancel/Save (or Cancel/Add) on the same action row — wrapping to
+       a second line when the editor is narrow. See §7.7 for its interaction
+       details.
      - **"Add new" row** (bottom of the list, when not actively adding or
        editing): two side-by-side triggers — **"Library block"** opens a
        **block library picker** dropdown (grouped by category, each block
