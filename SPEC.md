@@ -642,8 +642,8 @@ Top to bottom:
        the library) / — separator — / **Delete**. **Add note** / **Edit note**
        opens the inline editor with the note field shown and focused.
        **Add to library** opens
-       a small modal to pick a target category (or create one if the library
-       is empty), with **Add** and **Add and open library**; saves
+       a small modal to pick a target category (or name a new one if the
+       library is empty), with **Add** and **Add and open library**; saves
        title/duration/`empty`/`note` into that category. **Add and open library**
        then opens the block library modal scrolled to the new block, which
        is highlighted in green for 4 seconds then fades over 2 seconds. The
@@ -759,8 +759,10 @@ library, etc.) sit above those; toasts sit above nested dialogs. Modals used:
   task-editor UI as the sidebar (including the note-icon button; rows show
   a note icon when the saved block has a `note`; library rows keep
   edit/delete icon buttons rather than the plan-row ··· menu), and
-  an "New block +" button; plus a "New category +" button below the list.
-  Closed via its header's "×" button, clicking outside, or Escape. Shows an
+  an "New block +" button; plus a "New category +" button below the list
+  that opens a nested name dialog (Create — same pattern as New folder),
+  so the category is named before it exists. Closed via its header's "×"
+  button, clicking outside, or Escape. Shows an
   empty-state message if there are no categories. A freshly-added block
   opens its inline editor with a *blank* title field (unlike the sidebar's
   task editor, this is the one place a draft can be cancelled: if its title

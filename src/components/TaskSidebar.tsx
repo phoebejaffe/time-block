@@ -241,6 +241,7 @@ export function TaskSidebar({
   )
   const [addToLibraryTask, setAddToLibraryTask] = useState<Task | null>(null)
   const [addToLibraryCategoryId, setAddToLibraryCategoryId] = useState('')
+  const [addToLibraryCategoryName, setAddToLibraryCategoryName] = useState('')
   const [scrollToGroupId, setScrollToGroupId] = useState<string | null>(null)
   const blockGroupsRef = useRef<HTMLDivElement>(null)
   const [selectedCommitIds, setSelectedCommitIds] = useState<string[]>([])
@@ -497,6 +498,7 @@ export function TaskSidebar({
             onAddToLibrary={(task) => {
               setAddToLibraryTask(task)
               setAddToLibraryCategoryId(blockLibrary.categories[0]?.id ?? '')
+              setAddToLibraryCategoryName('')
             }}
             timeStepMinutes={settings.timeStepMinutes}
             defaultBlockMinutes={settings.defaultBlockMinutes}
@@ -702,11 +704,33 @@ export function TaskSidebar({
           title="Add to block library"
           onClose={() => setAddToLibraryTask(null)}
         >
-          <div className="modal-form">
+          <form
+            className="modal-form"
+            onSubmit={(e) => {
+              e.preventDefault()
+              if (blockLibrary.categories.length > 0) return
+              const category = {
+                id: crypto.randomUUID(),
+                name: addToLibraryCategoryName.trim() || 'Untitled',
+                blocks: [],
+              }
+              onReplaceBlockLibrary(
+                touchBlockLibrary([...blockLibrary.categories, category]),
+              )
+              setAddToLibraryCategoryId(category.id)
+              setAddToLibraryCategoryName('')
+            }}
+          >
             {blockLibrary.categories.length === 0 ? (
-              <p className="muted">
-                No categories yet. Create one to save this block.
-              </p>
+              <label>
+                <span>Category name</span>
+                <input
+                  value={addToLibraryCategoryName}
+                  onChange={(e) => setAddToLibraryCategoryName(e.target.value)}
+                  placeholder="Morning"
+                  autoFocus
+                />
+              </label>
             ) : (
               <label>
                 <span>Category</span>
@@ -732,21 +756,7 @@ export function TaskSidebar({
                 Cancel
               </button>
               {blockLibrary.categories.length === 0 ? (
-                <button
-                  type="button"
-                  className="btn btn-primary btn-sm"
-                  onClick={() => {
-                    const category = {
-                      id: crypto.randomUUID(),
-                      name: 'New category',
-                      blocks: [],
-                    }
-                    onReplaceBlockLibrary(
-                      touchBlockLibrary([...blockLibrary.categories, category]),
-                    )
-                    setAddToLibraryCategoryId(category.id)
-                  }}
-                >
+                <button type="submit" className="btn btn-primary btn-sm">
                   Create category
                 </button>
               ) : (
@@ -774,7 +784,7 @@ export function TaskSidebar({
                 </>
               )}
             </div>
-          </div>
+          </form>
         </Modal>
       )}
 

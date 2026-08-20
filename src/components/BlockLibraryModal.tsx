@@ -42,6 +42,7 @@ export function BlockLibraryModal({
   majorUndoSeconds = 10,
 }: BlockLibraryModalProps) {
   const [editingKey, setEditingKey] = useState<string | null>(null)
+  const [creatingCategory, setCreatingCategory] = useState(false)
   const [renamingCategoryId, setRenamingCategoryId] = useState<string | null>(
     null,
   )
@@ -62,13 +63,25 @@ export function BlockLibraryModal({
     return () => window.clearTimeout(timeout)
   }, [focusBlockId])
 
+  function closeCategoryNameDialog() {
+    setCreatingCategory(false)
+    setRenamingCategoryId(null)
+    setCategoryNameInput('')
+  }
+
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') onClose()
+      if (event.key !== 'Escape') return
+      if (creatingCategory || renamingCategoryId) {
+        event.preventDefault()
+        closeCategoryNameDialog()
+        return
+      }
+      onClose()
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [onClose])
+  }, [creatingCategory, renamingCategoryId, onClose])
 
   function commitCategories(categories: BlockLibraryCategory[]) {
     onChange(touchBlockLibrary(categories))
@@ -84,12 +97,9 @@ export function BlockLibraryModal({
   }
 
   function addCategory() {
-    const category: BlockLibraryCategory = {
-      id: crypto.randomUUID(),
-      name: 'New category',
-      blocks: [],
-    }
-    commitCategories([...library.categories, category])
+    setRenamingCategoryId(null)
+    setCreatingCategory(true)
+    setCategoryNameInput('')
   }
 
   function removeCategory(categoryId: string) {
@@ -211,28 +221,32 @@ export function BlockLibraryModal({
   function openRenameCategory(categoryId: string) {
     const category = library.categories.find((c) => c.id === categoryId)
     if (!category) return
+    setCreatingCategory(false)
     setRenamingCategoryId(categoryId)
     setCategoryNameInput(category.name)
   }
 
-  function closeRenameCategory() {
-    setRenamingCategoryId(null)
-    setCategoryNameInput('')
-  }
-
-  function handleRenameCategory(e: React.FormEvent) {
+  function handleSubmitCategoryName(e: React.FormEvent) {
     e.preventDefault()
-    if (!renamingCategoryId) return
-    updateCategory(renamingCategoryId, (c) => ({
-      ...c,
-      name: categoryNameInput.trim() || 'Untitled',
-    }))
-    closeRenameCategory()
+    const name = categoryNameInput.trim() || 'Untitled'
+    if (creatingCategory) {
+      const category: BlockLibraryCategory = {
+        id: crypto.randomUUID(),
+        name,
+        blocks: [],
+      }
+      commitCategories([...library.categories, category])
+    } else if (renamingCategoryId) {
+      updateCategory(renamingCategoryId, (c) => ({ ...c, name }))
+    }
+    closeCategoryNameDialog()
   }
 
-  const renamingCategory = renamingCategoryId
-    ? library.categories.find((c) => c.id === renamingCategoryId)
-    : null
+  const categoryNameDialog = creatingCategory
+    ? { title: 'New category', submitLabel: 'Create' }
+    : renamingCategoryId
+      ? { title: 'Rename category', submitLabel: 'Save' }
+      : null
 
   return (
     <div
@@ -302,32 +316,32 @@ export function BlockLibraryModal({
         </div>
       </div>
 
-      {renamingCategory && (
+      {categoryNameDialog && (
         <div
           className="modal-backdrop modal-backdrop-nested"
           role="presentation"
           onMouseDown={(e) => {
-            if (e.target === e.currentTarget) closeRenameCategory()
+            if (e.target === e.currentTarget) closeCategoryNameDialog()
           }}
         >
           <div
             className="modal-dialog"
             role="dialog"
             aria-modal="true"
-            aria-label="Rename category"
+            aria-label={categoryNameDialog.title}
           >
             <div className="modal-header">
-              <h2>Rename category</h2>
+              <h2>{categoryNameDialog.title}</h2>
               <button
                 type="button"
                 className="icon-btn"
                 aria-label="Close"
-                onClick={closeRenameCategory}
+                onClick={closeCategoryNameDialog}
               >
                 ×
               </button>
             </div>
-            <form className="modal-form" onSubmit={handleRenameCategory}>
+            <form className="modal-form" onSubmit={handleSubmitCategoryName}>
               <label>
                 <span>Name</span>
                 <input
@@ -341,12 +355,12 @@ export function BlockLibraryModal({
                 <button
                   type="button"
                   className="btn btn-ghost btn-sm"
-                  onClick={closeRenameCategory}
+                  onClick={closeCategoryNameDialog}
                 >
                   Cancel
                 </button>
                 <button type="submit" className="btn btn-primary btn-sm">
-                  Save
+                  {categoryNameDialog.submitLabel}
                 </button>
               </div>
             </form>
