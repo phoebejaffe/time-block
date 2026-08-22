@@ -17,8 +17,10 @@ import { FixedMenuPortal } from './FixedMenuPortal'
 import type { NoticeOptions } from '../lib/notice'
 import { undoNoticeOptions } from '../lib/notice'
 import { useFixedMenu } from '../hooks/useFixedMenu'
-
-const DRAG_ACTIVATE_PX = 5
+import {
+  attachReorderDragListeners,
+  consumeReorderClickSuppression,
+} from '../lib/reorderDrag'
 
 type BlockLibraryModalProps = {
   library: BlockLibrary
@@ -444,84 +446,41 @@ function CategorySection({
     index: number,
   ) {
     if (e.button !== 0 && e.pointerType === 'mouse') return
-    const handle = e.currentTarget
-    const pointerId = e.pointerId
-    const startX = e.clientX
-    const startY = e.clientY
-    let active = false
-    let cancelled = false
+    suppressClickRef.current = false
 
-    try {
-      handle.setPointerCapture(pointerId)
-    } catch {
-      /* ignore */
-    }
-
-    const endReorderSession = () => {
-      document.body.classList.remove('is-task-reordering')
-      setDragIndex(null)
-      setDropLineIndex(null)
-      dropLineIndexRef.current = null
-    }
-
-    const activate = () => {
-      if (cancelled || active) return
-      active = true
-      dropLineIndexRef.current = index
-      setDragIndex(index)
-      setDropLineIndex(index)
-      document.body.classList.add('is-task-reordering')
-    }
-
-    const onMove = (ev: PointerEvent) => {
-      if (ev.pointerId !== pointerId || cancelled) return
-      const dx = ev.clientX - startX
-      const dy = ev.clientY - startY
-      if (!active) {
-        if (Math.hypot(dx, dy) < DRAG_ACTIVATE_PX) return
-        activate()
-      }
-      ev.preventDefault()
-      const nextLine = lineIndexFromY(ev.clientY)
-      if (dropLineIndexRef.current !== nextLine) {
-        dropLineIndexRef.current = nextLine
-        setDropLineIndex(nextLine)
-      }
-    }
-
-    const onUp = (ev: PointerEvent) => {
-      if (ev.pointerId !== pointerId) return
-      if (active) {
-        suppressClickRef.current = true
-        window.setTimeout(() => {
-          suppressClickRef.current = false
-        }, 0)
-        handleDropAt(
-          dropLineIndexRef.current ?? lineIndexFromY(ev.clientY),
-          index,
-        )
-      }
-      endReorderSession()
-      cleanupListeners()
-    }
-
-    const cleanupListeners = () => {
-      cancelled = true
-      document.removeEventListener('pointermove', onMove)
-      document.removeEventListener('pointerup', onUp)
-      document.removeEventListener('pointercancel', onUp)
-      try {
-        if (handle.hasPointerCapture(pointerId)) {
-          handle.releasePointerCapture(pointerId)
+    attachReorderDragListeners({
+      handle: e.currentTarget,
+      pointerId: e.pointerId,
+      pointerType: e.pointerType,
+      startX: e.clientX,
+      startY: e.clientY,
+      onActivate: () => {
+        dropLineIndexRef.current = index
+        setDragIndex(index)
+        setDropLineIndex(index)
+        document.body.classList.add('is-task-reordering')
+      },
+      onMove: (ev) => {
+        const nextLine = lineIndexFromY(ev.clientY)
+        if (dropLineIndexRef.current !== nextLine) {
+          dropLineIndexRef.current = nextLine
+          setDropLineIndex(nextLine)
         }
-      } catch {
-        /* ignore */
-      }
-    }
-
-    document.addEventListener('pointermove', onMove, { passive: false })
-    document.addEventListener('pointerup', onUp)
-    document.addEventListener('pointercancel', onUp)
+      },
+      onEnd: (ev, didActivate) => {
+        if (didActivate) {
+          suppressClickRef.current = true
+          handleDropAt(
+            dropLineIndexRef.current ?? lineIndexFromY(ev.clientY),
+            index,
+          )
+        }
+        document.body.classList.remove('is-task-reordering')
+        setDragIndex(null)
+        setDropLineIndex(null)
+        dropLineIndexRef.current = null
+      },
+    })
   }
 
   return (
@@ -655,7 +614,7 @@ function CategorySection({
                     className="task-card-main task-card-drag"
                     onPointerDown={(e) => beginBlockDrag(e, index)}
                     onClick={() => {
-                      if (suppressClickRef.current) return
+                      if (consumeReorderClickSuppression(suppressClickRef)) return
                       onEditingKeyChange(key)
                     }}
                   >
@@ -684,7 +643,7 @@ function CategorySection({
                       aria-label={`Edit ${block.title}`}
                       title="Edit"
                       onClick={() => {
-                        if (suppressClickRef.current) return
+                        if (consumeReorderClickSuppression(suppressClickRef)) return
                         onEditingKeyChange(key)
                       }}
                     >
@@ -696,7 +655,7 @@ function CategorySection({
                       aria-label={`Remove ${block.title}`}
                       title="Remove"
                       onClick={() => {
-                        if (suppressClickRef.current) return
+                        if (consumeReorderClickSuppression(suppressClickRef)) return
                         onRemoveBlock(block.id)
                       }}
                     >

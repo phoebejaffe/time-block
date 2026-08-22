@@ -18,6 +18,7 @@ type CalendarToolbarProps = {
   calendars: GoogleCalendar[]
   visibleCalendarIds: Set<string>
   busy?: boolean
+  calendarsLoading?: boolean
   onPrev: () => void
   onNext: () => void
   prevDisabled?: boolean
@@ -43,6 +44,7 @@ export function CalendarToolbar({
   calendars,
   visibleCalendarIds,
   busy,
+  calendarsLoading = false,
   onPrev,
   onNext,
   prevDisabled = false,
@@ -126,6 +128,15 @@ export function CalendarToolbar({
       <div className="calendar-toolbar-side calendar-toolbar-right">
         <div className="calendar-toolbar-menus">
           <div className="calendars-menu" ref={calendarsRootRef}>
+            {calendarsLoading && (
+              <span
+                className="calendar-toolbar-spinner"
+                aria-label="Loading calendars"
+                title="Loading calendars"
+              >
+                <span className="spinner spinner-inline" aria-hidden />
+              </span>
+            )}
             <button
               type="button"
               ref={calendarsMenu.triggerRef}

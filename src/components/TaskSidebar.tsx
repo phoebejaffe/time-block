@@ -69,6 +69,10 @@ import {
 import type { NoticeOptions } from '../lib/notice'
 import type { SessionDiagnostics } from '../lib/google'
 import type { ArchivedPlan, PlanArchive } from '../lib/planArchive'
+import {
+  attachReorderDragListeners,
+  consumeReorderClickSuppression,
+} from '../lib/reorderDrag'
 import { ArchivedPlansModal } from './ArchivedPlansModal'
 
 const timeFmt = new Intl.DateTimeFormat(undefined, {
@@ -77,7 +81,6 @@ const timeFmt = new Intl.DateTimeFormat(undefined, {
 })
 
 const NEW_EDIT_ID = '__new__'
-const DRAG_ACTIVATE_PX = 5
 const ANCHOR_SCRUB_PX = 25
 const ANCHOR_SCRUB_ACTIVATE_PX = 8
 
@@ -158,6 +161,8 @@ type TaskSidebarProps = {
   blockLibrary: BlockLibrary
   onReplaceBlockLibrary: (library: BlockLibrary) => void
   planArchive: PlanArchive
+  planArchiveLoading?: boolean
+  onEnsurePlanArchiveLoaded?: () => Promise<void>
   onReplacePlanArchive: (archive: PlanArchive) => void
   onAddArchivedToHome: (plan: ArchivedPlan) => string
   onShowNotice?: (text: string, options?: NoticeOptions) => void
@@ -218,6 +223,8 @@ export function TaskSidebar({
   blockLibrary,
   onReplaceBlockLibrary,
   planArchive,
+  planArchiveLoading = false,
+  onEnsurePlanArchiveLoaded,
   onReplacePlanArchive,
   onAddArchivedToHome,
   onShowNotice,
@@ -235,6 +242,11 @@ export function TaskSidebar({
   const [modalGroupId, setModalGroupId] = useState<string | null>(null)
   const [addingGroupId, setAddingGroupId] = useState<string | null>(null)
   const [archivedPlansOpen, setArchivedPlansOpen] = useState(false)
+
+  function openArchivedPlans() {
+    setArchivedPlansOpen(true)
+    void onEnsurePlanArchiveLoaded?.()
+  }
   const [blockLibraryOpen, setBlockLibraryOpen] = useState(false)
   const [libraryFocusBlockId, setLibraryFocusBlockId] = useState<string | null>(
     null,
@@ -416,7 +428,7 @@ export function TaskSidebar({
               onReplacePlan={onReplacePlan ?? (() => {})}
               planArchive={planArchive}
               onReplacePlanArchive={onReplacePlanArchive}
-              onOpenArchivedPlans={() => setArchivedPlansOpen(true)}
+              onOpenArchivedPlans={openArchivedPlans}
               onShowNotice={onShowNotice}
               onClearNotice={onClearNotice}
               savedCalendarUsers={savedCalendarUsers}
@@ -517,7 +529,7 @@ export function TaskSidebar({
             <button
               type="button"
               className="task-new-group"
-              onClick={() => setArchivedPlansOpen(true)}
+              onClick={openArchivedPlans}
               disabled={busy}
             >
               Archived plans
@@ -674,6 +686,7 @@ export function TaskSidebar({
       {archivedPlansOpen && (
         <ArchivedPlansModal
           archive={planArchive}
+          loading={planArchiveLoading}
           onChange={onReplacePlanArchive}
           onAddToHome={handleAddFromArchive}
           onClose={() => setArchivedPlansOpen(false)}
@@ -1417,91 +1430,43 @@ function BlockGroupPanel({
     index: number,
   ) {
     if (e.button !== 0 && e.pointerType === 'mouse') return
+    suppressClickRef.current = false
 
-    const handle = e.currentTarget
-    const pointerId = e.pointerId
-    const startX = e.clientX
-    const startY = e.clientY
-    let active = false
-    let cancelled = false
-
-    // Immediate drag on touch/mouse — only from the title/duration handle.
-    try {
-      handle.setPointerCapture(pointerId)
-    } catch {
-      /* ignore */
-    }
-
-    const endReorderSession = () => {
-      document.body.classList.remove('is-task-reordering')
-      setDragIndex(null)
-      setDropLineIndex(null)
-      dropLineIndexRef.current = null
-    }
-
-    const activate = () => {
-      if (cancelled || active) return
-      active = true
-      dropLineIndexRef.current = index
-      setDragIndex(index)
-      setDropLineIndex(index)
-      document.body.classList.add('is-task-reordering')
-      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-        navigator.vibrate?.(12)
-      }
-    }
-
-    const onMove = (ev: PointerEvent) => {
-      if (ev.pointerId !== pointerId || cancelled) return
-      const dx = ev.clientX - startX
-      const dy = ev.clientY - startY
-      const dist = Math.hypot(dx, dy)
-
-      if (!active) {
-        if (dist < DRAG_ACTIVATE_PX) return
-        activate()
-      }
-
-      ev.preventDefault()
-      const nextLine = lineIndexFromY(ev.clientY)
-      if (dropLineIndexRef.current !== nextLine) {
-        dropLineIndexRef.current = nextLine
-        setDropLineIndex(nextLine)
-      }
-    }
-
-    const onUp = (ev: PointerEvent) => {
-      if (ev.pointerId !== pointerId) return
-      if (active) {
-        suppressClickRef.current = true
-        window.setTimeout(() => {
-          suppressClickRef.current = false
-        }, 0)
-        const insertAt =
-          dropLineIndexRef.current ?? lineIndexFromY(ev.clientY)
-        handleDropAt(insertAt, index)
-      }
-      endReorderSession()
-      cleanupListeners()
-    }
-
-    const cleanupListeners = () => {
-      cancelled = true
-      document.removeEventListener('pointermove', onMove)
-      document.removeEventListener('pointerup', onUp)
-      document.removeEventListener('pointercancel', onUp)
-      try {
-        if (handle.hasPointerCapture(pointerId)) {
-          handle.releasePointerCapture(pointerId)
+    attachReorderDragListeners({
+      handle: e.currentTarget,
+      pointerId: e.pointerId,
+      pointerType: e.pointerType,
+      startX: e.clientX,
+      startY: e.clientY,
+      onActivate: () => {
+        dropLineIndexRef.current = index
+        setDragIndex(index)
+        setDropLineIndex(index)
+        document.body.classList.add('is-task-reordering')
+        if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+          navigator.vibrate?.(12)
         }
-      } catch {
-        /* ignore */
-      }
-    }
-
-    document.addEventListener('pointermove', onMove, { passive: false })
-    document.addEventListener('pointerup', onUp)
-    document.addEventListener('pointercancel', onUp)
+      },
+      onMove: (ev) => {
+        const nextLine = lineIndexFromY(ev.clientY)
+        if (dropLineIndexRef.current !== nextLine) {
+          dropLineIndexRef.current = nextLine
+          setDropLineIndex(nextLine)
+        }
+      },
+      onEnd: (ev, didActivate) => {
+        if (didActivate) {
+          suppressClickRef.current = true
+          const insertAt =
+            dropLineIndexRef.current ?? lineIndexFromY(ev.clientY)
+          handleDropAt(insertAt, index)
+        }
+        document.body.classList.remove('is-task-reordering')
+        setDragIndex(null)
+        setDropLineIndex(null)
+        dropLineIndexRef.current = null
+      },
+    })
   }
 
   if (!enabled && mode !== 'execution') {
@@ -1801,7 +1766,8 @@ function BlockGroupPanel({
           const note = optionalNote(task.note)
 
           function toggleTaskDone() {
-            if (suppressClickRef.current || isTaskDelay(task)) return
+            if (consumeReorderClickSuppression(suppressClickRef)) return
+            if (isTaskDelay(task)) return
             if (task.done) {
               const { done: _d, ...rest } = task
               onUpdate(rest)
@@ -1890,7 +1856,7 @@ function BlockGroupPanel({
                     className="task-card-main task-card-drag"
                     onPointerDown={(e) => beginTaskDrag(e, index)}
                     onClick={() => {
-                      if (suppressClickRef.current) return
+                      if (consumeReorderClickSuppression(suppressClickRef)) return
                       setFocusNoteOnEdit(false)
                       onEditingIdChange(task.id)
                     }}
@@ -1942,7 +1908,8 @@ function BlockGroupPanel({
                       }
                       disabled={isTaskDelay(task)}
                       onClick={() => {
-                        if (suppressClickRef.current || isTaskDelay(task)) return
+                        if (consumeReorderClickSuppression(suppressClickRef)) return
+                        if (isTaskDelay(task)) return
                         if (isTaskDisabled(task)) {
                           const { disabled: _d, ...rest } = task
                           onUpdate(rest)
@@ -2258,7 +2225,7 @@ function TaskBlockMenu({
         aria-haspopup="true"
         title="Block options"
         onClick={() => {
-          if (suppressClickRef.current) return
+          if (consumeReorderClickSuppression(suppressClickRef)) return
           setMenuOpen((open) => {
             const next = !open
             if (next) onOpen?.()

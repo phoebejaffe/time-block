@@ -30,11 +30,14 @@ import type { NoticeOptions } from '../lib/notice'
 import { undoNoticeOptions } from '../lib/notice'
 import { useFixedMenu } from '../hooks/useFixedMenu'
 import { FixedMenuPortal } from './FixedMenuPortal'
-
-const DRAG_ACTIVATE_PX = 5
+import {
+  attachReorderDragListeners,
+  consumeReorderClickSuppression,
+} from '../lib/reorderDrag'
 
 type ArchivedPlansModalProps = {
   archive: PlanArchive
+  loading?: boolean
   onChange: (archive: PlanArchive) => void
   onAddToHome: (plan: ArchivedPlan) => void
   onClose: () => void
@@ -45,6 +48,7 @@ type ArchivedPlansModalProps = {
 
 export function ArchivedPlansModal({
   archive,
+  loading = false,
   onChange,
   onAddToHome,
   onClose,
@@ -245,7 +249,12 @@ export function ArchivedPlansModal({
             />
           </label>
 
-          {total === 0 && !searching ? (
+          {loading ? (
+            <p className="muted block-library-empty archived-plans-loading">
+              <span className="spinner spinner-inline" aria-hidden />
+              Loading archived plans…
+            </p>
+          ) : total === 0 && !searching ? (
             <p className="muted block-library-empty">
               Archive a plan from its ··· menu to tuck it off Home.
             </p>
@@ -304,7 +313,7 @@ export function ArchivedPlansModal({
             ))
           )}
 
-          {!searching && (
+          {!searching && !loading && (
             <button
               type="button"
               className="task-new-trigger block-library-add-category"
@@ -615,81 +624,43 @@ function FolderSection({
 
   function beginPlanDrag(e: React.PointerEvent<HTMLElement>, index: number) {
     if (e.button !== 0 && e.pointerType === 'mouse') return
-    const handle = e.currentTarget
-    const pointerId = e.pointerId
-    const startX = e.clientX
-    const startY = e.clientY
-    let active = false
-    let cancelled = false
-    try {
-      handle.setPointerCapture(pointerId)
-    } catch {
-      /* ignore */
-    }
+    suppressClickRef.current = false
 
-    const endReorderSession = () => {
-      document.body.classList.remove('is-task-reordering')
-      setDragIndex(null)
-      setDropLineIndex(null)
-      dropLineIndexRef.current = null
-    }
-
-    const onMove = (ev: PointerEvent) => {
-      if (ev.pointerId !== pointerId || cancelled) return
-      const dx = ev.clientX - startX
-      const dy = ev.clientY - startY
-      if (!active) {
-        if (Math.hypot(dx, dy) < DRAG_ACTIVATE_PX) return
-        if (Math.abs(dy) < Math.abs(dx)) {
-          cancelled = true
-          cleanup()
-          return
-        }
-        active = true
+    attachReorderDragListeners({
+      handle: e.currentTarget,
+      pointerId: e.pointerId,
+      pointerType: e.pointerType,
+      startX: e.clientX,
+      startY: e.clientY,
+      shouldAbortMove: (dx, dy) => Math.abs(dy) < Math.abs(dx),
+      onActivate: () => {
         dropLineIndexRef.current = index
         setDragIndex(index)
         setDropLineIndex(index)
         document.body.classList.add('is-task-reordering')
-      }
-      ev.preventDefault()
-      const nextLine = lineIndexFromY(ev.clientY)
-      if (dropLineIndexRef.current !== nextLine) {
-        dropLineIndexRef.current = nextLine
-        setDropLineIndex(nextLine)
-      }
-    }
-
-    const onUp = (ev: PointerEvent) => {
-      if (ev.pointerId !== pointerId) return
-      const insertAt = dropLineIndexRef.current
-      const from = index
-      if (active) suppressClickRef.current = true
-      cleanup()
-      if (!active || insertAt == null) return
-      let toIndex = insertAt
-      if (from < insertAt) toIndex -= 1
-      if (toIndex === from) return
-      onReorder(from, toIndex)
-    }
-
-    const cleanup = () => {
-      cancelled = true
-      endReorderSession()
-      document.removeEventListener('pointermove', onMove)
-      document.removeEventListener('pointerup', onUp)
-      document.removeEventListener('pointercancel', onUp)
-      try {
-        if (handle.hasPointerCapture(pointerId)) {
-          handle.releasePointerCapture(pointerId)
+      },
+      onMove: (ev) => {
+        const nextLine = lineIndexFromY(ev.clientY)
+        if (dropLineIndexRef.current !== nextLine) {
+          dropLineIndexRef.current = nextLine
+          setDropLineIndex(nextLine)
         }
-      } catch {
-        /* ignore */
-      }
-    }
-
-    document.addEventListener('pointermove', onMove, { passive: false })
-    document.addEventListener('pointerup', onUp)
-    document.addEventListener('pointercancel', onUp)
+      },
+      onEnd: (_ev, didActivate) => {
+        const insertAt = dropLineIndexRef.current
+        const from = index
+        if (didActivate) suppressClickRef.current = true
+        document.body.classList.remove('is-task-reordering')
+        setDragIndex(null)
+        setDropLineIndex(null)
+        dropLineIndexRef.current = null
+        if (!didActivate || insertAt == null) return
+        let toIndex = insertAt
+        if (from < insertAt) toIndex -= 1
+        if (toIndex === from) return
+        onReorder(from, toIndex)
+      },
+    })
   }
 
   const planCount = folder.plans.length
@@ -822,10 +793,7 @@ function FolderSection({
               expanded={expandedPlanId === plan.id}
               onPointerDown={(e) => beginPlanDrag(e, index)}
               onToggleExpanded={() => {
-                if (suppressClickRef.current) {
-                  suppressClickRef.current = false
-                  return
-                }
+                if (consumeReorderClickSuppression(suppressClickRef)) return
                 onToggleExpanded(plan.id)
               }}
               onAddToHome={() => onAddToHome(plan)}

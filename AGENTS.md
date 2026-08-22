@@ -157,8 +157,9 @@ testing.
   event description (above the Time Block stamp).
 - **Firestore sync is last-write-wins at the whole-document level** (one doc
   per user at `users/{uid}`, no field-level merge). Local edits debounce
-  ~2s before writing. Archived plans live in `planArchive` on that doc,
-  not inside `Plan.groups` — Home stays the live stack; Duplicate plan clones
+  ~2s before writing. Archived plans live in a separate Firestore fragment
+  (`users/{uid}/fragments/planArchive`), lazy-loaded when the archive modal
+  opens — not on initial sign-in. Home stays the live stack; Duplicate plan clones
   with new ids (push history does not come along).
 - **No comments that narrate the obvious.** Existing code favors short
   comments only where intent/trade-offs aren't obvious from the code itself

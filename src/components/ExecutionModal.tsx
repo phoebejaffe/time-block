@@ -64,6 +64,8 @@ type ExecutionModalProps = {
   blockLibrary: BlockLibrary
   onReplaceBlockLibrary: (library: BlockLibrary) => void
   planArchive: PlanArchive
+  planArchiveLoading?: boolean
+  onEnsurePlanArchiveLoaded?: () => Promise<void>
   onReplacePlanArchive: (archive: PlanArchive) => void
   onAddArchivedToHome: (plan: ArchivedPlan) => string
   onShowNotice?: (text: string, options?: NoticeOptions) => void
@@ -119,6 +121,8 @@ export function ExecutionModal({
   blockLibrary,
   onReplaceBlockLibrary,
   planArchive,
+  planArchiveLoading,
+  onEnsurePlanArchiveLoaded,
   onReplacePlanArchive,
   onAddArchivedToHome,
   onShowNotice,
@@ -208,6 +212,8 @@ export function ExecutionModal({
           blockLibrary={blockLibrary}
           onReplaceBlockLibrary={onReplaceBlockLibrary}
           planArchive={planArchive}
+          planArchiveLoading={planArchiveLoading}
+          onEnsurePlanArchiveLoaded={onEnsurePlanArchiveLoaded}
           onReplacePlanArchive={onReplacePlanArchive}
           onAddArchivedToHome={onAddArchivedToHome}
           onShowNotice={onShowNotice}

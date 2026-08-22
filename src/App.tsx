@@ -369,7 +369,7 @@ export default function App() {
     clear()
   }
 
-  function handleArchiveGroup(groupId: string) {
+  async function handleArchiveGroup(groupId: string) {
     if (plan.plan.groups.length <= 1) {
       show('info', 'Keep at least one plan.')
       return
@@ -381,6 +381,13 @@ export default function App() {
     const index = plan.plan.groups.findIndex((g) => g.id === groupId)
     const group = index >= 0 ? plan.plan.groups[index] : undefined
     if (!group) return
+
+    try {
+      await userData.ensurePlanArchiveLoaded()
+    } catch {
+      show('info', 'Could not load archived plans.')
+      return
+    }
 
     const snapshot = archivedPlanFromGroup(group)
     const nextArchive = addArchivedPlan(userData.planArchive, snapshot)
@@ -842,6 +849,8 @@ export default function App() {
             blockLibrary={userData.blockLibrary}
             onReplaceBlockLibrary={userData.replaceBlockLibrary}
             planArchive={userData.planArchive}
+            planArchiveLoading={userData.planArchiveLoading}
+            onEnsurePlanArchiveLoaded={userData.ensurePlanArchiveLoaded}
             onReplacePlanArchive={userData.replacePlanArchive}
             onAddArchivedToHome={handleAddArchivedToHome}
             onShowNotice={(text, options) => show('info', text, options)}
@@ -883,6 +892,7 @@ export default function App() {
               }}
               onTaskClick={setEditingTaskId}
               busy={busy}
+              calendarsLoading={calendars.busy}
             />
           </main>
         </div>
@@ -934,6 +944,8 @@ export default function App() {
             blockLibrary={userData.blockLibrary}
             onReplaceBlockLibrary={userData.replaceBlockLibrary}
             planArchive={userData.planArchive}
+            planArchiveLoading={userData.planArchiveLoading}
+            onEnsurePlanArchiveLoaded={userData.ensurePlanArchiveLoaded}
             onReplacePlanArchive={userData.replacePlanArchive}
             onAddArchivedToHome={handleAddArchivedToHome}
             onShowNotice={(text, options) => show('info', text, options)}

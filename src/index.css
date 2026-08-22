@@ -3585,6 +3585,40 @@ body.is-task-reordering .task-sidebar {
   animation: spinner-rotate 0.8s linear infinite;
 }
 
+.spinner-inline {
+  width: 0.95rem;
+  height: 0.95rem;
+  border-width: 2px;
+  display: inline-block;
+  vertical-align: -0.15em;
+  margin-right: 0.45rem;
+}
+
+.archived-plans-loading {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.calendars-menu {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.calendar-toolbar-spinner {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  color: var(--ink-muted);
+}
+
+.calendar-toolbar-spinner .spinner-inline {
+  margin-right: 0;
+}
+
 @keyframes spinner-rotate {
   to {
     transform: rotate(360deg);

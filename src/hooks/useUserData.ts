@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { onAuthStateChanged, type User } from 'firebase/auth'
 import { getFirebaseAuth, isFirebaseConfigured } from '../lib/firebase'
-import { saveUserState, subscribeUserState } from '../lib/userDataSync'
+import {
+  migrateLegacyPlanArchive,
+  savePlanArchive,
+  saveUserState,
+  subscribePlanArchive,
+  subscribeUserState,
+} from '../lib/userDataSync'
 import {
   loadLegacyPushedEvents,
   loadLegacyPushSnapshots,
@@ -56,6 +62,9 @@ type UseUserDataOptions = {
  * applies remote edits instantly; local edits are debounced and written
  * back with last-write-wins on `updatedAt`.
  *
+ * Archived plans sync from a separate Firestore fragment document and load
+ * on demand (see `ensurePlanArchiveLoaded`).
+ *
  * Requires Firebase Auth (see `signInToFirebase` in lib/google.ts), which
  * runs after the Google OAuth exchange using the returned ID token.
  */
@@ -66,6 +75,8 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
   const [planArchive, setPlanArchive] = useState<PlanArchive>(() =>
     defaultPlanArchive(),
   )
+  const [planArchiveLoading, setPlanArchiveLoading] = useState(false)
+  const [planArchiveSyncEnabled, setPlanArchiveSyncEnabled] = useState(false)
   const [targetCalendarId, setTargetCalendarIdState] = useState('')
   const [pushedEvents, setPushedEvents] = useState<PushedEvent[]>([])
   const [pushSnapshots, setPushSnapshots] = useState<PushSnapshot[]>([])
@@ -88,6 +99,16 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
   const pushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastSyncedAtRef = useRef<string | null>(null)
   const seededRef = useRef(false)
+
+  const planArchiveLoadedRef = useRef(false)
+  const planArchiveUnsubRef = useRef<(() => void) | null>(null)
+  const planArchiveLoadPromiseRef = useRef<Promise<void> | null>(null)
+  const skipNextArchivePushRef = useRef(false)
+  const archivePushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lastArchiveSyncedAtRef = useRef<string | null>(null)
+  const legacyPlanArchiveRef = useRef<unknown>(null)
+  const archiveMigrateStartedRef = useRef(false)
+  const archiveMigratePromiseRef = useRef<Promise<void> | null>(null)
 
   const stateRef = useRef({
     plan,
@@ -123,12 +144,25 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
     return onAuthStateChanged(getFirebaseAuth(), setFirebaseUser)
   }, [signedIn])
 
+  const applyRemoteArchive = useCallback(
+    (remote: { updatedAt: string; planArchive: PlanArchive }) => {
+      const isNewer =
+        !lastArchiveSyncedAtRef.current ||
+        new Date(remote.updatedAt) > new Date(lastArchiveSyncedAtRef.current)
+      if (!isNewer) return
+      skipNextArchivePushRef.current = true
+      setPlanArchive(normalizePlanArchive(remote.planArchive))
+      lastArchiveSyncedAtRef.current = remote.updatedAt
+    },
+    [],
+  )
+
   const applyRemote = useCallback(
     (remote: {
       updatedAt: string
       plan: unknown
       blockLibrary: unknown
-      planArchive?: unknown
+      legacyPlanArchive?: unknown
       targetCalendarId: unknown
       pushedEvents: unknown
       pushSnapshots: unknown
@@ -144,11 +178,9 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
           ? normalizeBlockLibrary(remote.blockLibrary)
           : defaultBlockLibrary(),
       )
-      setPlanArchive(
-        remote.planArchive != null
-          ? normalizePlanArchive(remote.planArchive)
-          : defaultPlanArchive(),
-      )
+      if (remote.legacyPlanArchive != null) {
+        legacyPlanArchiveRef.current = remote.legacyPlanArchive
+      }
       setTargetCalendarIdState(
         typeof remote.targetCalendarId === 'string' ? remote.targetCalendarId : '',
       )
@@ -189,10 +221,12 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
   )
 
   const pushNow = useCallback(async (uid: string) => {
+    if (archiveMigratePromiseRef.current) {
+      await archiveMigratePromiseRef.current
+    }
     const {
       plan: p,
       blockLibrary: bl,
-      planArchive: pa,
       targetCalendarId: tc,
       pushedEvents: pe,
       pushSnapshots: ps,
@@ -205,7 +239,6 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
       updatedAt,
       plan: p,
       blockLibrary: bl,
-      planArchive: pa,
       targetCalendarId: tc,
       pushedEvents: pe,
       pushSnapshots: ps,
@@ -215,6 +248,98 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
     })
     lastSyncedAtRef.current = updatedAt
   }, [])
+
+  const pushArchiveNow = useCallback(async (uid: string) => {
+    const { planArchive: pa } = stateRef.current
+    const updatedAt = new Date().toISOString()
+    await savePlanArchive(uid, {
+      updatedAt,
+      planArchive: pa,
+    })
+    lastArchiveSyncedAtRef.current = updatedAt
+  }, [])
+
+  const startLegacyArchiveMigration = useCallback((uid: string, legacy: unknown) => {
+    if (archiveMigrateStartedRef.current) return
+    archiveMigrateStartedRef.current = true
+    archiveMigratePromiseRef.current = migrateLegacyPlanArchive(uid, legacy).catch(
+      (err) => {
+        archiveMigrateStartedRef.current = false
+        archiveMigratePromiseRef.current = null
+        throw err
+      },
+    )
+  }, [])
+
+  const finishPlanArchiveLoad = useCallback(() => {
+    planArchiveLoadedRef.current = true
+    setPlanArchiveSyncEnabled(true)
+    setPlanArchiveLoading(false)
+    planArchiveLoadPromiseRef.current = null
+  }, [])
+
+  const ensurePlanArchiveLoaded = useCallback((): Promise<void> => {
+    if (planArchiveLoadedRef.current) return Promise.resolve()
+    if (planArchiveLoadPromiseRef.current) return planArchiveLoadPromiseRef.current
+    if (!signedIn || !firebaseUser) return Promise.resolve()
+
+    const uid = firebaseUser.uid
+    setPlanArchiveLoading(true)
+
+    planArchiveLoadPromiseRef.current = new Promise<void>((resolve, reject) => {
+      let settled = false
+      let initial = true
+
+      const settleOk = () => {
+        if (settled) return
+        settled = true
+        finishPlanArchiveLoad()
+        resolve()
+      }
+      const settleErr = (err: Error) => {
+        if (settled) return
+        settled = true
+        setPlanArchiveLoading(false)
+        planArchiveLoadPromiseRef.current = null
+        reject(err)
+      }
+
+      planArchiveUnsubRef.current = subscribePlanArchive(
+        uid,
+        (remote) => {
+          if (remote) {
+            applyRemoteArchive(remote)
+            if (initial) {
+              initial = false
+              settleOk()
+            }
+            return
+          }
+          if (!initial) return
+          initial = false
+          if (legacyPlanArchiveRef.current != null) {
+            const normalized = normalizePlanArchive(legacyPlanArchiveRef.current)
+            skipNextArchivePushRef.current = true
+            setPlanArchive(normalized)
+            lastArchiveSyncedAtRef.current = normalized.updatedAt
+            legacyPlanArchiveRef.current = null
+            void pushArchiveNow(uid).then(settleOk).catch(settleErr)
+            return
+          }
+          settleOk()
+        },
+        settleErr,
+      )
+    })
+
+    return planArchiveLoadPromiseRef.current
+  }, [
+    signedIn,
+    firebaseUser,
+    applyRemoteArchive,
+    finishPlanArchiveLoad,
+    pushArchiveNow,
+  ])
 
   // Real-time Firestore subscription for this user.
   useEffect(() => {
@@ -236,7 +361,12 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
           const isNewer =
             !lastSyncedAtRef.current ||
             new Date(remote.updatedAt) > new Date(lastSyncedAtRef.current)
-          if (isNewer) applyRemote(remote)
+          if (isNewer) {
+            applyRemote(remote)
+            if (remote.legacyPlanArchive != null) {
+              startLegacyArchiveMigration(uid, remote.legacyPlanArchive)
+            }
+          }
           setStatus('synced')
           setLoading(false)
         } else if (!seededRef.current) {
@@ -277,7 +407,7 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
       unsubscribe()
       seededRef.current = false
     }
-  }, [signedIn, firebaseUser, applyRemote, pushNow])
+  }, [signedIn, firebaseUser, applyRemote, pushNow, startLegacyArchiveMigration])
 
   // Debounced push whenever synced user data changes.
   useEffect(() => {
@@ -306,13 +436,42 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
     return () => {
       if (pushTimerRef.current) clearTimeout(pushTimerRef.current)
     }
-  }, [plan, blockLibrary, planArchive, targetCalendarId, pushedEvents, pushSnapshots, executingGroupId, savedCalendarUsers, settings, signedIn, firebaseUser, loading, pushNow])
+  }, [plan, blockLibrary, targetCalendarId, pushedEvents, pushSnapshots, executingGroupId, savedCalendarUsers, settings, signedIn, firebaseUser, loading, pushNow])
+
+  // Debounced push when archived plans change (after first load).
+  useEffect(() => {
+    if (!signedIn || !firebaseUser || !planArchiveSyncEnabled) return
+    if (skipNextArchivePushRef.current) {
+      skipNextArchivePushRef.current = false
+      return
+    }
+
+    if (archivePushTimerRef.current) clearTimeout(archivePushTimerRef.current)
+    archivePushTimerRef.current = setTimeout(() => {
+      setStatus('syncing')
+      setSyncError(null)
+      pushArchiveNow(firebaseUser.uid)
+        .then(() => setStatus('synced'))
+        .catch((err) => {
+          setStatus('error')
+          setSyncError(
+            err instanceof Error ? err.message : 'Could not save archived plans',
+          )
+        })
+    }, PUSH_DEBOUNCE_MS)
+
+    return () => {
+      if (archivePushTimerRef.current) clearTimeout(archivePushTimerRef.current)
+    }
+  }, [planArchive, planArchiveSyncEnabled, signedIn, firebaseUser, pushArchiveNow])
 
   const replaceBlockLibrary = useCallback((next: BlockLibrary) => {
     setBlockLibrary(next)
   }, [])
 
   const replacePlanArchive = useCallback((next: PlanArchive) => {
+    planArchiveLoadedRef.current = true
+    setPlanArchiveSyncEnabled(true)
     setPlanArchive(next)
   }, [])
 
@@ -383,12 +542,24 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
   /** Reset to blank, in-memory only — call on sign-out. */
   const reset = useCallback(() => {
     skipNextPushRef.current = false
+    skipNextArchivePushRef.current = false
     pushPendingRef.current = false
     if (pushTimerRef.current) clearTimeout(pushTimerRef.current)
+    if (archivePushTimerRef.current) clearTimeout(archivePushTimerRef.current)
+    planArchiveUnsubRef.current?.()
+    planArchiveUnsubRef.current = null
+    planArchiveLoadPromiseRef.current = null
+    planArchiveLoadedRef.current = false
     lastSyncedAtRef.current = null
+    lastArchiveSyncedAtRef.current = null
+    legacyPlanArchiveRef.current = null
+    archiveMigrateStartedRef.current = false
+    archiveMigratePromiseRef.current = null
     seededRef.current = false
     setBlockLibrary(defaultBlockLibrary())
     setPlanArchive(defaultPlanArchive())
+    setPlanArchiveLoading(false)
+    setPlanArchiveSyncEnabled(false)
     setTargetCalendarIdState('')
     setPushedEvents([])
     setPushSnapshots([])
@@ -404,6 +575,8 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
   return {
     blockLibrary,
     planArchive,
+    planArchiveLoading,
+    ensurePlanArchiveLoaded,
     targetCalendarId,
     pushedEvents,
     pushSnapshots,

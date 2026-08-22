@@ -60,6 +60,7 @@ type CalendarViewProps = {
   ) => void
   onTaskClick: (taskId: string) => void
   busy?: boolean
+  calendarsLoading?: boolean
   /** When false, task stack drag on the calendar is disabled (execution mode). */
   stackDragEnabled?: boolean
   /**
@@ -275,6 +276,7 @@ export function CalendarView({
   onStackShiftPreview,
   onTaskClick,
   busy,
+  calendarsLoading = false,
   stackDragEnabled = true,
   navDayBounds = null,
   scrollTasksIntoViewOnMount = false,
@@ -794,6 +796,7 @@ export function CalendarView({
         calendars={calendars}
         visibleCalendarIds={visibleCalendarIds}
         busy={busy}
+        calendarsLoading={calendarsLoading}
         onPrev={() => calendarRef.current?.getApi().prev()}
         onNext={() => calendarRef.current?.getApi().next()}
         prevDisabled={prevDisabled}

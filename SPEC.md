@@ -373,8 +373,14 @@ type ArchiveFolder = { id: string; name: string; plans: ArchivedPlan[] }
 type PlanArchive = { folders: ArchiveFolder[]; updatedAt: string }
 ```
 
-- Stored as its own Firestore field (`users/{uid}.planArchive`), parallel to
-  `blockLibrary` — **not** inside `Plan.groups`.
+- Stored in its own Firestore fragment document
+  (`users/{uid}/fragments/planArchive`), parallel to `blockLibrary` — **not**
+  inside `Plan.groups`. Older accounts may still have an inline
+  `users/{uid}.planArchive` field until the first sign-in migrates it to the
+  fragment. The archive is **not** loaded on sign-in; it loads when the
+  Archived plans modal is first opened (or when archiving a plan from Home).
+  Once loaded in a session, a real-time listener keeps it synced; reopening
+  the modal uses the cached copy.
 - Folders are a flat user-created list (no nesting). A built-in **Unfiled**
   folder (id `unfiled`) always exists and cannot be renamed or deleted;
   user folders can be renamed and deleted (a nested picker asks which other
@@ -796,7 +802,7 @@ library, etc.) sit above those; toasts sit above nested dialogs. Modals used:
   **New folder +** opens a nested name dialog (Create).
   Empty archive: "Archive a plan from its ··· menu to tuck it off Home."
   Closed via header "×", click-outside, or Escape. Plans can be
-  drag-reordered within a folder.
+  drag-reordered within a folder (same touch hold as §7.8).
 - **How Time Block works** (help) — opens with why Time Block exists (visualizing
   time for ADHD / time blindness), then a short narrative of planning,
   block library, execution, calendar, Settings, and layout; opened from the
@@ -879,6 +885,10 @@ library category)
 Pressing and dragging on a task/block row's main content area (title +
 duration, not the trailing controls) reorders it within its list:
 
+- On **touch**, the pointer must be held still for 0.3 seconds before a
+  drag can activate (movement beyond the threshold during that hold cancels
+  the gesture so scrolling and taps still work). **Mouse** drag activates
+  immediately once the movement threshold is met.
 - A small movement threshold must be exceeded before a drag "activates"
   (so a simple click still opens the inline editor, not a reorder).
 - Once active, a light haptic tick fires on supported devices, a body-level
@@ -1109,7 +1119,9 @@ whenever the calendar's visible date range changes.
   calendars determine which Google events are fetched/shown, and that
   choice syncs across devices in Settings — see §7.4) and a general
   overflow menu (show/hide all-day events; view switcher) — both portaled
-  like other overflow menus (§7.5).
+  like other overflow menus (§7.5). While the Google calendar list is still
+  loading after sign-in, a small spinner appears just left of the calendars
+  icon button.
 - **Sync status indicators per task**: while the task's group has been
   pushed to Google Calendar for the day currently in view, its row (in both
   sidebar and implicitly via what's fetched from Google) shows either a
@@ -1122,7 +1134,6 @@ whenever the calendar's visible date range changes.
 
 - One document per user at `users/{uid}` containing: `updatedAt` (ISO),
   `plan` (each group's checkpoint travels inline with it), `blockLibrary`,
-  `planArchive`,
   `targetCalendarId`, `pushedEvents`, `pushSnapshots`, `executingGroupId`
   (string or null — which group is in execution mode, if any),
   `savedCalendarUsers` (address book of `{ id, name, email }` for calendar
@@ -1131,6 +1142,11 @@ whenever the calendar's visible date range changes.
   block minutes, time step, Quick/Major undo seconds (`0s` disables undo),
   execution auto-end hours, hidden calendar ids, visible overlay calendar
   ids — see §7.4).
+- **Archived plans** sync separately at
+  `users/{uid}/fragments/planArchive` (`updatedAt` + `planArchive`). Lazy-loaded
+  on first open of the Archived plans modal (or before the first Archive action
+  from Home). Legacy inline `planArchive` on the main user doc is migrated to
+  the fragment on sign-in when present.
 - **On sign-in**, subscribe to that document in real time:
   - If it exists and its `updatedAt` is newer than the last value this tab
     itself wrote, replace all local state with the remote values
@@ -1142,11 +1158,12 @@ whenever the calendar's visible date range changes.
     subscription's own initial write as one to *ignore* when it echoes
     back (to avoid re-processing your own write as if it were a remote
     change).
-- **On local edits** (to plan, block library, archived plans, saved users, settings, target calendar, push
+- **On local edits** (to plan, block library, saved users, settings, target calendar, push
   history, or executing group id), debounce ~2 seconds of inactivity, then
   overwrite the
-  whole document with a fresh `updatedAt` — last-write-wins at the
-  document level; no field-level merge/CRDT logic.
+  whole main document with a fresh `updatedAt` — last-write-wins at the
+  document level; no field-level merge/CRDT logic. Archived-plan edits debounce
+  separately to the fragment document once the archive has been loaded.
 - **Loading state**: while signed in but the Firestore user isn't
   established yet, or while waiting for the very first snapshot, the app
   shows the full-screen loading gate rather than a half-populated UI.
@@ -1291,7 +1308,7 @@ touch the in-app plan/tasks at all — it only removes calendar-side events.
 | --- | --- | --- |
 | Plan (groups/tasks/anchors/checkpoints/intendedEndAt/calendarGuests) | Firestore `users/{uid}.plan` | Yes |
 | Block library | Firestore `users/{uid}.blockLibrary` | Yes |
-| Archived plans | Firestore `users/{uid}.planArchive` | Yes |
+| Archived plans | Firestore `users/{uid}/fragments/planArchive` (lazy-loaded) | Yes |
 | Saved calendar users | Firestore `users/{uid}.savedCalendarUsers` | Yes |
 | User settings (prefs) | Firestore `users/{uid}.settings` | Yes |
 | Target calendar id | Firestore `users/{uid}.targetCalendarId` | Yes |
