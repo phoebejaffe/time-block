@@ -50,6 +50,8 @@ import {
   type TaskEditPreview,
 } from './lib/tasks'
 
+const LAST_SEEN_BUILD_TIME_KEY = 'time-block:last-seen-build-time'
+
 export default function App() {
   const { notice, show, clear } = useNotice()
   const session = useGoogleSession()
@@ -685,6 +687,20 @@ export default function App() {
     }).format(d)
     return `Build time: ${date} at ${time}`
   }, [])
+
+  useEffect(() => {
+    try {
+      const previousBuildTime = window.localStorage.getItem(
+        LAST_SEEN_BUILD_TIME_KEY,
+      )
+      if (previousBuildTime && previousBuildTime !== __BUILD_TIME__) {
+        show('success', 'App updated')
+      }
+      window.localStorage.setItem(LAST_SEEN_BUILD_TIME_KEY, __BUILD_TIME__)
+    } catch {
+      return
+    }
+  }, [show])
 
   const sessionRestoring =
     !session.ready && session.diagnostics.hasStoredSession

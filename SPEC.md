@@ -851,7 +851,9 @@ auto-dismiss after a default delay (~5s, or a custom delay if specified —
 Quick undo / Major undo seconds from Settings; `0s` disables undo);
 error notices persist until the user causes
 another notice or the current action completes/clears it, since they must
-not be missed.
+not be missed. On app startup, the current build timestamp is compared with
+the last timestamp stored in local storage; when it changes, a success toast
+says "App updated".
 
 ### 7.7 Time & duration "scrub" interaction
 
