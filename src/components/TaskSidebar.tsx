@@ -37,6 +37,7 @@ import {
   optionalNote,
   resolveSavedBlocksFromKeys,
   resolveStack,
+  stackDayBoundaryOffsets,
   stackDurationMinutes,
   stepLocalTime,
   toggleAnchorPreservingStack,
@@ -1150,10 +1151,35 @@ function BlockGroupPanel({
     () => resolved.filter((task) => !isTaskDisabled(task)),
     [resolved],
   )
+  const stackBoundaryOffsets = stackDayBoundaryOffsets({ tasks, anchor })
   const stackSummary =
-    activeResolved.length === 0
-      ? null
-      : `${timeFmt.format(activeResolved[0]!.start)} – ${timeFmt.format(activeResolved[activeResolved.length - 1]!.end)}`
+    activeResolved.length === 0 ? null : (
+      <>
+        <span>
+          {timeFmt.format(activeResolved[0]!.start)}
+          {stackBoundaryOffsets.startPreviousDay && (
+            <sup
+              className="task-range-day-offset"
+              title="This start time is yesterday"
+            >
+              -1
+            </sup>
+          )}
+        </span>{' '}
+        –{' '}
+        <span>
+          {timeFmt.format(activeResolved[activeResolved.length - 1]!.end)}
+          {stackBoundaryOffsets.endNextDay && (
+            <span
+              className="task-range-day-offset"
+              title="This end time is tomorrow"
+            >
+              +1
+            </span>
+          )}
+        </span>
+      </>
+    )
   const dayKey = localDateKey(anchor.at)
   const onCalendar = hasPushedGroupOnDay(pushedEvents, group.id, dayKey)
   const isUpdate = onCalendar

@@ -1090,6 +1090,25 @@ export function startOfLocalDay(date: Date = new Date()): Date {
   return d
 }
 
+/** Whether the active stack crosses the anchor's local calendar day boundary. */
+export function stackDayBoundaryOffsets(
+  group: Pick<BlockGroup, 'tasks' | 'anchor'>,
+): { startPreviousDay: boolean; endNextDay: boolean } {
+  const active = resolveStack(group.tasks, group.anchor).filter(
+    (task) => !isTaskDisabled(task),
+  )
+  if (active.length === 0) {
+    return { startPreviousDay: false, endNextDay: false }
+  }
+  const anchorDay = startOfLocalDay(new Date(group.anchor.at)).getTime()
+  return {
+    startPreviousDay:
+      startOfLocalDay(active[0]!.start).getTime() < anchorDay,
+    endNextDay:
+      startOfLocalDay(active[active.length - 1]!.end).getTime() > anchorDay,
+  }
+}
+
 /**
  * Inclusive first/last local calendar days occupied by a group's resolved
  * stack (using the stored anchor, not remapped onto a view day). Empty when

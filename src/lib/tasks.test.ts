@@ -40,6 +40,7 @@ import {
   getStackDelayOverrun,
   getStackEndStatus,
   prepareGroupForExecution,
+  stackDayBoundaryOffsets,
   stackOccupiedLocalDays,
   canNavigateCalendarRange,
   type BlockLibrary,
@@ -1046,6 +1047,24 @@ describe('execution helpers', () => {
         new Date('2026-07-18T12:00:00.000Z'),
       ),
     ).toBeNull()
+  })
+
+  it('marks stack boundaries that cross the anchor day', () => {
+    const lateStart = new Date(2026, 6, 18, 23, 0, 0)
+    expect(
+      stackDayBoundaryOffsets({
+        tasks: [{ id: 'a', title: 'Late', durationMinutes: 120 }],
+        anchor: { kind: 'start', at: lateStart.toISOString() },
+      }),
+    ).toEqual({ startPreviousDay: false, endNextDay: true })
+
+    const earlyEnd = new Date(2026, 6, 19, 1, 0, 0)
+    expect(
+      stackDayBoundaryOffsets({
+        tasks: [{ id: 'a', title: 'Early', durationMinutes: 120 }],
+        anchor: { kind: 'end', at: earlyEnd.toISOString() },
+      }),
+    ).toEqual({ startPreviousDay: true, endNextDay: false })
   })
 
   it('stackOccupiedLocalDays covers every local day the stack touches', () => {

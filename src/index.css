@@ -522,6 +522,15 @@ body.is-sidebar-resizing .main-panel {
   text-align: right;
 }
 
+.task-range-day-offset {
+  margin-left: 0.08rem;
+  color: var(--warn);
+  font-size: 0.72em;
+  font-weight: 600;
+  line-height: 0;
+  vertical-align: super;
+}
+
 .sidebar-actions {
   margin-top: auto;
   padding-top: 0.75rem;

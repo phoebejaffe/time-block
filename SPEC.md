@@ -637,7 +637,11 @@ Top to bottom:
        moves it backward); the word "at"; a native time input showing the
        anchor's local time (`HH:mm`, step from Settings); and, if the group has
        any tasks, a read-only summary of the whole stack's start–end time
-       range.
+       range. If the range starts on the local day before the anchor, the
+       start time has an orange superscript `-1` (hover text: "This start
+       time is yesterday"); if it ends on the local day after the anchor, the
+       end time has an orange superscript `+1` (hover text: "This end time is
+       tomorrow").
      - **Task list**: one row per task, each showing (in order): the task's
        title, truncated with an ellipsis if it doesn't fit rather than
        pushing anything else out of the row; then its duration ("· N min");
