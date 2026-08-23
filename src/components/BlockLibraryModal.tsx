@@ -459,6 +459,7 @@ function CategorySection({
         setDragIndex(index)
         setDropLineIndex(index)
         document.body.classList.add('is-task-reordering')
+        e.currentTarget.classList.add('is-dragging-original')
       },
       onMove: (ev) => {
         const nextLine = lineIndexFromY(ev.clientY)
@@ -475,6 +476,7 @@ function CategorySection({
           )
         }
         document.body.classList.remove('is-task-reordering')
+        e.currentTarget.classList.remove('is-dragging-original')
         setDragIndex(null)
         setDropLineIndex(null)
         dropLineIndexRef.current = null

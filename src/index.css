@@ -1742,6 +1742,8 @@ body.is-datetime-scrubbing .task-form-duration input {
   touch-action: none;
   width: fit-content;
   max-width: 100%;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .task-card-drag:active {
@@ -2265,6 +2267,8 @@ body.is-datetime-scrubbing .task-form-duration input {
 
 .archived-plan-main-draggable {
   touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .archived-plan-main:hover .archived-plan-name {
@@ -2640,6 +2644,12 @@ body.is-task-reordering .task-sidebar {
 
 .task-card.is-dragging {
   opacity: 0.45;
+}
+
+.task-card.is-dragging-original,
+.archived-plan-row.is-dragging-original,
+.block-library-list .task-card.is-dragging-original {
+  opacity: 0.6;
 }
 
 .task-card-empty .task-card-main {

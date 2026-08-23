@@ -638,6 +638,7 @@ function FolderSection({
         setDragIndex(index)
         setDropLineIndex(index)
         document.body.classList.add('is-task-reordering')
+        e.currentTarget.classList.add('is-dragging-original')
       },
       onMove: (ev) => {
         const nextLine = lineIndexFromY(ev.clientY)
@@ -867,7 +868,7 @@ function ArchivedPlanRow({
       className={[
         'archived-plan-row',
         expanded ? 'is-expanded' : '',
-        dragIndex != null && dragIndex === index ? 'is-dragging' : '',
+        dragIndex != null && dragIndex === index ? 'is-dragging is-dragging-original' : '',
         showLineBefore ? 'drop-line-before' : '',
       ]
         .filter(Boolean)

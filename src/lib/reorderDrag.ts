@@ -1,5 +1,5 @@
 export const REORDER_DRAG_ACTIVATE_PX = 5
-export const REORDER_TOUCH_HOLD_MS = 300
+export const REORDER_TOUCH_HOLD_MS = 200
 export const REORDER_CLICK_SUPPRESS_PX = 3
 
 /** Swallow one click after reorder drag; returns true if suppressed. */
