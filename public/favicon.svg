@@ -10,6 +10,9 @@
   </defs>
   <g clip-path="url(#round)">
     <rect width="32" height="32" fill="url(#brand)"/>
+    <rect x="5" y="5" width="22" height="6.2" rx="1.7" fill="rgba(243, 239, 230, 0.4)" />
+    <rect x="5" y="12.9" width="22" height="6.2" rx="1.7" fill="#f3efe6" />
+    <rect x="5" y="20.8" width="22" height="6.2" rx="1.7" fill="rgba(243, 239, 230, 0.4)" />
     <rect
       x="0.5"
       y="0.5"

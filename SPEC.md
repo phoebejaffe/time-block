@@ -537,9 +537,11 @@ token is applied.
 
 Three states, chosen by session/auth status:
 
-1. **Loading gate** — shown while the Google session is still restoring, or
-   (once signed in) while the user's cross-device data is still loading
-   from Firestore. Centered spinner + "Loading your plan…".
+1. **Loading gate** — centered spinner + "Loading your plan…". Shown while a
+   stored Google session is still restoring (silent token refresh on return
+   visits), or once signed in while cross-device data is still loading from
+   Firestore. **Not** shown for first-time or signed-out visitors while
+   Google API scripts load — they see the sign-in gate immediately instead.
 2. **Signed-out gate** — centered card: heading **"Time blindness is real!"**,
    then **"Time Block lets you draft plans that end when you need to leave, and
    compensate for delays as you go so you stay on time. Your plan syncs to
@@ -738,6 +740,7 @@ library, etc.) sit above those; toasts sit above nested dialogs. Modals used:
   (Planning / Calendars / Interface / Running Plans / App) and
   stacked preference sections. Synced across devices in Firestore
   `users/{uid}.settings` (plus existing top-level `targetCalendarId`).
+  Opens on **Planning**.
   - **Planning**: default new-plan anchor (Starts/Ends + scrubbable time);
     default Custom block duration in minutes.
   - **Calendars**: **Saved users** (name + email on one line; add form
@@ -800,7 +803,7 @@ library, etc.) sit above those; toasts sit above nested dialogs. Modals used:
   Unfiled cannot be renamed or deleted, and its ··· is hidden when it is
   the only folder.
   **New folder +** opens a nested name dialog (Create).
-  Empty archive: "Archive a plan from its ··· menu to tuck it off Home."
+  Empty archive: "Archive a plan from its ··· menu."
   Closed via header "×", click-outside, or Escape. Plans can be
   drag-reordered within a folder (same touch hold as §7.8).
 - **How Time Block works** (help) — opens with why Time Block exists (visualizing
@@ -1166,7 +1169,11 @@ whenever the calendar's visible date range changes.
   separately to the fragment document once the archive has been loaded.
 - **Loading state**: while signed in but the Firestore user isn't
   established yet, or while waiting for the very first snapshot, the app
-  shows the full-screen loading gate rather than a half-populated UI.
+  shows the full-screen loading gate rather than a half-populated UI. If
+  Firebase Auth can't be linked from the restored Google session, the gate
+  clears with a sync error banner instead of spinning forever. Brand-new
+  accounts (no Firestore doc yet) show the app immediately and seed their
+  first document via the normal debounced push.
 - **On sign out**: unsubscribe, and reset all cross-device state back to
   defaults in memory (nothing is deleted server-side).
 - **Legacy migration**: earlier versions of the app kept pushed-event

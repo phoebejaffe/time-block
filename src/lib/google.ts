@@ -281,6 +281,21 @@ async function signInToFirebase(
   await signInWithCredential(getFirebaseAuth(), credential)
 }
 
+function readGoogleAccessToken(): string | undefined {
+  const session = readStoredSession()
+  if (session?.access_token && Date.now() < session.expires_at) {
+    return session.access_token
+  }
+  if (gapiReady && typeof gapi !== 'undefined') {
+    try {
+      return gapi.client.getToken()?.access_token
+    } catch {
+      /* gapi not fully ready yet */
+    }
+  }
+  return session?.access_token
+}
+
 /** Ensure Firebase is signed in after a silent Google token restore/refresh. */
 async function ensureFirebaseSession(accessToken: string): Promise<void> {
   if (!isFirebaseConfigured()) return
@@ -293,6 +308,17 @@ async function ensureFirebaseSession(accessToken: string): Promise<void> {
     // the UI can still recover; surface via console for diagnostics.
     console.warn('Firebase silent re-auth failed:', err)
   }
+}
+
+/** Retry linking Firestore auth from the active Google OAuth session. */
+export async function linkFirebaseFromGoogleSession(): Promise<boolean> {
+  if (!isFirebaseConfigured()) return false
+  const auth = getFirebaseAuth()
+  if (auth.currentUser) return true
+  const accessToken = readGoogleAccessToken()
+  if (!accessToken) return false
+  await signInToFirebase(undefined, accessToken)
+  return Boolean(auth.currentUser)
 }
 
 async function signOutFirebase(): Promise<void> {
@@ -521,7 +547,7 @@ async function refreshAccessToken(
           refresh_token: refreshToken,
         })
         setGapiToken(next.access_token)
-        await ensureFirebaseSession(next.access_token)
+        void ensureFirebaseSession(next.access_token)
         recordRefreshAttempt(source, true, null, Date.now() - started)
         return true
       } catch (err) {
@@ -624,7 +650,7 @@ async function activateRestoredSession(
 ): Promise<true> {
   setGapiToken(session.access_token)
   applyScopes(session.scope)
-  await ensureFirebaseSession(session.access_token)
+  void ensureFirebaseSession(session.access_token)
   startTokenRefreshLoop()
   restoreSucceeded = true
   restoreDetail = detail

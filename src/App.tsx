@@ -686,10 +686,16 @@ export default function App() {
     return `Build time: ${date} at ${time}`
   }, [])
 
+  const sessionRestoring =
+    !session.ready && session.diagnostics.hasStoredSession
+  const showLoadingGate =
+    (session.signedIn && (!session.ready || userData.loading)) ||
+    sessionRestoring
+
   // After OAuth → app-body mounts; give flex layout a moment then the calendar
   // measures itself via ResizeObserver (pixel height, not percentage).
   useLayoutEffect(() => {
-    if (!session.ready || !session.signedIn || userData.loading) return
+    if (showLoadingGate) return
 
     function nudgeLayout() {
       window.dispatchEvent(new Event('resize'))
@@ -702,7 +708,7 @@ export default function App() {
     return () => {
       for (const id of timers) window.clearTimeout(id)
     }
-  }, [session.ready, session.signedIn, userData.loading])
+  }, [showLoadingGate])
 
   return (
     <div className="app">
@@ -738,7 +744,7 @@ export default function App() {
         </div>
       )}
 
-      {!session.ready || (session.signedIn && userData.loading) ? (
+      {showLoadingGate ? (
         <div className="app-gate">
           <div className="empty-state">
             <span className="spinner" aria-hidden />

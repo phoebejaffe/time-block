@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { onAuthStateChanged, type User } from 'firebase/auth'
 import { getFirebaseAuth, isFirebaseConfigured } from '../lib/firebase'
+import { linkFirebaseFromGoogleSession } from '../lib/google'
 import {
   migrateLegacyPlanArchive,
   savePlanArchive,
@@ -92,7 +93,11 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
   const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState<SyncStatus>('idle')
   const [syncError, setSyncError] = useState<string | null>(null)
-  const [firebaseUser, setFirebaseUser] = useState<User | null>(null)
+  const [firebaseUser, setFirebaseUser] = useState<User | null>(() => {
+    if (!isFirebaseConfigured()) return null
+    return getFirebaseAuth().currentUser
+  })
+  const [firebaseLinkFailed, setFirebaseLinkFailed] = useState(false)
 
   const skipNextPushRef = useRef(false)
   const pushPendingRef = useRef(false)
@@ -139,10 +144,51 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
   useEffect(() => {
     if (!signedIn || !isFirebaseConfigured()) {
       setFirebaseUser(null)
+      setFirebaseLinkFailed(false)
       return
     }
-    return onAuthStateChanged(getFirebaseAuth(), setFirebaseUser)
+    const auth = getFirebaseAuth()
+    if (auth.currentUser) {
+      setFirebaseUser(auth.currentUser)
+      setFirebaseLinkFailed(false)
+    }
+    return onAuthStateChanged(auth, (user) => {
+      setFirebaseUser(user)
+      if (user) setFirebaseLinkFailed(false)
+    })
   }, [signedIn])
+
+  useEffect(() => {
+    if (!signedIn || !isFirebaseConfigured() || firebaseUser || firebaseLinkFailed) {
+      return
+    }
+
+    let cancelled = false
+    void (async () => {
+      try {
+        const linked = await linkFirebaseFromGoogleSession()
+        if (cancelled || linked || getFirebaseAuth().currentUser) return
+        setSyncError(
+          'Could not link Google sign-in to sync. Try Recover session below.',
+        )
+        setFirebaseLinkFailed(true)
+        setLoading(false)
+      } catch (err) {
+        if (cancelled) return
+        setSyncError(
+          err instanceof Error
+            ? err.message
+            : 'Could not link Google sign-in to sync',
+        )
+        setFirebaseLinkFailed(true)
+        setLoading(false)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [signedIn, firebaseUser, firebaseLinkFailed])
 
   const applyRemoteArchive = useCallback(
     (remote: { updatedAt: string; planArchive: PlanArchive }) => {
@@ -371,7 +417,6 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
           setLoading(false)
         } else if (!seededRef.current) {
           seededRef.current = true
-          skipNextPushRef.current = true
           const legacyEvents = loadLegacyPushedEvents()
           const legacySnapshots = loadLegacyPushSnapshots()
           if (legacyEvents.length > 0) {
@@ -382,15 +427,8 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
             setPushSnapshots(legacySnapshots)
             stateRef.current.pushSnapshots = legacySnapshots
           }
-          void pushNow(uid)
-            .then(() => setStatus('synced'))
-            .catch((err) => {
-              setStatus('error')
-              setSyncError(
-                err instanceof Error ? err.message : 'Could not save to Firestore',
-              )
-            })
-            .finally(() => setLoading(false))
+          setStatus('syncing')
+          setLoading(false)
         } else {
           setStatus('synced')
           setLoading(false)
@@ -568,6 +606,7 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
     setSettings(defaultUserSettings())
     setStatus('idle')
     setSyncError(null)
+    setFirebaseLinkFailed(false)
     setLoading(false)
     setFirebaseUser(null)
   }, [])
@@ -584,7 +623,12 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
     savedCalendarUsers,
     settings,
     firebaseUser,
-    loading: loading || (signedIn && !firebaseUser && isFirebaseConfigured()),
+    loading:
+      loading ||
+      (signedIn &&
+        !firebaseUser &&
+        isFirebaseConfigured() &&
+        !firebaseLinkFailed),
     status,
     syncError,
     replaceBlockLibrary,

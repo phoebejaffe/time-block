@@ -256,7 +256,7 @@ export function ArchivedPlansModal({
             </p>
           ) : total === 0 && !searching ? (
             <p className="muted block-library-empty">
-              Archive a plan from its ··· menu to tuck it off Home.
+              Archive a plan from its ··· menu.
             </p>
           ) : searching ? (
             searchHits.length === 0 ? (
