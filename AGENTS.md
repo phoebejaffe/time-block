@@ -50,6 +50,9 @@ npm run lint     # oxlint
 npm run preview  # preview a production build
 ```
 
+The SPA deploys to GitHub Pages automatically: deploying is as simple as
+pushing to `main`, which triggers `.github/workflows/deploy.yml`.
+
 See `README.md` for first-time `.env` / Google Cloud / Firebase setup.
 `server/README.md` covers the token-exchange backend deploy.
 
