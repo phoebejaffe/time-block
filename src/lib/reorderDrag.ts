@@ -1,5 +1,6 @@
 export const REORDER_DRAG_ACTIVATE_PX = 5
 export const REORDER_TOUCH_HOLD_MS = 300
+export const REORDER_CLICK_SUPPRESS_PX = 3
 
 /** Swallow one click after reorder drag; returns true if suppressed. */
 export function consumeReorderClickSuppression(ref: {
@@ -21,6 +22,8 @@ type AttachReorderDragOptions = {
   onEnd: (ev: PointerEvent, didActivate: boolean) => void
   /** Return true to abort the gesture (e.g. horizontal swipe). */
   shouldAbortMove?: (dx: number, dy: number) => boolean
+  /** Callback to suppress click events when dragging starts */
+  onSuppressClick?: () => void
 }
 
 /** Pointer listeners for list reorder; touch requires a short hold first. */
@@ -37,12 +40,14 @@ export function attachReorderDragListeners(
     onMove,
     onEnd,
     shouldAbortMove,
+    onSuppressClick,
   } = opts
 
   const requiresHold = pointerType === 'touch'
   let holdReady = !requiresHold
   let active = false
   let cancelled = false
+  let clickSuppressed = false
 
   try {
     handle.setPointerCapture(pointerId)
@@ -78,6 +83,12 @@ export function attachReorderDragListeners(
     const dy = ev.clientY - startY
     const dist = Math.hypot(dx, dy)
 
+    // Suppress clicks on any significant movement, even if drag doesn't fully activate
+    if (!clickSuppressed && dist >= REORDER_CLICK_SUPPRESS_PX) {
+      clickSuppressed = true
+      onSuppressClick?.()
+    }
+
     if (!holdReady) {
       if (dist >= REORDER_DRAG_ACTIVATE_PX) cleanup()
       return
@@ -101,6 +112,8 @@ export function attachReorderDragListeners(
     if (ev.pointerId !== pointerId) return
     const didActivate = active
     if (didActivate) ev.preventDefault()
+    // Suppress click if we moved significantly, even if drag didn't fully activate
+    if (clickSuppressed) onSuppressClick?.()
     onEnd(ev, didActivate)
     cleanup()
   }

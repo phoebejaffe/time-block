@@ -3041,6 +3041,18 @@ body.is-task-reordering .task-sidebar {
 
 .calendar-toolbar-left {
   justify-content: flex-start;
+  gap: 0.5rem;
+}
+
+.calendar-brand {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.calendar-brand-icon {
+  width: 24px;
+  height: 24px;
 }
 
 .calendar-toolbar-right {

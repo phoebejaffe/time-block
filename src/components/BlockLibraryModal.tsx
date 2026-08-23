@@ -469,7 +469,6 @@ function CategorySection({
       },
       onEnd: (ev, didActivate) => {
         if (didActivate) {
-          suppressClickRef.current = true
           handleDropAt(
             dropLineIndexRef.current ?? lineIndexFromY(ev.clientY),
             index,
@@ -479,6 +478,9 @@ function CategorySection({
         setDragIndex(null)
         setDropLineIndex(null)
         dropLineIndexRef.current = null
+      },
+      onSuppressClick: () => {
+        suppressClickRef.current = true
       },
     })
   }

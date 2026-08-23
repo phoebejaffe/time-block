@@ -649,7 +649,6 @@ function FolderSection({
       onEnd: (_ev, didActivate) => {
         const insertAt = dropLineIndexRef.current
         const from = index
-        if (didActivate) suppressClickRef.current = true
         document.body.classList.remove('is-task-reordering')
         setDragIndex(null)
         setDropLineIndex(null)
@@ -659,6 +658,9 @@ function FolderSection({
         if (from < insertAt) toIndex -= 1
         if (toIndex === from) return
         onReorder(from, toIndex)
+      },
+      onSuppressClick: () => {
+        suppressClickRef.current = true
       },
     })
   }

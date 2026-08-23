@@ -1456,7 +1456,6 @@ function BlockGroupPanel({
       },
       onEnd: (ev, didActivate) => {
         if (didActivate) {
-          suppressClickRef.current = true
           const insertAt =
             dropLineIndexRef.current ?? lineIndexFromY(ev.clientY)
           handleDropAt(insertAt, index)
@@ -1465,6 +1464,9 @@ function BlockGroupPanel({
         setDragIndex(null)
         setDropLineIndex(null)
         dropLineIndexRef.current = null
+      },
+      onSuppressClick: () => {
+        suppressClickRef.current = true
       },
     })
   }

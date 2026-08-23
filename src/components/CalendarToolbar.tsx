@@ -76,6 +76,9 @@ export function CalendarToolbar({
   return (
     <div className="calendar-toolbar">
       <div className="calendar-toolbar-side calendar-toolbar-left">
+        <div className="calendar-brand">
+          <img src="/favicon.svg" alt="Time Block" className="calendar-brand-icon" />
+        </div>
         <div className="calendar-nav">
           <button
             type="button"
