@@ -6,6 +6,7 @@ import {
   createTask,
   defaultAnchor,
   defaultPlan,
+  insertTasksAt as insertTasksInList,
   isTaskDelay,
   moveGroupInList,
   prepareGroupForExecution,
@@ -145,29 +146,31 @@ export function usePlan(options?: { getDefaultAnchor?: () => StackAnchor }) {
     [updatePlan],
   )
 
-  const addTask = useCallback(
-    (groupId: string, input: Omit<Task, 'id'>) => {
+  const insertTasksAt = useCallback(
+    (groupId: string, inputs: Omit<Task, 'id'>[], index: number) => {
+      if (inputs.length === 0) return
       updatePlan((prev) => ({
         groups: mapGroup(prev.groups, groupId, (g) => ({
           ...g,
-          tasks: [...g.tasks, createTask(input)],
+          tasks: insertTasksInList(g.tasks, inputs, index),
         })),
       }))
     },
     [updatePlan],
   )
 
+  const addTask = useCallback(
+    (groupId: string, input: Omit<Task, 'id'>) => {
+      insertTasksAt(groupId, [input], Number.MAX_SAFE_INTEGER)
+    },
+    [insertTasksAt],
+  )
+
   const addTasks = useCallback(
     (groupId: string, inputs: Omit<Task, 'id'>[]) => {
-      if (inputs.length === 0) return
-      updatePlan((prev) => ({
-        groups: mapGroup(prev.groups, groupId, (g) => ({
-          ...g,
-          tasks: [...g.tasks, ...inputs.map((input) => createTask(input))],
-        })),
-      }))
+      insertTasksAt(groupId, inputs, Number.MAX_SAFE_INTEGER)
     },
-    [updatePlan],
+    [insertTasksAt],
   )
 
   const updateTask = useCallback(
@@ -506,6 +509,7 @@ export function usePlan(options?: { getDefaultAnchor?: () => StackAnchor }) {
     moveGroup,
     addTask,
     addTasks,
+    insertTasksAt,
     updateTask,
     removeTask,
     insertTaskAt,

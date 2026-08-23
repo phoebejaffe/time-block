@@ -683,7 +683,14 @@ Top to bottom:
        selection order, plus an "Add N block(s)" confirm button; shows an
        empty-state message pointing at the header menu → Block library if the
        library has no categories yet) and **"Custom"** opens the inline
-       task editor directly for a one-off task.
+       task editor directly for a one-off task. Clicking either trigger retains
+       append-at-end behavior. Pressing and dragging either trigger uses the
+       same task-list insertion line as task reordering; releasing over a valid
+       boundary opens the Library picker or Custom editor with that boundary
+       remembered. Confirmed library blocks are inserted there in selection
+       order, and a Custom block is created there. Releasing outside the task
+       list cancels the insertion. This interaction is available in planning
+       and execution mode.
      - **Group footer** (below the task list, on the group's grey outer
        surface, right-aligned; planning mode only): an inline **Revert**
        button whenever the group has drifted from its saved checkpoint

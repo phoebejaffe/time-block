@@ -2446,6 +2446,11 @@ body.is-datetime-scrubbing .task-form-duration input {
   cursor: not-allowed;
 }
 
+.task-new-trigger.is-dragging {
+  color: var(--accent);
+  cursor: grabbing;
+}
+
 .block-groups {
   display: flex;
   flex-direction: column;

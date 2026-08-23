@@ -17,6 +17,7 @@ import {
   groupMatchesCheckpoint,
   groupSidebarAccentColor,
   hasCommittedOnDay,
+  insertTasksAt,
   loadCommittedDays,
   localDateKey,
   markCommittedDay,
@@ -51,6 +52,22 @@ const tasks: Task[] = [
   { id: 'b', title: 'B', durationMinutes: 15 },
   { id: 'c', title: 'C', durationMinutes: 45 },
 ]
+
+describe('insertTasksAt', () => {
+  it('inserts multiple fresh tasks at a clamped boundary', () => {
+    const inserted = insertTasksAt(tasks, [
+      { title: 'X', durationMinutes: 20 },
+      { title: 'Y', durationMinutes: 10 },
+    ], 1)
+    expect(inserted.map((task) => task.title)).toEqual(['A', 'X', 'Y', 'B', 'C'])
+    expect(inserted[1]!.id).not.toBe('x')
+  })
+
+  it('clamps insertion before and after the list', () => {
+    expect(insertTasksAt(tasks, [{ title: 'X', durationMinutes: 1 }], -1).map((t) => t.title)).toEqual(['X', 'A', 'B', 'C'])
+    expect(insertTasksAt(tasks, [{ title: 'X', durationMinutes: 1 }], 99).map((t) => t.title)).toEqual(['A', 'B', 'C', 'X'])
+  })
+})
 
 describe('resolveStack', () => {
   it('stacks forward from a start anchor', () => {

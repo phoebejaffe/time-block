@@ -762,6 +762,18 @@ export function createTask(
   }
 }
 
+/** Insert fresh tasks at an ordered-list boundary, clamping the boundary. */
+export function insertTasksAt(
+  tasks: Task[],
+  inputs: Omit<Task, 'id'>[],
+  index: number,
+): Task[] {
+  const next = [...tasks]
+  const at = Math.max(0, Math.min(index, next.length))
+  next.splice(at, 0, ...inputs.map((input) => createTask(input)))
+  return next
+}
+
 /**
  * Lay out the ordered task list from a shared start or end anchor.
  * - start: first task begins at `at`, subsequent tasks follow

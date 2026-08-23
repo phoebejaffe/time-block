@@ -249,13 +249,23 @@ export default function App() {
     clear()
   }
 
-  function handleAddTask(groupId: string, input: Omit<Task, 'id'>) {
-    plan.addTask(groupId, input)
+  function handleAddTask(
+    groupId: string,
+    input: Omit<Task, 'id'>,
+    index?: number,
+  ) {
+    if (index == null) plan.addTask(groupId, input)
+    else plan.insertTasksAt(groupId, [input], index)
     clear()
   }
 
-  function handleAddBlocks(groupId: string, inputs: Omit<Task, 'id'>[]) {
-    plan.addTasks(groupId, inputs)
+  function handleAddBlocks(
+    groupId: string,
+    inputs: Omit<Task, 'id'>[],
+    index?: number,
+  ) {
+    if (index == null) plan.addTasks(groupId, inputs)
+    else plan.insertTasksAt(groupId, inputs, index)
     clear()
   }
 

@@ -1,4 +1,5 @@
 import {
+  Fragment,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -137,8 +138,12 @@ type TaskSidebarProps = {
   groups: BlockGroup[]
   canDeleteGroup: boolean
   writableCalendars: GoogleCalendar[]
-  onAdd: (groupId: string, task: Omit<Task, 'id'>) => void
-  onAddBlocks: (groupId: string, tasks: Omit<Task, 'id'>[]) => void
+  onAdd: (groupId: string, task: Omit<Task, 'id'>, index?: number) => void
+  onAddBlocks: (
+    groupId: string,
+    tasks: Omit<Task, 'id'>[],
+    index?: number,
+  ) => void
   onUpdate: (groupId: string, task: Task) => void
   onRemove: (groupId: string, id: string) => void
   onReorder: (groupId: string, fromIndex: number, toIndex: number) => void
@@ -502,8 +507,8 @@ export function TaskSidebar({
               setAddingGroupId(null)
               onEditingIdChange(null)
             }}
-            onAdd={(task) => {
-              onAdd(group.id, task)
+            onAdd={(task, index) => {
+              onAdd(group.id, task, index)
               setAddingGroupId(null)
               onEditingIdChange(null)
             }}
@@ -540,7 +545,9 @@ export function TaskSidebar({
             onOpenName={() => openModal('name', group.id)}
             onSetGroupColor={(color) => onSetGroupColor(group.id, color)}
             blockLibrary={blockLibrary}
-            onAddFromLibrary={(inputs) => onAddBlocks(group.id, inputs)}
+            onAddFromLibrary={(inputs, index) =>
+              onAddBlocks(group.id, inputs, index)
+            }
             onAddToLibrary={(task) => {
               setAddToLibraryTask(task)
               setAddToLibraryCategoryId(blockLibrary.categories[0]?.id ?? '')
@@ -883,7 +890,7 @@ type BlockGroupPanelProps = {
   onEditingIdChange: (id: string | null) => void
   onStartAdd: () => void
   onCancelAdd: () => void
-  onAdd: (task: Omit<Task, 'id'>) => void
+  onAdd: (task: Omit<Task, 'id'>, index?: number) => void
   onUpdate: (task: Task) => void
   onRemove: (id: string) => void
   onReorder: (fromIndex: number, toIndex: number) => void
@@ -913,7 +920,7 @@ type BlockGroupPanelProps = {
   onOpenName: () => void
   onSetGroupColor: (color: string | undefined) => void
   blockLibrary: BlockLibrary
-  onAddFromLibrary: (inputs: Omit<Task, 'id'>[]) => void
+  onAddFromLibrary: (inputs: Omit<Task, 'id'>[], index?: number) => void
   onAddToLibrary: (task: Task) => void
   timeStepMinutes?: number
   defaultBlockMinutes?: number
@@ -1006,7 +1013,16 @@ function BlockGroupPanel({
   const { tasks, anchor } = group
   const enabled = isGroupEnabled(group)
   const [dragIndex, setDragIndex] = useState<number | null>(null)
+  const [insertDragSource, setInsertDragSource] = useState<
+    'library' | 'custom' | null
+  >(null)
   const [dropLineIndex, setDropLineIndex] = useState<number | null>(null)
+  const [pendingInsertIndex, setPendingInsertIndex] = useState<number | null>(
+    null,
+  )
+  const [customInsertIndex, setCustomInsertIndex] = useState<number | null>(
+    null,
+  )
   const [listMenuOpen, setListMenuOpen] = useState(false)
   const [libraryOpen, setLibraryOpen] = useState(false)
   const [librarySelection, setLibrarySelection] = useState<string[]>([])
@@ -1028,9 +1044,15 @@ function BlockGroupPanel({
     matchTriggerWidth: true,
     minWidth: 224,
     maxWidth: 288,
-    onClose: () => setLibraryOpen(false),
+    onClose: () => {
+      setLibraryOpen(false)
+      setPendingInsertIndex(null)
+    },
   })
   const dropLineIndexRef = useRef<number | null>(null)
+  const insertDragSourceRef = useRef<'library' | 'custom' | null>(null)
+  const insertDragXRef = useRef(0)
+  const insertDragYRef = useRef(0)
   const suppressClickRef = useRef(false)
   const timePointerActiveRef = useRef(false)
   const tasksLengthRef = useRef(tasks.length)
@@ -1039,6 +1061,7 @@ function BlockGroupPanel({
   const intendedEndAtRef = useRef(group.intendedEndAt)
   intendedEndAtRef.current = group.intendedEndAt
   const [nowMs, setNowMs] = useState(() => Date.now())
+  const dropLineActive = dragIndex !== null || insertDragSource !== null
 
   useEffect(() => {
     if (mode !== 'execution') return
@@ -1097,9 +1120,12 @@ function BlockGroupPanel({
         title: b.title,
         durationMinutes: b.durationMinutes,
         ...(b.empty ? { empty: true } : {}),
+        ...(b.note ? { note: b.note } : {}),
       })),
+      pendingInsertIndex ?? tasks.length,
     )
     setLibrarySelection([])
+    setPendingInsertIndex(null)
     setLibraryOpen(false)
   }
 
@@ -1469,6 +1495,26 @@ function BlockGroupPanel({
     return cards.length
   }
 
+  function insertionIndexAtPoint(clientX: number, clientY: number): number | null {
+    const list = listRef.current
+    if (!list) return null
+    const rect = list.getBoundingClientRect()
+    if (
+      clientX < rect.left ||
+      clientX > rect.right ||
+      clientY < rect.top ||
+      clientY > rect.bottom
+    ) {
+      return null
+    }
+    return lineIndexFromY(clientY)
+  }
+
+  function showDropLineAt(index: number): boolean {
+    if (dropLineIndex !== index || !dropLineActive) return false
+    return dragIndex === null || (index !== dragIndex && index !== dragIndex + 1)
+  }
+
   function beginTaskDrag(
     e: React.PointerEvent<HTMLElement>,
     index: number,
@@ -1489,14 +1535,6 @@ function BlockGroupPanel({
         document.body.classList.add('is-task-reordering')
         if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
           navigator.vibrate?.(12)
-        }
-      },
-      autoScroll: true,
-      onAutoScroll: (clientY) => {
-        const nextLine = lineIndexFromY(clientY)
-        if (dropLineIndexRef.current !== nextLine) {
-          dropLineIndexRef.current = nextLine
-          setDropLineIndex(nextLine)
         }
       },
       onMove: (ev) => {
@@ -1520,7 +1558,118 @@ function BlockGroupPanel({
       onSuppressClick: () => {
         suppressClickRef.current = true
       },
+      autoScroll: true,
+      onAutoScroll: (clientY) => {
+        const nextLine = lineIndexFromY(clientY)
+        if (dropLineIndexRef.current !== nextLine) {
+          dropLineIndexRef.current = nextLine
+          setDropLineIndex(nextLine)
+        }
+      },
     })
+  }
+
+  function beginInsertDrag(
+    e: React.PointerEvent<HTMLButtonElement>,
+    source: 'library' | 'custom',
+  ) {
+    if (e.button !== 0 && e.pointerType === 'mouse') return
+    suppressClickRef.current = false
+    insertDragSourceRef.current = null
+    insertDragXRef.current = e.clientX
+    insertDragYRef.current = e.clientY
+
+    attachReorderDragListeners({
+      handle: e.currentTarget,
+      pointerId: e.pointerId,
+      pointerType: e.pointerType,
+      startX: e.clientX,
+      startY: e.clientY,
+      onActivate: () => {
+        const index = insertionIndexAtPoint(e.clientX, e.clientY)
+        insertDragSourceRef.current = source
+        setInsertDragSource(source)
+        dropLineIndexRef.current = index
+        setDropLineIndex(index)
+        document.body.classList.add('is-task-reordering')
+      },
+      onMove: (ev) => {
+        insertDragXRef.current = ev.clientX
+        insertDragYRef.current = ev.clientY
+        const index = insertionIndexAtPoint(ev.clientX, ev.clientY)
+        if (dropLineIndexRef.current !== index) {
+          dropLineIndexRef.current = index
+          setDropLineIndex(index)
+        }
+      },
+      onEnd: (ev, didActivate) => {
+        const index = didActivate
+          ? insertionIndexAtPoint(ev.clientX, ev.clientY)
+          : null
+        const droppedSource = insertDragSourceRef.current
+        insertDragSourceRef.current = null
+        document.body.classList.remove('is-task-reordering')
+        setInsertDragSource(null)
+        setDropLineIndex(null)
+        dropLineIndexRef.current = null
+        if (index == null || !droppedSource) return
+        setPendingInsertIndex(index)
+        if (droppedSource === 'library') {
+          setLibrarySelection([])
+          setLibraryOpen(true)
+          setListMenuOpen(false)
+        } else {
+          setCustomInsertIndex(index)
+          onStartAdd()
+        }
+      },
+      onSuppressClick: () => {
+        suppressClickRef.current = true
+      },
+      autoScroll: true,
+      onAutoScroll: () => {
+        const index = insertionIndexAtPoint(
+          insertDragXRef.current,
+          insertDragYRef.current,
+        )
+        if (dropLineIndexRef.current !== index) {
+          dropLineIndexRef.current = index
+          setDropLineIndex(index)
+        }
+      },
+    })
+  }
+
+  function clearCustomAdd() {
+    setCustomInsertIndex(null)
+    setPendingInsertIndex(null)
+    onCancelAdd()
+  }
+
+  function renderCustomAddEditor() {
+    return (
+      <TaskFieldsForm
+        initialTitle=""
+        initialDuration={defaultBlockMinutes}
+        stepMinutes={timeStepMinutes}
+        submitLabel="Add"
+        busy={busy}
+        onCancel={clearCustomAdd}
+        onSubmit={(next) => {
+          onAdd(
+            {
+              title: next.title,
+              durationMinutes: next.durationMinutes,
+              ...(next.empty ? { empty: true } : {}),
+              ...(next.note ? { note: next.note } : {}),
+            },
+            customInsertIndex ?? tasks.length,
+          )
+          setCustomInsertIndex(null)
+          setPendingInsertIndex(null)
+        }}
+      />
+    )
   }
 
   if (!enabled && mode !== 'execution') {
@@ -1812,11 +1961,7 @@ function BlockGroupPanel({
               dayKey,
               resolvedTask,
             )
-          const showLineBefore =
-            dropLineIndex === index &&
-            dragIndex !== null &&
-            dropLineIndex !== dragIndex &&
-            dropLineIndex !== dragIndex + 1
+          const showLineBefore = showDropLineAt(index)
           const note = optionalNote(task.note)
 
           function toggleTaskDone() {
@@ -1831,11 +1976,16 @@ function BlockGroupPanel({
           }
 
           return (
-            <li
-              key={task.id}
-              data-task-index={index}
-              data-task-id={task.id}
-              className={[
+            <Fragment key={task.id}>
+              {adding && customInsertIndex === index && (
+                <li className="task-card task-card-new is-editing">
+                  {renderCustomAddEditor()}
+                </li>
+              )}
+              <li
+                data-task-index={index}
+                data-task-id={task.id}
+                className={[
                 'task-card',
                 dragIndex === index ? 'is-dragging' : '',
                 focusedTaskId === task.id ? 'is-calendar-focused' : '',
@@ -2000,47 +2150,37 @@ function BlockGroupPanel({
                   </div>
                 </>
               )}
-            </li>
+              </li>
+            </Fragment>
           )
         })}
 
-        <li
-          className={[
-            'task-card',
-            'task-card-new',
+        {(!adding || customInsertIndex === tasks.length) && (
+          <li
+            className={[
+              'task-card',
+              'task-card-new',
             adding ? 'is-editing' : '',
-            dropLineIndex === tasks.length &&
-            dragIndex !== null &&
-            dropLineIndex !== dragIndex &&
-            dropLineIndex !== dragIndex + 1
-              ? 'drop-line-before'
-              : '',
+            showDropLineAt(tasks.length) ? 'drop-line-before' : '',
           ]
             .filter(Boolean)
             .join(' ')}
         >
-          {adding ? (
-            <TaskFieldsForm
-              initialTitle=""
-              initialDuration={defaultBlockMinutes}
-              stepMinutes={timeStepMinutes}
-              submitLabel="Add"
-              busy={busy}
-              onCancel={onCancelAdd}
-              onSubmit={onAdd}
-            />
-          ) : (
+          {adding ? renderCustomAddEditor() : (
             <div className="task-new-row">
               <div className="task-new-triggers">
                 <div className="task-new-menu task-new-library" ref={libraryMenuRef}>
                   <button
                     ref={libraryMenu.triggerRef}
                     type="button"
-                    className="task-new-trigger"
+                    className={`task-new-trigger${insertDragSource === 'library' ? ' is-dragging' : ''}`}
                     disabled={busy}
+                    onPointerDown={(e) => beginInsertDrag(e, 'library')}
                     aria-expanded={libraryOpen}
                     aria-haspopup="listbox"
                     onClick={() => {
+                      if (consumeReorderClickSuppression(suppressClickRef)) return
+                      setPendingInsertIndex(null)
                       setLibraryOpen((open) => !open)
                       setListMenuOpen(false)
                     }}
@@ -2148,8 +2288,14 @@ function BlockGroupPanel({
                 </div>
                 <button
                   type="button"
-                  className="task-new-trigger task-new-trigger-secondary"
-                  onClick={onStartAdd}
+                  className={`task-new-trigger task-new-trigger-secondary${insertDragSource === 'custom' ? ' is-dragging' : ''}`}
+                  onPointerDown={(e) => beginInsertDrag(e, 'custom')}
+                  onClick={() => {
+                    if (consumeReorderClickSuppression(suppressClickRef)) return
+                    setPendingInsertIndex(null)
+                    setCustomInsertIndex(tasks.length)
+                    onStartAdd()
+                  }}
                   disabled={busy}
                 >
                   <BlockIcon />
@@ -2158,7 +2304,8 @@ function BlockGroupPanel({
               </div>
             </div>
           )}
-        </li>
+          </li>
+        )}
       </ul>
       {mode !== 'execution' && (
         <div className="block-group-footer">
