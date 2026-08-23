@@ -1076,8 +1076,9 @@ whenever the calendar's visible date range changes.
   label renders the start time floating beside the title on the first line
   so wrapped lines run flush left, wraps onto further lines as space
   allows, then ellipsizes once it exceeds the event box's available height
-  (for ≤5-minute events below 1.7× zoom, time and title stay on one
-  baseline and the label overflows above the box instead); label text color is chosen
+  (for ≤5-minute events below 1.7× zoom, ≤10-minute events below 0.9×,
+  ≤15-minute events below 0.5×, and ≤20-minute events below 0.4×, time and
+  title stay on one baseline and the label overflows above the box instead); label text color is chosen
   per-event for WCAG-contrast against that event's background color (black
   or white, whichever has the higher contrast), with a soft outline in the
   opposite color so it stays legible over any group color.
@@ -1117,7 +1118,7 @@ whenever the calendar's visible date range changes.
   including unlabeled quarter-hour rows, has a light orange background;
   labeled rows are orange and include a small direction indicator.
 - **Zoom**: pinch gesture (touch) or Ctrl/Cmd + mouse-wheel scroll changes a
-  vertical zoom factor (clamped 0.6×–2.5×) applied to the calendar's
+  vertical zoom factor (clamped 0.3×–2.5×) applied to the calendar's
   row heights via a CSS custom property. Zoom is anchored to the pointer
   (wheel) or the midpoint between the two touches (pinch), adjusting the
   time-grid scroller so content under that point stays put instead of
@@ -1133,7 +1134,7 @@ whenever the calendar's visible date range changes.
   stay centered. The now-bar is not used to zoom extra or to trigger a
   scroll on its own. If the stacks cannot fit at the current zoom, it
   zooms **out** until they occupy about 90% of the time grid (never in;
-  still clamped to 0.95×). Scroll and zoom share the same 0.5s ease-out;
+  still clamped to 0.3×). Scroll and zoom share the same 0.5s ease-out;
   zoom is not animated when it does not change. Debounced (~250ms) and
   skipped while the user is scrubbing a time, dragging a stack, or pinching
   zoom, so it does not fight live interaction. Not run on the main

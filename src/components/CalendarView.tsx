@@ -117,13 +117,15 @@ function resolvedTaskEventMap(
   return new Map(events.map((event) => [event.taskId, event]))
 }
 
-/** Tighter layout for short events: <30 min, <=10 min, and <=5 min. */
+/** Tighter layout for short events: <30 min, with compact labels by duration. */
 function durationClass(start: Date | string, end: Date | string): string[] {
   const ms = new Date(end).getTime() - new Date(start).getTime()
   if (!Number.isFinite(ms) || ms <= 0) return []
   const minutes = ms / 60_000
   if (minutes <= 5) return ['event-xs', 'event-xxs']
-  if (minutes <= 10) return ['event-xs']
+  if (minutes <= 10) return ['event-xs', 'event-compact-10']
+  if (minutes <= 15) return ['event-sm', 'event-compact-15']
+  if (minutes <= 20) return ['event-sm', 'event-compact-20']
   if (minutes < 30) return ['event-sm']
   return []
 }
@@ -995,6 +997,9 @@ export function CalendarView({
         className={[
           'calendar-body',
           zoom < 1.7 ? 'is-xxs-overflow' : '',
+          zoom < 0.9 ? 'is-10m-overflow' : '',
+          zoom < 0.5 ? 'is-15m-overflow' : '',
+          zoom < 0.4 ? 'is-20m-overflow' : '',
         ]
           .filter(Boolean)
           .join(' ')}

@@ -6,7 +6,7 @@ import {
   type RefObject,
 } from 'react'
 
-export const CAL_ZOOM_MIN = 0.6
+export const CAL_ZOOM_MIN = 0.3
 export const CAL_ZOOM_MAX = 2.5
 
 function clampZoom(value: number): number {
@@ -76,6 +76,7 @@ export function useCalendarZoom({
 }: UseCalendarZoomOptions) {
   const [zoom, setZoom] = useState(1)
   const zoomRef = useRef(1)
+  const previousZoomRef = useRef(1)
   const pinchingRef = useRef(false)
   const pinchRef = useRef<{
     startDistance: number
@@ -90,6 +91,10 @@ export function useCalendarZoom({
 
   useLayoutEffect(() => {
     zoomRef.current = zoom
+    if (previousZoomRef.current !== zoom) {
+      console.log('Calendar zoom adjusted:', zoom)
+      previousZoomRef.current = zoom
+    }
     const anchor = pendingAnchorRef.current
     pendingAnchorRef.current = null
 
