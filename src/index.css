@@ -2657,7 +2657,13 @@ body.is-task-reordering .task-sidebar {
 }
 
 .task-card.is-dragging {
-  opacity: 0.6;
+  opacity: 1;
+}
+
+.task-card.is-dragging .task-card-main,
+.task-card.is-dragging .task-card-icons,
+.task-card.is-dragging .task-done-btn {
+  opacity: 0.35;
 }
 
 .task-card-empty .task-card-main {
