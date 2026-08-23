@@ -76,7 +76,6 @@ export function useCalendarZoom({
 }: UseCalendarZoomOptions) {
   const [zoom, setZoom] = useState(1)
   const zoomRef = useRef(1)
-  const previousZoomRef = useRef(1)
   const pinchingRef = useRef(false)
   const pinchRef = useRef<{
     startDistance: number
@@ -91,10 +90,6 @@ export function useCalendarZoom({
 
   useLayoutEffect(() => {
     zoomRef.current = zoom
-    if (previousZoomRef.current !== zoom) {
-      console.log('Calendar zoom adjusted:', zoom)
-      previousZoomRef.current = zoom
-    }
     const anchor = pendingAnchorRef.current
     pendingAnchorRef.current = null
 
