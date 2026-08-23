@@ -3288,6 +3288,17 @@ body.is-task-reordering .task-sidebar {
   touch-action: pan-y;
   user-select: none;
   -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.calendar-shell .fc .fc-timegrid-event.task-event:active,
+.calendar-shell .fc .fc-daygrid-event.task-event:active,
+.calendar-shell .fc .task-event:focus,
+.calendar-shell .fc .task-event:focus-visible {
+  opacity: 0.8;
+  filter: none;
+  box-shadow: none;
+  outline: none;
 }
 
 .calendar-shell .fc .fc-timegrid-event.task-event-empty,
