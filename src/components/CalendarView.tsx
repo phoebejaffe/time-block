@@ -758,24 +758,49 @@ export function CalendarView({
       if (!label) return
       const minutes =
         slotRange.minMinutes + index * CALENDAR_SLOT_MINUTES
+      const previousDay = minutes < 0
+      const nextDay = minutes >= 24 * 60
       label.classList.toggle(
         'calendar-adjacent-slot-label-cell',
-        minutes < 0 || minutes >= 24 * 60,
+        previousDay || nextDay,
+      )
+      label.classList.toggle(
+        'calendar-previous-day-slot-label-cell',
+        previousDay,
+      )
+      label.classList.toggle(
+        'calendar-next-day-slot-label-cell',
+        nextDay,
       )
     })
-  }, [calendarHeight, slotRange.maxMinutes, slotRange.minMinutes, zoom])
+  }, [groups, calendarHeight, slotRange.maxMinutes, slotRange.minMinutes, zoom, viewType])
 
   function handleSlotLabelClassNames(arg: SlotLabelContentArg): string[] {
     const offset = localDayOffset(arg.date, logicalViewDay())
-    return offset === -1 || offset === 1
-      ? ['calendar-adjacent-slot-label-cell']
-      : []
+    if (offset === -1) {
+      return [
+        'calendar-adjacent-slot-label-cell',
+        'calendar-previous-day-slot-label-cell',
+      ]
+    }
+    if (offset === 1) {
+      return [
+        'calendar-adjacent-slot-label-cell',
+        'calendar-next-day-slot-label-cell',
+      ]
+    }
+    return []
   }
 
   function handleSlotLabelDidMount(arg: SlotLabelMountArg) {
     const offset = localDayOffset(arg.date, logicalViewDay())
     if (offset === -1 || offset === 1) {
       arg.el.classList.add('calendar-adjacent-slot-label-cell')
+      arg.el.classList.add(
+        offset === -1
+          ? 'calendar-previous-day-slot-label-cell'
+          : 'calendar-next-day-slot-label-cell',
+      )
     }
   }
 

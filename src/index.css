@@ -3276,6 +3276,33 @@ body.is-task-reordering .task-sidebar {
   line-height: 1;
 }
 
+.calendar-body .fc .fc-timegrid-slot-label {
+  position: relative;
+}
+
+.calendar-body .fc .fc-timegrid-slot-label.calendar-previous-day-slot-label-cell[data-time$=':30:00']::after,
+.calendar-body .fc .fc-timegrid-slot-label.calendar-next-day-slot-label-cell[data-time$=':30:00']::after {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 0.55rem;
+  font-weight: 500;
+  line-height: 1;
+  color: #000;
+  opacity: 0.35;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.calendar-body .fc .fc-timegrid-slot-label.calendar-previous-day-slot-label-cell[data-time$=':30:00']::after {
+  content: 'yesterday';
+}
+
+.calendar-body .fc .fc-timegrid-slot-label.calendar-next-day-slot-label-cell[data-time$=':30:00']::after {
+  content: 'tomorrow';
+}
+
 .calendar-shell .fc .fc-timegrid-now-indicator-line {
   border-top-width: 2px;
 }
