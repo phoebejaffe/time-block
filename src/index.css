@@ -1739,7 +1739,7 @@ body.is-datetime-scrubbing .task-form-duration input {
 
 .task-card-drag {
   cursor: grab;
-  touch-action: pan-y;
+  touch-action: none;
   width: fit-content;
   max-width: 100%;
   -webkit-user-select: none;
@@ -2266,7 +2266,7 @@ body.is-datetime-scrubbing .task-form-duration input {
 }
 
 .archived-plan-main-draggable {
-  touch-action: pan-y;
+  touch-action: none;
   -webkit-user-select: none;
   user-select: none;
 }

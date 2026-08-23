@@ -47,7 +47,9 @@ export function attachReorderDragListeners(
   let holdReady = !requiresHold
   let active = false
   let cancelled = false
+  let gestureAborted = false
   let clickSuppressed = false
+  let previousY = startY
 
   function capturePointer() {
     try {
@@ -61,7 +63,7 @@ export function attachReorderDragListeners(
 
   const holdTimer = requiresHold
     ? window.setTimeout(() => {
-        if (!cancelled) holdReady = true
+        if (!cancelled && !gestureAborted) holdReady = true
       }, REORDER_TOUCH_HOLD_MS)
     : null
 
@@ -81,10 +83,28 @@ export function attachReorderDragListeners(
     }
   }
 
+  function scrollParentBy(parent: HTMLElement, deltaY: number): boolean {
+    if (parent.scrollHeight <= parent.clientHeight) return false
+    const style = window.getComputedStyle(parent)
+    if (!/(auto|scroll)/.test(style.overflowY)) return false
+    parent.scrollTop -= deltaY
+    return true
+  }
+
+  function scrollNearestParent(deltaY: number) {
+    let parent = handle.parentElement
+    while (parent) {
+      if (scrollParentBy(parent, deltaY)) return
+      parent = parent.parentElement
+    }
+  }
+
   const onPointerMove = (ev: PointerEvent) => {
     if (ev.pointerId !== pointerId || cancelled) return
     const dx = ev.clientX - startX
     const dy = ev.clientY - startY
+    const stepY = ev.clientY - previousY
+    previousY = ev.clientY
     const dist = Math.hypot(dx, dy)
 
     // Suppress clicks on any significant movement, even if drag doesn't fully activate
@@ -93,8 +113,11 @@ export function attachReorderDragListeners(
       onSuppressClick?.()
     }
 
-    if (!holdReady) {
-      if (dist >= REORDER_DRAG_ACTIVATE_PX) cleanup()
+    if (!holdReady || gestureAborted) {
+      if (pointerType === 'touch' && stepY !== 0) {
+        scrollNearestParent(stepY)
+      }
+      if (dist >= REORDER_DRAG_ACTIVATE_PX) gestureAborted = true
       return
     }
 
