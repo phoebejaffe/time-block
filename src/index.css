@@ -3286,21 +3286,23 @@ body.is-task-reordering .task-sidebar {
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  font-size: 0.55rem;
-  font-weight: 500;
-  line-height: 1;
-  color: #000;
-  opacity: 0.35;
-  white-space: nowrap;
+  width: 0.85rem;
+  height: 0.85rem;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  opacity: 0.25;
   pointer-events: none;
 }
 
 .calendar-body .fc .fc-timegrid-slot-label.calendar-previous-day-slot-label-cell[data-time$=':30:00']::after {
-  content: 'yesterday';
+  content: '';
+  background-image: url('../calendar-previous-day.svg');
 }
 
 .calendar-body .fc .fc-timegrid-slot-label.calendar-next-day-slot-label-cell[data-time$=':30:00']::after {
-  content: 'tomorrow';
+  content: '';
+  background-image: url('../calendar-next-day.svg');
 }
 
 .calendar-shell .fc .fc-timegrid-now-indicator-line {
