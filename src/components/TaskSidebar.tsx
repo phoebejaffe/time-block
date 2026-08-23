@@ -83,6 +83,37 @@ const timeFmt = new Intl.DateTimeFormat(undefined, {
 const NEW_EDIT_ID = '__new__'
 const ANCHOR_SCRUB_PX = 25
 const ANCHOR_SCRUB_ACTIVATE_PX = 8
+const TASK_FOCUS_SCROLL_MARGIN = 40
+
+function scrollTaskIntoViewWithMargin(card: HTMLElement) {
+  let scroller = card.parentElement
+  while (scroller) {
+    const style = window.getComputedStyle(scroller)
+    if (
+      scroller.scrollHeight > scroller.clientHeight &&
+      /(auto|scroll)/.test(style.overflowY)
+    ) {
+      const cardRect = card.getBoundingClientRect()
+      const scrollRect = scroller.getBoundingClientRect()
+      const top = scrollRect.top + TASK_FOCUS_SCROLL_MARGIN
+      const bottom = scrollRect.bottom - TASK_FOCUS_SCROLL_MARGIN
+      const delta =
+        cardRect.top < top
+          ? cardRect.top - top
+          : cardRect.bottom > bottom
+            ? cardRect.bottom - bottom
+            : 0
+      if (delta !== 0) {
+        scroller.scrollTo({
+          top: scroller.scrollTop + delta,
+          behavior: 'smooth',
+        })
+      }
+      return
+    }
+    scroller = scroller.parentElement
+  }
+}
 
 type AnchorField = 'hour' | 'minute'
 type ModalKind = 'commit' | 'name'
@@ -1026,10 +1057,10 @@ function BlockGroupPanel({
 
   useEffect(() => {
     if (!focusedTaskId || !tasks.some((t) => t.id === focusedTaskId)) return
-    const card = listRef.current?.querySelector(
+    const card = listRef.current?.querySelector<HTMLElement>(
       `[data-task-id="${CSS.escape(focusedTaskId)}"]`,
     )
-    card?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    if (card) scrollTaskIntoViewWithMargin(card)
   }, [focusedTaskId, tasks])
 
   useEffect(() => {
