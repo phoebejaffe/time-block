@@ -144,6 +144,7 @@ type TaskSidebarProps = {
   } | null) => void
   editingId: string | null
   onEditingIdChange: (id: string | null) => void
+  focusedTaskId?: string | null
   busy?: boolean
   commitProgress?: SyncProgress | null
   signedIn?: boolean
@@ -207,6 +208,7 @@ export function TaskSidebar({
   onTaskEditPreview,
   editingId,
   onEditingIdChange,
+  focusedTaskId = null,
   busy,
   commitProgress = null,
   signedIn,
@@ -458,6 +460,7 @@ export function TaskSidebar({
             pushedEvents={pushedEvents}
             pushSnapshots={pushSnapshots}
             editingId={editingId}
+            focusedTaskId={focusedTaskId}
             adding={addingGroupId === group.id && editingId === NEW_EDIT_ID}
             onEditingIdChange={onEditingIdChange}
             onStartAdd={() => {
@@ -844,6 +847,7 @@ type BlockGroupPanelProps = {
   pushedEvents: PushedEvent[]
   pushSnapshots: PushSnapshot[]
   editingId: string | null
+  focusedTaskId?: string | null
   adding: boolean
   onEditingIdChange: (id: string | null) => void
   onStartAdd: () => void
@@ -934,6 +938,7 @@ function BlockGroupPanel({
   pushedEvents,
   pushSnapshots,
   editingId,
+  focusedTaskId = null,
   adding,
   onEditingIdChange,
   onStartAdd,
@@ -1018,6 +1023,14 @@ function BlockGroupPanel({
   useEffect(() => {
     tasksLengthRef.current = tasks.length
   }, [tasks.length])
+
+  useEffect(() => {
+    if (!focusedTaskId || !tasks.some((t) => t.id === focusedTaskId)) return
+    const card = listRef.current?.querySelector(
+      `[data-task-id="${CSS.escape(focusedTaskId)}"]`,
+    )
+    card?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }, [focusedTaskId, tasks])
 
   useEffect(() => {
     if (!editingId || editingId === NEW_EDIT_ID) return
@@ -1786,6 +1799,7 @@ function BlockGroupPanel({
               className={[
                 'task-card',
                 dragIndex === index ? 'is-dragging' : '',
+                focusedTaskId === task.id ? 'is-calendar-focused' : '',
                 showLineBefore ? 'drop-line-before' : '',
                 editing ? 'is-editing' : '',
                 isTaskEmpty(task) && !editing ? 'task-card-empty' : '',

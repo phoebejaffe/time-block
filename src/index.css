@@ -2109,6 +2109,20 @@ body.is-datetime-scrubbing .task-form-duration input {
   animation: library-block-highlight 6s ease-out forwards;
 }
 
+@keyframes calendar-task-focus {
+  0%,
+  75% {
+    background-color: color-mix(in srgb, var(--accent) 22%, transparent);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.task-card.is-calendar-focused {
+  animation: calendar-task-focus 3s ease-out forwards;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .block-library-list .task-card.is-just-added {
     animation: none;
@@ -3447,6 +3461,13 @@ body.is-task-reordering .task-sidebar {
   flex: 1;
   min-height: 0;
   overflow: auto;
+}
+
+.app-gate-menu {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.85rem;
+  z-index: 2;
 }
 
 .app-gate-footer {

@@ -6,6 +6,7 @@ import { ExecutionModal } from './components/ExecutionModal'
 import { MobileSplitHandle } from './components/MobileSplitHandle'
 import { NoticeToast } from './components/NoticeToast'
 import { SidebarResizeHandle } from './components/SidebarResizeHandle'
+import { SettingsMenu } from './components/SettingsMenu'
 import { TaskSidebar } from './components/TaskSidebar'
 import { useCalendarEvents } from './hooks/useCalendarEvents'
 import { useGoogleSession } from './hooks/useGoogleSession'
@@ -92,6 +93,8 @@ export default function App() {
   )
 
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
+  const [focusedTaskId, setFocusedTaskId] = useState<string | null>(null)
+  const focusTaskTimeoutRef = useRef<number | null>(null)
   const [commitBusy, setCommitBusy] = useState(false)
   const [commitProgress, setCommitProgress] = useState<SyncProgress | null>(null)
   const [viewDate, setViewDate] = useState(() => startOfLocalDay())
@@ -195,6 +198,33 @@ export default function App() {
     setEditingTaskId(id)
     if (id == null) setTaskEditPreview(null)
   }
+
+  function handleCalendarTaskClick(taskId: string) {
+    handleEditingIdChange(null)
+    if (focusTaskTimeoutRef.current !== null) {
+      window.clearTimeout(focusTaskTimeoutRef.current)
+    }
+    const focus = () => setFocusedTaskId(taskId)
+    if (focusedTaskId === taskId) {
+      setFocusedTaskId(null)
+      window.requestAnimationFrame(focus)
+    } else {
+      focus()
+    }
+    focusTaskTimeoutRef.current = window.setTimeout(() => {
+      focusTaskTimeoutRef.current = null
+      setFocusedTaskId(null)
+    }, 3_000)
+  }
+
+  useEffect(
+    () => () => {
+      if (focusTaskTimeoutRef.current !== null) {
+        window.clearTimeout(focusTaskTimeoutRef.current)
+      }
+    },
+    [],
+  )
 
   function handleDatesSet(start: Date, end: Date) {
     calendars.setDates(start, end)
@@ -762,6 +792,34 @@ export default function App() {
 
       {showLoadingGate ? (
         <div className="app-gate">
+          <div className="app-gate-menu">
+            <SettingsMenu
+              busy={busy}
+              signedIn={session.signedIn}
+              onSignIn={() => void handleSignIn()}
+              onSignOut={handleSignOut}
+              authDiagnostics={session.diagnostics}
+              authSignedIn={session.signedIn}
+              authTestRefreshBusy={session.testRefreshBusy}
+              onAuthTestRefresh={() => void session.testRefresh()}
+              blockLibrary={userData.blockLibrary}
+              onReplaceBlockLibrary={userData.replaceBlockLibrary}
+              plan={plan.plan}
+              onReplacePlan={plan.replacePlan}
+              planArchive={userData.planArchive}
+              onReplacePlanArchive={userData.replacePlanArchive}
+              onShowNotice={(text, options) => show('info', text, options)}
+              onClearNotice={clear}
+              savedCalendarUsers={userData.savedCalendarUsers}
+              onReplaceSavedCalendarUsers={userData.replaceSavedCalendarUsers}
+              settings={userData.settings}
+              onReplaceSettings={userData.replaceSettings}
+              targetCalendarId={userData.targetCalendarId}
+              onTargetCalendarChange={userData.setTargetCalendarId}
+              calendars={calendars.calendars}
+              writableCalendars={calendars.writableCalendars}
+            />
+          </div>
           <div className="empty-state">
             <span className="spinner" aria-hidden />
             <p>Loading your plan…</p>
@@ -855,6 +913,7 @@ export default function App() {
             onTaskEditPreview={handleTaskEditPreview}
             editingId={editingTaskId}
             onEditingIdChange={handleEditingIdChange}
+            focusedTaskId={focusedTaskId}
             busy={busy}
             commitProgress={commitProgress}
             signedIn={session.signedIn}
@@ -912,7 +971,7 @@ export default function App() {
                 }
                 setStackDragPreview({ groupId, deltaMs })
               }}
-              onTaskClick={setEditingTaskId}
+              onTaskClick={handleCalendarTaskClick}
               busy={busy}
               calendarsLoading={calendars.busy}
             />
@@ -955,8 +1014,9 @@ export default function App() {
             onTaskEditPreview={handleTaskEditPreview}
             editingId={editingTaskId}
             onEditingIdChange={handleEditingIdChange}
+            focusedTaskId={focusedTaskId}
             onDatesSet={handleDatesSet}
-            onTaskClick={setEditingTaskId}
+            onTaskClick={handleCalendarTaskClick}
             busy={busy}
             commitProgress={commitProgress}
             targetCalendarId={userData.targetCalendarId}

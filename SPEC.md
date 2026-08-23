@@ -560,7 +560,9 @@ Three states, chosen by session/auth status:
 A slim error banner can appear above everything (session errors, sync
 errors, or missing-config warnings) and a toast/notice can appear
 overlaying the bottom of the screen for transient success/error/info
-messages (see §7.6).
+messages (see §7.6). Clicking a local task block in the calendar does not
+open its editor; it scrolls the matching sidebar block into view and
+highlights it for three seconds.
 
 ### 7.2 Responsive behavior (desktop vs. mobile split)
 

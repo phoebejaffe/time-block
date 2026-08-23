@@ -53,6 +53,7 @@ type ExecutionModalProps = {
   } | null) => void
   editingId: string | null
   onEditingIdChange: (id: string | null) => void
+  focusedTaskId?: string | null
   onDatesSet: (start: Date, end: Date) => void
   onTaskClick: (taskId: string) => void
   busy?: boolean
@@ -110,6 +111,7 @@ export function ExecutionModal({
   onTaskEditPreview,
   editingId,
   onEditingIdChange,
+  focusedTaskId = null,
   onDatesSet,
   onTaskClick,
   busy,
@@ -203,6 +205,7 @@ export function ExecutionModal({
           onTaskEditPreview={onTaskEditPreview}
           editingId={editingId}
           onEditingIdChange={onEditingIdChange}
+          focusedTaskId={focusedTaskId}
           busy={busy}
           commitProgress={commitProgress}
           targetCalendarId={targetCalendarId}
