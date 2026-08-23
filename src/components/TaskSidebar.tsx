@@ -1491,6 +1491,14 @@ function BlockGroupPanel({
           navigator.vibrate?.(12)
         }
       },
+      autoScroll: true,
+      onAutoScroll: (clientY) => {
+        const nextLine = lineIndexFromY(clientY)
+        if (dropLineIndexRef.current !== nextLine) {
+          dropLineIndexRef.current = nextLine
+          setDropLineIndex(nextLine)
+        }
+      },
       onMove: (ev) => {
         const nextLine = lineIndexFromY(ev.clientY)
         if (dropLineIndexRef.current !== nextLine) {

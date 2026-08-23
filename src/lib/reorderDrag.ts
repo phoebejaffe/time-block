@@ -1,6 +1,24 @@
 export const REORDER_DRAG_ACTIVATE_PX = 5
 export const REORDER_TOUCH_HOLD_MS = 200
 export const REORDER_CLICK_SUPPRESS_PX = 3
+export const REORDER_AUTO_SCROLL_EDGE_PX = 72
+export const REORDER_AUTO_SCROLL_MAX_PX = 8
+
+export function getReorderAutoScrollDelta(
+  clientY: number,
+  viewportTop: number,
+  viewportBottom: number,
+  edge = REORDER_AUTO_SCROLL_EDGE_PX,
+  maxSpeed = REORDER_AUTO_SCROLL_MAX_PX,
+): number {
+  if (clientY < viewportTop + edge) {
+    return -maxSpeed * Math.min(1, (viewportTop + edge - clientY) / edge)
+  }
+  if (clientY > viewportBottom - edge) {
+    return maxSpeed * Math.min(1, (clientY - (viewportBottom - edge)) / edge)
+  }
+  return 0
+}
 
 /** Swallow one click after reorder drag; returns true if suppressed. */
 export function consumeReorderClickSuppression(ref: {
@@ -24,6 +42,10 @@ type AttachReorderDragOptions = {
   shouldAbortMove?: (dx: number, dy: number) => boolean
   /** Callback to suppress click events when dragging starts */
   onSuppressClick?: () => void
+  /** Enable edge scrolling for the nearest scrollable ancestor. */
+  autoScroll?: boolean
+  /** Called after auto-scrolling so the drop indicator can be recalculated. */
+  onAutoScroll?: (clientY: number) => void
 }
 
 /** Pointer listeners for list reorder; touch requires a short hold first. */
@@ -41,6 +63,8 @@ export function attachReorderDragListeners(
     onEnd,
     shouldAbortMove,
     onSuppressClick,
+    autoScroll = false,
+    onAutoScroll,
   } = opts
 
   const requiresHold = pointerType === 'touch'
@@ -50,6 +74,8 @@ export function attachReorderDragListeners(
   let gestureAborted = false
   let clickSuppressed = false
   let previousY = startY
+  let latestY = startY
+  let autoScrollFrame: number | null = null
 
   function capturePointer() {
     try {
@@ -71,6 +97,10 @@ export function attachReorderDragListeners(
     if (cancelled) return
     cancelled = true
     if (holdTimer != null) window.clearTimeout(holdTimer)
+    if (autoScrollFrame != null) {
+      window.cancelAnimationFrame(autoScrollFrame)
+      autoScrollFrame = null
+    }
     document.removeEventListener('pointermove', onPointerMove)
     document.removeEventListener('pointerup', onPointerUp)
     document.removeEventListener('pointercancel', onPointerUp)
@@ -96,6 +126,44 @@ export function attachReorderDragListeners(
     while (parent) {
       if (scrollParentBy(parent, deltaY)) return
       parent = parent.parentElement
+    }
+  }
+
+  function nearestScrollParent(): HTMLElement | null {
+    let parent = handle.parentElement
+    while (parent) {
+      if (parent.scrollHeight > parent.clientHeight) {
+        const style = window.getComputedStyle(parent)
+        if (/(auto|scroll)/.test(style.overflowY)) return parent
+      }
+      parent = parent.parentElement
+    }
+    return null
+  }
+
+  function runAutoScroll() {
+    autoScrollFrame = null
+    if (cancelled || !active || !autoScroll) return
+    const parent = nearestScrollParent()
+    if (!parent) return
+    const rect = parent.getBoundingClientRect()
+    const delta = getReorderAutoScrollDelta(
+      latestY,
+      rect.top,
+      rect.bottom,
+    )
+    if (delta === 0) return
+    const previousScrollTop = parent.scrollTop
+    parent.scrollTop += delta
+    if (parent.scrollTop === previousScrollTop) return
+    onAutoScroll?.(latestY)
+    autoScrollFrame = window.requestAnimationFrame(runAutoScroll)
+  }
+
+  function scheduleAutoScroll(clientY: number) {
+    latestY = clientY
+    if (autoScroll && autoScrollFrame == null) {
+      autoScrollFrame = window.requestAnimationFrame(runAutoScroll)
     }
   }
 
@@ -134,6 +202,7 @@ export function attachReorderDragListeners(
 
     ev.preventDefault()
     onMove(ev)
+    scheduleAutoScroll(ev.clientY)
   }
 
   const onPointerUp = (ev: PointerEvent) => {

@@ -904,6 +904,10 @@ duration, not the trailing controls) reorders it within its list:
   the dragged item would land as the pointer moves over other rows
   (computed by comparing the pointer's Y position against each row's
   vertical midpoint).
+- While an active plan-block drag is near the top or bottom edge of its
+  scrollable sidebar, the sidebar auto-scrolls in that direction. Scrolling
+  accelerates toward the edge and the drop indicator is recalculated as new
+  rows are revealed.
 - Releasing commits the reorder (a no-op if dropped back at/adjacent to its
   original position) and suppresses the row's own click handler for that
   same release (so it doesn't also re-open the editor).
