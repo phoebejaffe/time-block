@@ -2643,12 +2643,6 @@ body.is-task-reordering .task-sidebar {
 }
 
 .task-card.is-dragging {
-  opacity: 0.45;
-}
-
-.task-card.is-dragging-original,
-.archived-plan-row.is-dragging-original,
-.block-library-list .task-card.is-dragging-original {
   opacity: 0.6;
 }
 
