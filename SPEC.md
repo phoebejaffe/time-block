@@ -1093,8 +1093,14 @@ whenever the calendar's visible date range changes.
   stored time is shifted by the same delta that was dragged. This is the
   exact same code path as manually editing the anchor time field — a drag
   is just another way to change the anchor.
-- **Clicking** a block (rather than dragging it) opens that task for inline
-  editing in the sidebar (scrolling it into view if needed).
+- **Clicking** a block (rather than dragging it) does not open the editor;
+  it scrolls the matching sidebar block into view and highlights it for
+  three seconds. The time grid renders midnight through midnight by default
+  and extends by up to one adjacent day when a block stack crosses midnight;
+  prepending earlier hours compensates `scrollTop` so the visible clock time
+  does not jump. The full left time-label area for previous-/next-day slots,
+  including unlabeled quarter-hour rows, has a light orange background;
+  labeled rows are orange and include a small direction indicator.
 - **Zoom**: pinch gesture (touch) or Ctrl/Cmd + mouse-wheel scroll changes a
   vertical zoom factor (clamped 0.95×–2.5×) applied to the calendar's
   row heights via a CSS custom property. Zoom is anchored to the pointer

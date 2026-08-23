@@ -7,6 +7,8 @@ import type {
   EventClickArg,
   EventContentArg,
   EventInput,
+  SlotLabelContentArg,
+  SlotLabelMountArg,
 } from '@fullcalendar/core'
 import timeGridPlugin from '@fullcalendar/timegrid'
 import interactionPlugin from '@fullcalendar/interaction'
@@ -24,9 +26,19 @@ import {
   pickViewDate,
   resolveStack,
   shiftAnchor,
+  startOfLocalDay,
 } from '../lib/tasks'
-import { useCalendarZoom } from '../hooks/useCalendarZoom'
+import {
+  findTimegridScroller,
+  useCalendarZoom,
+} from '../hooks/useCalendarZoom'
 import { useFitEnabledPlans } from '../hooks/useFitEnabledPlans'
+import {
+  CALENDAR_SLOT_MINUTES,
+  calendarSlotBounds,
+  enabledPlansTimeRange,
+  scrollTopForSlotMinChange,
+} from '../lib/calendarFit'
 import {
   TASK_STACK_CLASS,
   useTaskStackDrag,
@@ -128,6 +140,31 @@ function formatTaskEventTime(date: Date): string {
     .format(date)
     .replace(/\s/g, '')
     .toLowerCase()
+}
+
+function localDayOffset(date: Date, baseDay: Date): number {
+  const dateDay = startOfLocalDay(date)
+  const base = startOfLocalDay(baseDay)
+  const cursor = new Date(base)
+  let offset = 0
+  while (cursor.getTime() < dateDay.getTime() && offset < 2) {
+    cursor.setDate(cursor.getDate() + 1)
+    offset += 1
+  }
+  if (cursor.getTime() === dateDay.getTime()) return offset
+  cursor.setTime(base.getTime())
+  offset = 0
+  while (cursor.getTime() > dateDay.getTime() && offset > -2) {
+    cursor.setDate(cursor.getDate() - 1)
+    offset -= 1
+  }
+  return cursor.getTime() === dateDay.getTime() ? offset : 0
+}
+
+function formatSlotMinutes(minutes: number): string {
+  const sign = minutes < 0 ? '-' : ''
+  const absolute = Math.abs(minutes)
+  return `${sign}${String(Math.floor(absolute / 60)).padStart(2, '0')}:${String(absolute % 60).padStart(2, '0')}:00`
 }
 
 function hexToRgb(hex: string): [number, number, number] | null {
@@ -284,6 +321,11 @@ export function CalendarView({
   const calendarRef = useRef<FullCalendar>(null)
   const shellRef = useRef<HTMLDivElement>(null)
   const calendarBodyRef = useRef<HTMLDivElement>(null)
+  const slotScrollSnapshotRef = useRef<{
+    minMinutes: number
+    scrollTop: number
+    slotHeight: number
+  } | null>(null)
   /** Pixel height — `height="100%"` breaks after the OAuth gate; numeric height sticks across re-renders. */
   const [calendarHeight, setCalendarHeight] = useState(0)
   const dragOriginStartRef = useRef<number | null>(null)
@@ -652,6 +694,109 @@ export function CalendarView({
     return () => cancelAnimationFrame(frame)
   }, [resolvedTaskEvents])
 
+  function logicalViewDay(): Date {
+    const anchor = groups.find(isGroupEnabled)?.anchor.at
+    if (anchor) {
+      const date = new Date(anchor)
+      if (!Number.isNaN(date.getTime())) return startOfLocalDay(date)
+    }
+    const rangeStart = viewRangeRef.current?.start
+    if (rangeStart) return rangeStart
+    return startOfLocalDay()
+  }
+
+  const slotRange = useMemo(() => {
+    const bounds = calendarSlotBounds(enabledPlansTimeRange(groups))
+    return {
+      ...bounds,
+      min: formatSlotMinutes(bounds.minMinutes),
+      max: formatSlotMinutes(bounds.maxMinutes),
+    }
+  }, [groups])
+
+  useLayoutEffect(() => {
+    const body = calendarBodyRef.current
+    if (!body) return
+    const scroller = findTimegridScroller(body)
+    const slot = scroller?.querySelector<HTMLElement>('.fc-timegrid-slot')
+    if (!scroller || !slot) return
+    const slotHeight = slot.getBoundingClientRect().height
+    if (slotHeight <= 0) return
+
+    const previous = slotScrollSnapshotRef.current
+    if (previous && previous.minMinutes !== slotRange.minMinutes) {
+      scroller.scrollTop = scrollTopForSlotMinChange(
+        previous.scrollTop,
+        previous.minMinutes,
+        slotRange.minMinutes,
+        CALENDAR_SLOT_MINUTES,
+        previous.slotHeight,
+        slotHeight,
+      )
+    }
+
+    const capture = () => {
+      slotScrollSnapshotRef.current = {
+        minMinutes: slotRange.minMinutes,
+        scrollTop: scroller.scrollTop,
+        slotHeight,
+      }
+    }
+    capture()
+    scroller.addEventListener('scroll', capture, { passive: true })
+    return () => scroller.removeEventListener('scroll', capture)
+  }, [calendarHeight, slotRange.maxMinutes, slotRange.minMinutes, zoom])
+
+  useLayoutEffect(() => {
+    const body = calendarBodyRef.current
+    if (!body) return
+    const rows = body.querySelectorAll<HTMLTableRowElement>(
+      '.fc-timegrid-slots tr',
+    )
+    rows.forEach((row, index) => {
+      const label = row.querySelector<HTMLElement>('.fc-timegrid-slot-label')
+      if (!label) return
+      const minutes =
+        slotRange.minMinutes + index * CALENDAR_SLOT_MINUTES
+      label.classList.toggle(
+        'calendar-adjacent-slot-label-cell',
+        minutes < 0 || minutes >= 24 * 60,
+      )
+    })
+  }, [calendarHeight, slotRange.maxMinutes, slotRange.minMinutes, zoom])
+
+  function handleSlotLabelClassNames(arg: SlotLabelContentArg): string[] {
+    const offset = localDayOffset(arg.date, logicalViewDay())
+    return offset === -1 || offset === 1
+      ? ['calendar-adjacent-slot-label-cell']
+      : []
+  }
+
+  function handleSlotLabelDidMount(arg: SlotLabelMountArg) {
+    const offset = localDayOffset(arg.date, logicalViewDay())
+    if (offset === -1 || offset === 1) {
+      arg.el.classList.add('calendar-adjacent-slot-label-cell')
+    }
+  }
+
+  function handleSlotLabelContent(arg: SlotLabelContentArg) {
+    const baseDay = logicalViewDay()
+    const offset = localDayOffset(arg.date, baseDay)
+    if (offset !== -1 && offset !== 1) return arg.text
+
+    return (
+      <span
+        className="calendar-adjacent-slot-label"
+        title={offset < 0 ? 'Previous day' : 'Next day'}
+      >
+        <span>{arg.text}</span>
+        <span className="calendar-adjacent-slot-icon" aria-hidden>
+          {offset < 0 ? '↙' : '↗'}
+        </span>
+      </span>
+    )
+  }
+
   const events = useMemo((): EventInput[] => {
     const google: EventInput[] = googleEvents
       .filter((e) => showAllDay || !e.allDay)
@@ -702,24 +847,26 @@ export function CalendarView({
 
   function handleDatesSet(arg: DatesSetArg) {
     const type = arg.view.type
-    viewRangeRef.current = { start: arg.start, end: arg.end }
+    const rangeStart = arg.view.currentStart
+    const rangeEnd = arg.view.currentEnd
+    viewRangeRef.current = { start: rangeStart, end: rangeEnd }
     if (
       type === 'timeGridDay' ||
       type === 'timeGridThreeDay' ||
       type === 'timeGridWeek'
     ) {
       setViewType(type)
-      setTitle(formatCalendarRange(arg.start, arg.end, type))
+      setTitle(formatCalendarRange(rangeStart, rangeEnd, type))
     } else {
       setTitle(arg.view.title)
     }
     const now = new Date()
-    setIsOnToday(now >= arg.start && now < arg.end)
+    setIsOnToday(now >= rangeStart && now < rangeEnd)
     setFarFromTodayOrTomorrow(
-      !isTodayOrTomorrow(pickViewDate(arg.start, arg.end, now)),
+      !isTodayOrTomorrow(pickViewDate(rangeStart, rangeEnd, now)),
     )
-    syncNavDisabled(arg.start, arg.end)
-    onDatesSet(arg.start, arg.end)
+    syncNavDisabled(rangeStart, rangeEnd)
+    onDatesSet(rangeStart, rangeEnd)
     scheduleCalendarHeightSync()
   }
 
@@ -876,8 +1023,11 @@ export function CalendarView({
               }
             }
           }}
-          slotMinTime="05:00:00"
-          slotMaxTime="24:00:00"
+          slotMinTime={slotRange.min}
+          slotMaxTime={slotRange.max}
+          slotLabelClassNames={handleSlotLabelClassNames}
+          slotLabelDidMount={handleSlotLabelDidMount}
+          slotLabelContent={handleSlotLabelContent}
           scrollTime="06:00:00"
           slotDuration="00:15:00"
           slotLabelInterval="01:00:00"

@@ -5,12 +5,11 @@ import {
   type RefObject,
 } from 'react'
 import {
-  CALENDAR_SLOT_MAX_MINUTES,
-  CALENDAR_SLOT_MIN_MINUTES,
   CALENDAR_SLOT_MINUTES,
   FIT_DEBOUNCE_MS,
   FIT_PADDING_PX,
   FIT_SCROLL_MS,
+  calendarSlotBounds,
   clockMinutes,
   enabledPlansFingerprint,
   enabledPlansTimeRange,
@@ -189,13 +188,14 @@ export function useFitEnabledPlans({
       if (!range) return 'done'
       const slotH = slotHeightPx(scroller)
       if (slotH <= 0) return 'retry'
+      const slotBounds = calendarSlotBounds(range)
 
       const fromZoom = zoomNow.current
       const fit = planFit({
         startMinutes: range.startMinutes,
         endMinutes: range.endMinutes,
-        slotMinMinutes: CALENDAR_SLOT_MIN_MINUTES,
-        slotMaxMinutes: CALENDAR_SLOT_MAX_MINUTES,
+        slotMinMinutes: slotBounds.minMinutes,
+        slotMaxMinutes: slotBounds.maxMinutes,
         slotMinutes: CALENDAR_SLOT_MINUTES,
         slotHeight: slotH,
         scrollTop: scroller.scrollTop,

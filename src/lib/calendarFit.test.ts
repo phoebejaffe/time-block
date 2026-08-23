@@ -4,6 +4,7 @@ import {
   CALENDAR_SLOT_MIN_MINUTES,
   CALENDAR_SLOT_MINUTES,
   FIT_ZOOM_FILL,
+  calendarSlotBounds,
   clockMinutes,
   contentYForMinutes,
   easeOut,
@@ -12,6 +13,7 @@ import {
   fitAnimFrame,
   fitScrollTop,
   planFit,
+  scrollTopForSlotMinChange,
 } from './calendarFit'
 import { createBlockGroup, createTask } from './tasks'
 
@@ -98,6 +100,27 @@ describe('enabledPlansTimeRange', () => {
     expect(range!.endMinutes).toBeCloseTo(18 * 60 + 45)
   })
 
+  it('keeps backward stacks relative to the anchor day', () => {
+    const group = createBlockGroup({
+      tasks: [createTask({ title: 'Late', durationMinutes: 120 })],
+      anchor: { kind: 'end', at: at(1) },
+    })
+    const range = enabledPlansTimeRange([group])
+    expect(range).not.toBeNull()
+    expect(range!.startMinutes).toBe(-60)
+    expect(range!.endMinutes).toBe(60)
+    expect(calendarSlotBounds(range)).toEqual({
+      minMinutes: -60,
+      maxMinutes: 24 * 60,
+    })
+  })
+
+  it('limits adjacent-day slots to one day', () => {
+    expect(
+      calendarSlotBounds({ startMinutes: -2000, endMinutes: 3500 }),
+    ).toEqual({ minMinutes: -24 * 60, maxMinutes: 48 * 60 })
+  })
+
   it('fingerprint changes when a group is enabled or the stack moves', () => {
     const group = createBlockGroup({
       id: 'g1',
@@ -130,13 +153,23 @@ describe('enabledPlansTimeRange', () => {
   })
 })
 
+describe('scrollTopForSlotMinChange', () => {
+  it('keeps the same clock time visible when earlier slots are prepended', () => {
+    expect(scrollTopForSlotMinChange(480, 0, -60, 15, 20, 20)).toBe(560)
+  })
+
+  it('accounts for a simultaneous slot-height change', () => {
+    expect(scrollTopForSlotMinChange(480, 0, -60, 15, 20, 10)).toBe(280)
+  })
+})
+
 describe('contentYForMinutes / fitScrollTop', () => {
   const slotH = 20
 
-  it('maps 5am to y=0 and each 15 minutes to one slot', () => {
+  it('maps midnight to y=0 and each 15 minutes to one slot', () => {
     expect(
       contentYForMinutes(
-        5 * 60,
+        0,
         CALENDAR_SLOT_MIN_MINUTES,
         CALENDAR_SLOT_MAX_MINUTES,
         CALENDAR_SLOT_MINUTES,
@@ -151,7 +184,7 @@ describe('contentYForMinutes / fitScrollTop', () => {
         CALENDAR_SLOT_MINUTES,
         slotH,
       ),
-    ).toBe(4 * slotH)
+    ).toBe(24 * slotH)
   })
 
   it('is a no-op when the range is already fully visible', () => {
@@ -205,8 +238,7 @@ describe('planFit', () => {
   }
 
   it('does nothing when the stack is already on screen', () => {
-    // 9:00 is 16 slots below 5:00 → y=320; 10:00 → y=400; plus padding
-    // with scrollTop covering that area:
+    // Keep scrollTop covering the occupied range plus padding.
     const startY = contentYForMinutes(
       9 * 60,
       base.slotMinMinutes,

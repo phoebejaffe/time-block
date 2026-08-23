@@ -3260,6 +3260,22 @@ body.is-task-reordering .task-sidebar {
   vertical-align: middle;
 }
 
+.calendar-body .fc .fc-timegrid-slot-label.calendar-adjacent-slot-label-cell {
+  background: rgba(230, 153, 54, 0.2);
+}
+
+.calendar-adjacent-slot-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  color: #b46318;
+}
+
+.calendar-adjacent-slot-icon {
+  font-size: 0.7rem;
+  line-height: 1;
+}
+
 .calendar-shell .fc .fc-timegrid-now-indicator-line {
   border-top-width: 2px;
 }

@@ -2,11 +2,12 @@ import {
   isGroupEnabled,
   isTaskDisabled,
   resolveStack,
+  startOfLocalDay,
   type BlockGroup,
 } from './tasks'
 
 /** Matches CalendarView `slotMinTime`. */
-export const CALENDAR_SLOT_MIN_MINUTES = 5 * 60
+export const CALENDAR_SLOT_MIN_MINUTES = 0
 /** Matches CalendarView `slotMaxTime`. */
 export const CALENDAR_SLOT_MAX_MINUTES = 24 * 60
 /** Matches CalendarView `slotDuration`. */
@@ -63,8 +64,15 @@ export function enabledPlansTimeRange(
 ): { startMinutes: number; endMinutes: number } | null {
   let minMs = Infinity
   let maxMs = -Infinity
+  let baseDayMs: number | null = null
   for (const group of groups) {
     if (!isGroupEnabled(group)) continue
+    if (baseDayMs == null) {
+      const anchor = new Date(group.anchor.at)
+      if (!Number.isNaN(anchor.getTime())) {
+        baseDayMs = startOfLocalDay(anchor).getTime()
+      }
+    }
     const resolved = resolveStack(group.tasks, group.anchor)
     for (const task of resolved) {
       if (isTaskDisabled(task)) continue
@@ -77,11 +85,43 @@ export function enabledPlansTimeRange(
       if (end > maxMs) maxMs = end
     }
   }
-  if (!Number.isFinite(minMs) || maxMs <= minMs) return null
-  const startMinutes = clockMinutes(new Date(minMs))
+  if (
+    baseDayMs == null ||
+    !Number.isFinite(minMs) ||
+    maxMs <= minMs
+  ) {
+    return null
+  }
   return {
-    startMinutes,
-    endMinutes: startMinutes + (maxMs - minMs) / 60_000,
+    startMinutes: (minMs - baseDayMs) / 60_000,
+    endMinutes: (maxMs - baseDayMs) / 60_000,
+  }
+}
+
+export function calendarSlotBounds(
+  range: { startMinutes: number; endMinutes: number } | null,
+): { minMinutes: number; maxMinutes: number } {
+  if (!range) {
+    return {
+      minMinutes: CALENDAR_SLOT_MIN_MINUTES,
+      maxMinutes: CALENDAR_SLOT_MAX_MINUTES,
+    }
+  }
+  return {
+    minMinutes: Math.max(
+      -24 * 60,
+      Math.min(
+        CALENDAR_SLOT_MIN_MINUTES,
+        Math.floor(range.startMinutes / 60) * 60,
+      ),
+    ),
+    maxMinutes: Math.min(
+      48 * 60,
+      Math.max(
+        CALENDAR_SLOT_MAX_MINUTES,
+        Math.ceil(range.endMinutes / 60) * 60,
+      ),
+    ),
   }
 }
 
@@ -95,6 +135,29 @@ export function enabledPlansFingerprint(groups: BlockGroup[]): string {
   const range = enabledPlansTimeRange(groups)
   if (!range) return `none|${ids}`
   return `${ids}|${range.startMinutes.toFixed(2)}|${range.endMinutes.toFixed(2)}`
+}
+
+export function scrollTopForSlotMinChange(
+  scrollTop: number,
+  previousMinMinutes: number,
+  nextMinMinutes: number,
+  slotMinutes: number,
+  previousSlotHeight: number,
+  nextSlotHeight: number,
+): number {
+  if (
+    slotMinutes <= 0 ||
+    previousSlotHeight <= 0 ||
+    nextSlotHeight <= 0
+  ) {
+    return scrollTop
+  }
+  const visibleMinutes =
+    previousMinMinutes + (scrollTop / previousSlotHeight) * slotMinutes
+  return Math.max(
+    0,
+    ((visibleMinutes - nextMinMinutes) / slotMinutes) * nextSlotHeight,
+  )
 }
 
 export function contentYForMinutes(
