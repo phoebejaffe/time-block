@@ -49,11 +49,15 @@ export function attachReorderDragListeners(
   let cancelled = false
   let clickSuppressed = false
 
-  try {
-    handle.setPointerCapture(pointerId)
-  } catch {
-    /* ignore */
+  function capturePointer() {
+    try {
+      handle.setPointerCapture(pointerId)
+    } catch {
+      /* ignore */
+    }
   }
+
+  if (!requiresHold) capturePointer()
 
   const holdTimer = requiresHold
     ? window.setTimeout(() => {
@@ -101,6 +105,7 @@ export function attachReorderDragListeners(
         return
       }
       active = true
+      capturePointer()
       onActivate()
     }
 
