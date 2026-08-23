@@ -1106,7 +1106,7 @@ whenever the calendar's visible date range changes.
   including unlabeled quarter-hour rows, has a light orange background;
   labeled rows are orange and include a small direction indicator.
 - **Zoom**: pinch gesture (touch) or Ctrl/Cmd + mouse-wheel scroll changes a
-  vertical zoom factor (clamped 0.6×–2.5×) applied to the calendar's
+  vertical zoom factor (clamped 0.4×–2.5×) applied to the calendar's
   row heights via a CSS custom property. Zoom is anchored to the pointer
   (wheel) or the midpoint between the two touches (pinch), adjusting the
   time-grid scroller so content under that point stays put instead of
