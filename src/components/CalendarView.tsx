@@ -969,6 +969,9 @@ export function CalendarView({
       ref={shellRef}
       style={{
         ['--task-event-time-ch' as string]: String(TASK_EVENT_TIME_CHARS),
+        ['--calendar-slot-label-scale' as string]: String(
+          Math.min(1, Math.max(0.7, 0.7 + ((zoom - 0.3) / 0.7) * 0.3)),
+        ),
       }}
     >
       <CalendarToolbar

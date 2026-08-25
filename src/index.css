@@ -3274,6 +3274,7 @@ body.is-task-reordering .task-sidebar {
 
 .calendar-body .fc .fc-timegrid-slot-label {
   vertical-align: middle;
+  font-size: calc(1em * var(--calendar-slot-label-scale, 1));
 }
 
 .calendar-body .fc .fc-timegrid-slot-label.calendar-adjacent-slot-label-cell {
