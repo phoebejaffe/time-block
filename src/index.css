@@ -1798,6 +1798,7 @@ body.is-datetime-scrubbing .task-form-duration input {
   text-align: left;
   white-space: nowrap;
   cursor: pointer;
+  touch-action: none;
 }
 
 .task-new-trigger:focus {
