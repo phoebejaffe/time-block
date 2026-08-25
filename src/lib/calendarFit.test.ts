@@ -115,6 +115,21 @@ describe('enabledPlansTimeRange', () => {
     })
   })
 
+  it('resolves a forward stack across the next local day', () => {
+    const group = createBlockGroup({
+      tasks: [createTask({ title: 'Late', durationMinutes: 120 })],
+      anchor: { kind: 'start', at: at(23) },
+    })
+    const range = enabledPlansTimeRange([group])
+    expect(range).not.toBeNull()
+    expect(range!.startMinutes).toBeCloseTo(23 * 60)
+    expect(range!.endMinutes).toBeCloseTo(25 * 60)
+    expect(calendarSlotBounds(range)).toEqual({
+      minMinutes: 0,
+      maxMinutes: 25 * 60,
+    })
+  })
+
   it('limits adjacent-day slots to one day', () => {
     expect(
       calendarSlotBounds({ startMinutes: -2000, endMinutes: 3500 }),

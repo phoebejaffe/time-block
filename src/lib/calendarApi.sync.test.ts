@@ -187,6 +187,38 @@ describe('syncTasksToCalendar — per-day isolation', () => {
     expect(day1Tracked!.eventId).not.toBe(day2Tracked!.eventId)
   })
 
+  it('writes and tracks a Google event that crosses midnight', async () => {
+    const { store } = mockGapiCalendar()
+    const anchorAt = new Date(2026, 6, 23, 23, 0, 0)
+    const endAt = new Date(2026, 6, 24, 1, 0, 0)
+    const anchor = {
+      kind: 'start' as const,
+      at: anchorAt.toISOString(),
+    }
+    const result = await syncTasksToCalendar(
+      'cal-1',
+      'group-1',
+      [{ id: 't1', title: 'Late focus', durationMinutes: 120 }],
+      anchor,
+      [],
+    )
+
+    expect(result.created).toBe(1)
+    expect(result.pushedEvents).toMatchObject([
+      {
+        calendarId: 'cal-1',
+        groupId: 'group-1',
+        taskId: 't1',
+        dayKey: '2026-07-23',
+      },
+    ])
+    const event = [...store.values()].at(0)
+    expect(event).toMatchObject({
+      start: anchorAt.toISOString(),
+      end: endAt.toISOString(),
+    })
+  })
+
   it('updating one day does not touch the calendar event on another day', async () => {
     const day1Anchor = {
       kind: 'start' as const,

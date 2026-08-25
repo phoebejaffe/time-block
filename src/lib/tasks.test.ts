@@ -920,6 +920,86 @@ describe('execution helpers', () => {
     ).toBe(false)
   })
 
+  it('keeps a concrete start occurrence executable after midnight', () => {
+    const group = {
+      tasks: [{ id: 'late', title: 'Late', durationMinutes: 120 }],
+      anchor: {
+        kind: 'start' as const,
+        at: new Date(2026, 6, 18, 23, 0, 0).toISOString(),
+      },
+    }
+    expect(
+      isGroupExecutableNow(group, new Date(2026, 6, 19, 0, 30, 0)),
+    ).toBe(true)
+    expect(
+      isGroupExecutableNow(group, new Date(2026, 6, 19, 2, 1, 0)),
+    ).toBe(false)
+  })
+
+  it('inserts a delay into the active block after midnight', () => {
+    const group = {
+      id: 'g',
+      tasks: [
+        { id: 'a', title: 'A', durationMinutes: 60 },
+        { id: 'b', title: 'B', durationMinutes: 60 },
+      ],
+      anchor: {
+        kind: 'start' as const,
+        at: new Date(2026, 6, 18, 23, 0, 0).toISOString(),
+      },
+    }
+    const now = new Date(2026, 6, 19, 0, 30, 0)
+    expect(planGotDelayed(group.tasks, group.anchor, now)).toEqual({
+      ok: true,
+      index: 1,
+      delayMinutes: 30,
+    })
+    const next = applyGotDelayed(group, now)
+    expect(next.anchor).toEqual(group.anchor)
+    expect(next.tasks[1]).toMatchObject({
+      title: 'Delay',
+      durationMinutes: 30,
+      empty: true,
+      delay: true,
+    })
+  })
+
+  it('prepares an early end-anchored occurrence with a previous-day start', () => {
+    const next = prepareGroupForExecution(
+      {
+        id: 'g',
+        tasks: [{ id: 'late', title: 'Late', durationMinutes: 120 }],
+        anchor: {
+          kind: 'end',
+          at: new Date(2026, 6, 18, 1, 0, 0).toISOString(),
+        },
+      },
+      new Date(2026, 6, 18, 0, 30, 0),
+    )
+    expect(next.anchor).toEqual({
+      kind: 'start',
+      at: new Date(2026, 6, 17, 23, 0, 0).toISOString(),
+    })
+    expect(next.intendedEndAt).toBe(
+      new Date(2026, 6, 18, 1, 0, 0).toISOString(),
+    )
+  })
+
+  it('compares execution end status against a next-day concrete end', () => {
+    const status = getStackEndStatus(
+      {
+        tasks: [{ id: 'late', title: 'Late', durationMinutes: 120 }],
+        anchor: {
+          kind: 'start',
+          at: new Date(2026, 6, 18, 23, 0, 0).toISOString(),
+        },
+        intendedEndAt: new Date(2026, 6, 19, 1, 0, 0).toISOString(),
+      },
+      new Date(2026, 6, 19, 0, 30, 0),
+    )
+    expect(status).toMatchObject({ kind: 'on-time' })
+  })
+
   it('shouldAutoEndExecution is true 2 hours after the last active block', () => {
     const group = { tasks, anchor: startAnchor }
     // Stack is 09:00–10:30 UTC; auto-end at 12:30.
