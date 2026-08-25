@@ -583,14 +583,18 @@ export function CalendarView({
     const originMs = dragOriginStartRef.current
     if (originMs == null || !span.start) return true
 
-    // Keep stacks on the same local calendar day (vertical time moves only).
-    const origin = new Date(originMs)
-    if (
-      span.start.getFullYear() !== origin.getFullYear() ||
-      span.start.getMonth() !== origin.getMonth() ||
-      span.start.getDate() !== origin.getDate()
-    ) {
-      return false
+    // Day view's overflow slots are a continuation of the same vertical
+    // timeline, so crossing midnight is a valid stack shift. In multi-day
+    // views, retain the column-change guard and keep movement vertical.
+    if (viewType !== 'timeGridDay') {
+      const origin = new Date(originMs)
+      if (
+        span.start.getFullYear() !== origin.getFullYear() ||
+        span.start.getMonth() !== origin.getMonth() ||
+        span.start.getDate() !== origin.getDate()
+      ) {
+        return false
+      }
     }
 
     // Refuse duration changes (resize hits have a different end delta).

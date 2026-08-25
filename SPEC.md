@@ -1104,10 +1104,10 @@ whenever the calendar's visible date range changes.
   DOM transforms); only the sidebar's live preview layer (§8.2) shifts the
   anchor for its own display, so the two views can't fight over layout
   during a drag. A custom `eventAllow` guard: (a) blocks
-  drags entirely during a pinch-zoom gesture, (b) refuses to let the block
-  cross onto a different calendar day (vertical-only reordering within the
-  same day), (c) refuses any change that would alter duration (guards
-  against accidental resize being interpreted as a move), and (d) tracks
+  drags entirely during a pinch-zoom gesture, (b) allows Day-view vertical
+  movement through adjacent-day overflow slots while retaining the day-column
+  guard in multi-day views, (c) refuses any change that would alter duration
+  (guards against accidental resize being interpreted as a move), and (d) tracks
   the very first allowed pointer position as the drag's local origin so
   only actual pointer movement counts (cancels out any initial
   snap/centering jump FullCalendar itself introduces at drag start).
