@@ -328,6 +328,7 @@ export function CalendarView({
   const calendarBodyRef = useRef<HTMLDivElement>(null)
   const slotScrollSnapshotRef = useRef<{
     minMinutes: number
+    maxMinutes: number
     scrollTop: number
     slotHeight: number
   } | null>(null)
@@ -729,7 +730,11 @@ export function CalendarView({
     if (slotHeight <= 0) return
 
     const previous = slotScrollSnapshotRef.current
-    if (previous && previous.minMinutes !== slotRange.minMinutes) {
+    const rangeChanged =
+      previous &&
+      (previous.minMinutes !== slotRange.minMinutes ||
+        previous.maxMinutes !== slotRange.maxMinutes)
+    if (rangeChanged) {
       scroller.scrollTop = scrollTopForSlotMinChange(
         previous.scrollTop,
         previous.minMinutes,
@@ -743,6 +748,7 @@ export function CalendarView({
     const capture = () => {
       slotScrollSnapshotRef.current = {
         minMinutes: slotRange.minMinutes,
+        maxMinutes: slotRange.maxMinutes,
         scrollTop: scroller.scrollTop,
         slotHeight,
       }
