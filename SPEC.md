@@ -230,7 +230,12 @@ the stack on the calendar) while viewing that day. In other words: the
 calendar view always shows "if this group's tasks happened today [or
 whatever day is in view], here's when," and only committing an edit persists
 that day. Default: a new group uses the Settings default anchor (Starts/Ends
-+ time; factory default is "ends at 9:00am today").
++ time; factory default is "ends at 9:00am today"). When execution starts, the
+clock-time template is remapped onto today's local day once and becomes a
+concrete occurrence; an early Ends anchor may therefore resolve to a start on
+the previous local day, and a late Starts anchor may resolve to an end on the
+next local day. The concrete execution occurrence is not remapped again at
+midnight.
 
 ### 4.6 Block-group checkpoint (save/revert a group's "default" blocks)
 
@@ -935,9 +940,10 @@ for running one group against the clock:
    group is executing, the same button stays available (labeled **Running**)
    even if the group is collapsed, to expand it and reopen the run modal.
 2. Entering execution: persist `executingGroupId` on the user sync document;
-   flip the group to `anchor.kind: 'start'` via `toggleAnchorPreservingStack`
-   if needed; place the stored anchor on today's local day (same clock time)
-   so auto-end matches the stack Start was eligible against; set
+   remap the anchor's clock time onto today's local day and, if needed, flip
+   to `anchor.kind: 'start'` via `toggleAnchorPreservingStack` while preserving
+   the concrete occurrence (including a previous-day start for an early Ends
+   plan); set
    `intendedEndAt` from the resolved stack end if not already set for this
    run; turn the group on (`enabled: true`) if it was collapsed; open a
    full-screen **execution modal**. Reopening a run (Running button or the
@@ -957,8 +963,9 @@ for running one group against the clock:
    collapsing), and the "···" overflow sits on the Start / Intended End
    row instead. **Delete** is omitted from the menu.
    Start / Intended End / the end-status strip stay pinned at the top of the
-   pane while the block list scrolls beneath. On open, the calendar scrolls
-   so the group's blocks are in view. Calendar ‹ › are disabled when
+   pane while the block list scrolls beneath. On open, the calendar opens on
+   the concrete execution occurrence and scrolls so all of the group's blocks
+   are in view, including adjacent-day spillover. Calendar ‹ › are disabled when
    the next step would leave the local days occupied by the executing stack
    (a stack may span midnight).
    **"I’m delayed"** (with a clock icon) inserts an empty spacer titled
@@ -1066,7 +1073,8 @@ whenever the calendar's visible date range changes.
   very short events (≤5 min, ≤10 min, <30 min) so labels still fit.
 - **In-app block events** (one FullCalendar event per task, across all
   *enabled* groups, positioned via §4.4's stack resolution against the day
-  currently in view — including `empty`/spacer tasks, which render with
+  currently in view in planning mode, or against the concrete execution
+  occurrence in execution mode — including `empty`/spacer tasks, which render with
   desaturated/muted colors instead of being omitted, and excluding
   `disabled` tasks entirely): each carries the
   group's color (or its muted variant for spacers), is move-only

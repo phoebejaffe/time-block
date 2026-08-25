@@ -962,6 +962,10 @@ describe('execution helpers', () => {
       empty: true,
       delay: true,
     })
+
+    expect(
+      planGotDelayed(group.tasks, group.anchor, new Date(2026, 6, 19, 2, 30, 0), true),
+    ).toEqual({ ok: true, index: 2, delayMinutes: 90 })
   })
 
   it('prepares an early end-anchored occurrence with a previous-day start', () => {
@@ -998,6 +1002,22 @@ describe('execution helpers', () => {
       new Date(2026, 6, 19, 0, 30, 0),
     )
     expect(status).toMatchObject({ kind: 'on-time' })
+  })
+
+  it('auto-ends after a next-day final block', () => {
+    const group = {
+      tasks: [{ id: 'late', title: 'Late', durationMinutes: 120 }],
+      anchor: {
+        kind: 'start' as const,
+        at: new Date(2026, 6, 18, 23, 0, 0).toISOString(),
+      },
+    }
+    expect(
+      shouldAutoEndExecution(group, new Date(2026, 6, 19, 2, 59, 59)),
+    ).toBe(false)
+    expect(
+      shouldAutoEndExecution(group, new Date(2026, 6, 19, 3, 0, 0)),
+    ).toBe(true)
   })
 
   it('shouldAutoEndExecution is true 2 hours after the last active block', () => {

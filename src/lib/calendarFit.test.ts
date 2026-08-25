@@ -252,6 +252,19 @@ describe('planFit', () => {
     paddingPx: 16,
   }
 
+  it('fits a stack whose end is on the next day', () => {
+    const result = planFit({
+      ...base,
+      startMinutes: 23 * 60,
+      endMinutes: 25 * 60,
+      slotMaxMinutes: 26 * 60,
+      viewHeight: 200,
+      zoom: 1,
+      minZoom: 0.3,
+    })
+    expect(result.kind).not.toBe('visible')
+  })
+
   it('does nothing when the stack is already on screen', () => {
     // Keep scrollTop covering the occupied range plus padding.
     const startY = contentYForMinutes(

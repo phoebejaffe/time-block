@@ -225,11 +225,17 @@ export function usePlan(options?: { getDefaultAnchor?: () => StackAnchor }) {
 
   /** Insert an empty "delay" before the current block, or append at the end. */
   const insertGotDelayed = useCallback(
-    (groupId: string, now: Date = new Date()): boolean => {
+    (
+      groupId: string,
+      now: Date = new Date(),
+      concreteOccurrence = false,
+    ): boolean => {
       const group = plan.groups.find((g) => g.id === groupId)
       if (!group) return false
       updatePlan((prev) => ({
-        groups: mapGroup(prev.groups, groupId, (g) => applyGotDelayed(g, now)),
+        groups: mapGroup(prev.groups, groupId, (g) =>
+          applyGotDelayed(g, now, concreteOccurrence),
+        ),
       }))
       return true
     },

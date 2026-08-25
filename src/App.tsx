@@ -153,19 +153,13 @@ export default function App() {
         : undefined,
     [plan.plan.groups, executingGroupId],
   )
-  const executingPreviewGroup = useMemo(
-    () =>
-      executingGroupId
-        ? previewGroups.find((g) => g.id === executingGroupId)
-        : undefined,
-    [previewGroups, executingGroupId],
-  )
+  const executingPreviewGroup = useMemo(() => {
+    if (!executingGroup) return undefined
+    return applyTaskEditPreview([executingGroup], taskEditPreview)[0]
+  }, [executingGroup, taskEditPreview])
   const executingCalendarGroups = useMemo(
-    () =>
-      executingGroupId
-        ? calendarGroups.filter((g) => g.id === executingGroupId)
-        : [],
-    [calendarGroups, executingGroupId],
+    () => (executingPreviewGroup ? [executingPreviewGroup] : []),
+    [executingPreviewGroup],
   )
 
   // Drop stale execution if the group was deleted remotely / locally.
@@ -227,7 +221,14 @@ export default function App() {
   )
 
   function handleDatesSet(start: Date, end: Date) {
-    calendars.setDates(start, end)
+    // The time grid may expose one adjacent day through slotMin/slotMax;
+    // fetch Google events for that spillover even though FullCalendar's view
+    // range itself remains day/week bounded.
+    const eventsStart = new Date(start)
+    eventsStart.setDate(eventsStart.getDate() - 1)
+    const eventsEnd = new Date(end)
+    eventsEnd.setDate(eventsEnd.getDate() + 1)
+    calendars.setDates(eventsStart, eventsEnd)
     const next = pickViewDate(start, end)
     setViewDate((prev) =>
       prev.getTime() === next.getTime() ? prev : next,
@@ -273,7 +274,12 @@ export default function App() {
     const group = plan.plan.groups.find((g) => g.id === groupId)
     if (!group) return
     const previousTasks = group.tasks
-    if (!plan.insertGotDelayed(groupId)) return
+    const inserted = plan.insertGotDelayed(
+      groupId,
+      new Date(),
+      executingGroupId === groupId,
+    )
+    if (!inserted) return
     show('info', 'Added a delay block.', {
       ...undoNoticeOptions(userData.settings.quickUndoSeconds, () => {
         plan.replaceTasks(groupId, previousTasks)
@@ -531,7 +537,10 @@ export default function App() {
   ): Promise<boolean> {
     const group = plan.plan.groups.find((g) => g.id === groupId)
     if (!group) return false
-    const anchor = anchorOnDay(group.anchor, viewDate)
+    const anchor =
+      executingGroupId === groupId
+        ? group.anchor
+        : anchorOnDay(group.anchor, viewDate)
     const dayKey = localDateKey(anchor.at)
     const isUpdate = hasPushedGroupOnDay(userData.pushedEvents, groupId, dayKey)
     if (calendarIds.length === 0 && !isUpdate) {
@@ -638,7 +647,10 @@ export default function App() {
   async function handleDeleteFromCalendar(groupId: string) {
     const group = plan.plan.groups.find((g) => g.id === groupId)
     if (!group) return
-    const anchor = anchorOnDay(group.anchor, viewDate)
+    const anchor =
+      executingGroupId === groupId
+        ? group.anchor
+        : anchorOnDay(group.anchor, viewDate)
     const dayKey = localDateKey(anchor.at)
     if (!hasPushedGroupOnDay(userData.pushedEvents, groupId, dayKey)) return
     const calendarNames = calendarNamesForPushedGroupDay(

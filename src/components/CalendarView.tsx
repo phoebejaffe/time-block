@@ -82,6 +82,8 @@ type CalendarViewProps = {
   navDayBounds?: { first: Date; last: Date } | null
   /** Scroll the time grid so the group's blocks are in view (execution open). */
   scrollTasksIntoViewOnMount?: boolean
+  /** Initial local day for an execution occurrence. */
+  initialDate?: Date
 }
 
 type ResolvedTaskEvent = {
@@ -319,6 +321,7 @@ export function CalendarView({
   stackDragEnabled = true,
   navDayBounds = null,
   scrollTasksIntoViewOnMount = false,
+  initialDate,
 }: CalendarViewProps) {
   const calendarRef = useRef<FullCalendar>(null)
   const shellRef = useRef<HTMLDivElement>(null)
@@ -1010,6 +1013,7 @@ export function CalendarView({
           ref={calendarRef}
           plugins={[timeGridPlugin, interactionPlugin]}
           initialView="timeGridDay"
+          {...(initialDate ? { initialDate } : {})}
           headerToolbar={false}
           views={{
             timeGridThreeDay: {

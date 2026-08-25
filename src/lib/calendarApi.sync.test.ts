@@ -219,6 +219,62 @@ describe('syncTasksToCalendar — per-day isolation', () => {
     })
   })
 
+  it('pushes an end-anchored occurrence that starts the previous day', async () => {
+    const { store } = mockGapiCalendar()
+    const endAt = new Date(2026, 6, 24, 1, 0, 0)
+    const result = await syncTasksToCalendar(
+      'cal-1',
+      'group-1',
+      [{ id: 't1', title: 'Early focus', durationMinutes: 120 }],
+      { kind: 'end', at: endAt.toISOString() },
+      [],
+    )
+
+    expect(result.pushedEvents[0]).toMatchObject({ dayKey: '2026-07-24' })
+    expect([...store.values()][0]).toMatchObject({
+      start: new Date(2026, 6, 23, 23, 0, 0).toISOString(),
+      end: endAt.toISOString(),
+    })
+  })
+
+  it('updates and deletes the same spillover occurrence', async () => {
+    const { store } = mockGapiCalendar()
+    const anchorAt = new Date(2026, 6, 23, 23, 0, 0)
+    const anchor = { kind: 'start' as const, at: anchorAt.toISOString() }
+    const first = await syncTasksToCalendar(
+      'cal-1',
+      'group-1',
+      [{ id: 't1', title: 'Late focus', durationMinutes: 120 }],
+      anchor,
+      [],
+    )
+    const eventId = first.pushedEvents[0]!.eventId
+
+    const updated = await syncTasksToCalendar(
+      'cal-1',
+      'group-1',
+      [{ id: 't1', title: 'Late focus updated', durationMinutes: 90 }],
+      anchor,
+      first.pushedEvents,
+    )
+    expect(updated.updated).toBe(1)
+    expect(updated.created).toBe(0)
+    expect(updated.pushedEvents[0]!.eventId).toBe(eventId)
+    expect(store.get(eventId)).toMatchObject({
+      summary: 'Late focus updated',
+      end: new Date(2026, 6, 24, 0, 30, 0).toISOString(),
+    })
+
+    const deleted = await deleteGroupFromCalendar(
+      'group-1',
+      '2026-07-23',
+      updated.pushedEvents,
+    )
+    expect(deleted.removed).toBe(1)
+    expect(deleted.pushedEvents).toEqual([])
+    expect(store.has(eventId)).toBe(false)
+  })
+
   it('updating one day does not touch the calendar event on another day', async () => {
     const day1Anchor = {
       kind: 'start' as const,

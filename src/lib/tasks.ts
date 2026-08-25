@@ -820,6 +820,28 @@ export function resolveStack(
   return resolved
 }
 
+function occurrenceAnchorForNow(
+  tasks: Task[],
+  anchor: StackAnchor,
+  now: Date,
+): StackAnchor {
+  const active = resolveStack(tasks, anchor).filter(
+    (task) => !isTaskDisabled(task),
+  )
+  const nowMs = now.getTime()
+  const start = active[0]?.start.getTime() ?? NaN
+  const end = active.at(-1)?.end.getTime() ?? NaN
+  if (
+    Number.isFinite(start) &&
+    Number.isFinite(end) &&
+    nowMs >= start - 60 * 60_000 &&
+    nowMs <= end + 60 * 60_000
+  ) {
+    return anchor
+  }
+  return anchorOnDay(anchor, now)
+}
+
 export function shiftAnchor(anchor: StackAnchor, deltaMs: number): StackAnchor {
   return {
     ...anchor,
@@ -854,17 +876,24 @@ export type GotDelayedPlan = {
  * sized from that block's start to now (nearest 5 minutes, minimum 5).
  *
  * When `now` is outside the stack: append at the end. After the stack ends,
- * size from stack end to now; otherwise use 5 minutes.
+ * size from stack end to now; otherwise use 5 minutes. Execution passes
+ * `concreteOccurrence` so an active run is never remapped at midnight.
  */
 export function planGotDelayed(
   tasks: Task[],
   anchor: StackAnchor,
   now: Date = new Date(),
+  concreteOccurrence = false,
 ): GotDelayedPlan {
   if (tasks.length === 0) {
     return { ok: true, index: 0, delayMinutes: 5 }
   }
-  const resolved = resolveStack(tasks, anchorOnDay(anchor, now))
+  const resolved = resolveStack(
+    tasks,
+    concreteOccurrence
+      ? anchor
+      : occurrenceAnchorForNow(tasks, anchor, now),
+  )
   const t = now.getTime()
   const currentIndex = resolved.findIndex(
     (task) =>
@@ -906,8 +935,14 @@ export function planGotDelayed(
 export function applyGotDelayed(
   group: BlockGroup,
   now: Date = new Date(),
+  concreteOccurrence = false,
 ): BlockGroup {
-  const planned = planGotDelayed(group.tasks, group.anchor, now)
+  const planned = planGotDelayed(
+    group.tasks,
+    group.anchor,
+    now,
+    concreteOccurrence,
+  )
   const delay = createTask({
     title: 'Delay',
     durationMinutes: planned.delayMinutes,
@@ -931,7 +966,10 @@ export function isGroupExecutableNow(
   now: Date = new Date(),
 ): boolean {
   if (group.enabled === false || group.tasks.length === 0) return false
-  const resolved = resolveStack(group.tasks, anchorOnDay(group.anchor, now)).filter(
+  const resolved = resolveStack(
+    group.tasks,
+    occurrenceAnchorForNow(group.tasks, group.anchor, now),
+  ).filter(
     (task) => !isTaskDisabled(task),
   )
   if (resolved.length === 0) return false
@@ -973,7 +1011,8 @@ export function shouldAutoEndExecution(
 
 /**
  * Compare resolved stack end to `intendedEndAt`: late, early, or on time.
- * Uses the group's anchor remapped onto `day` (typically today during execution).
+ * Prefer the stored concrete occurrence when it best matches the intended end;
+ * otherwise use the group's clock time remapped onto `day`.
  */
 export type StackEndStatus =
   | {
@@ -1001,8 +1040,18 @@ export function getStackEndStatus(
   if (!group.intendedEndAt) return null
   const intendedEnd = new Date(group.intendedEndAt)
   if (Number.isNaN(intendedEnd.getTime())) return null
-  const resolved = resolveStack(group.tasks, anchorOnDay(group.anchor, day))
-  const actualEnd = resolved[resolved.length - 1]?.end
+  const storedResolved = resolveStack(group.tasks, group.anchor)
+  const remappedResolved = resolveStack(group.tasks, anchorOnDay(group.anchor, day))
+  const intendedMs = intendedEnd.getTime()
+  const endDistance = (resolved: ResolvedTask[]) => {
+    const end = resolved.at(-1)?.end.getTime()
+    return end == null ? Infinity : Math.abs(end - intendedMs)
+  }
+  const resolved =
+    endDistance(storedResolved) <= endDistance(remappedResolved)
+      ? storedResolved
+      : remappedResolved
+  const actualEnd = resolved.at(-1)?.end
   if (!actualEnd) return null
   const deltaMinutes = Math.round(
     (actualEnd.getTime() - intendedEnd.getTime()) / 60_000,
@@ -1057,14 +1106,13 @@ export function prepareGroupForExecution(
   now: Date = new Date(),
 ): BlockGroup {
   const totalMinutes = stackDurationMinutes(group.tasks)
-  const flipped =
-    group.anchor.kind === 'start'
-      ? group.anchor
-      : toggleAnchorPreservingStack(group.anchor, totalMinutes)
-  // Start plan is eligible against today's remapped stack; without writing
-  // that day into the stored anchor, auto-end (which uses stored times)
-  // immediately ends runs whose clock time is from an earlier calendar day.
-  const anchor = anchorOnDay(flipped, now)
+  // Remap the original occurrence first. Flipping an early Ends anchor after
+  // remapping would otherwise move its previous-day start onto tomorrow.
+  const occurrenceAnchor = anchorOnDay(group.anchor, now)
+  const anchor =
+    occurrenceAnchor.kind === 'start'
+      ? occurrenceAnchor
+      : toggleAnchorPreservingStack(occurrenceAnchor, totalMinutes)
   if (group.intendedEndAt) {
     return group.anchor.kind === 'start' && group.anchor.at === anchor.at
       ? group

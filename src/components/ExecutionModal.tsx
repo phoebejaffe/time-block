@@ -7,7 +7,7 @@ import type {
   StackAnchor,
   Task,
 } from '../lib/tasks'
-import { stackOccupiedLocalDays } from '../lib/tasks'
+import { stackOccupiedLocalDays, startOfLocalDay } from '../lib/tasks'
 import type { ArchivedPlan, PlanArchive } from '../lib/planArchive'
 import type { NoticeOptions } from '../lib/notice'
 import type { PushedEvent, PushSnapshot } from '../lib/pushedEvents'
@@ -240,6 +240,7 @@ export function ExecutionModal({
             busy={busy}
             stackDragEnabled={false}
             navDayBounds={navDayBounds}
+            initialDate={startOfLocalDay(new Date(group.anchor.at))}
             scrollTasksIntoViewOnMount
           />
         </main>

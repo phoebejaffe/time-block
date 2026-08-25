@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { anchoredScrollTop } from './useCalendarZoom'
+import { anchoredScrollTop, CAL_ZOOM_MIN } from './useCalendarZoom'
+
+describe('calendar zoom bounds', () => {
+  it('allows the adjacent-day fit minimum zoom', () => {
+    expect(CAL_ZOOM_MIN).toBe(0.3)
+  })
+})
 
 describe('anchoredScrollTop', () => {
   it('scales scroll when the pointer is at the top of the scroller', () => {
