@@ -1746,17 +1746,8 @@ body.is-datetime-scrubbing .task-form-duration input {
   background: color-mix(in srgb, var(--accent) 10%, transparent);
 }
 
-.task-card-drag {
-  cursor: grab;
-  touch-action: none;
-  width: fit-content;
-  max-width: 100%;
-  -webkit-user-select: none;
-  user-select: none;
-}
-
-.task-card-drag:active {
-  cursor: grabbing;
+.task-list > .task-card:not(.task-card-new) {
+  touch-action: pan-y;
 }
 
 .task-card-new:not(.is-editing) {

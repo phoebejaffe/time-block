@@ -678,7 +678,11 @@ Top to bottom:
        when not being edited. Clicking anywhere on a row's main area
        (other than the trailing controls) opens that task for inline
        editing with the duration minutes field focused (title stays focused
-       when adding a new Custom block).
+       when adding a new Custom block). Existing task rows are draggable as
+       whole rows within their own group; a quick vertical touch swipe remains
+       normal list scrolling, and releasing outside the task list cancels the
+       reorder and restores the original order. Task-row dragging does not
+       interfere with the separate Library block/Custom insertion drags.
      - **Inline task editor** (replaces a row, or appears as a fresh row at
        the bottom when adding): a text input for the title, an optional note
        textarea (toggled by a notebook-icon button next to the empty

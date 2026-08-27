@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@atlaskit/pragmatic-drag-and-drop": "^3.0.0",
+    "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.1.0",
     "@atlaskit/pragmatic-drag-and-drop-hitbox": "^1.2.0",
     "@fullcalendar/core": "^6.1.21",
     "@fullcalendar/interaction": "^6.1.21",
@@ -22,6 +23,7 @@
     "react-dom": "^19.2.7"
   },
   "devDependencies": {
+    "@atlaskit/pragmatic-drag-and-drop-unit-testing": "^2.0.0",
     "@types/gapi": "^0.0.47",
     "@types/gapi.client": "^1.0.8",
     "@types/gapi.client.calendar": "^3.0.12",

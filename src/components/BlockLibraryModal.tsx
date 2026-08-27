@@ -19,6 +19,9 @@ import type { NoticeOptions } from '../lib/notice'
 import { undoNoticeOptions } from '../lib/notice'
 import { useFixedMenu } from '../hooks/useFixedMenu'
 import {
+  autoScrollForElements,
+} from '@atlaskit/pragmatic-drag-and-drop-auto-scroll/element'
+import {
   draggable,
   dropTargetForElements,
   monitorForElements,
@@ -112,6 +115,15 @@ export function BlockLibraryModal({
         setDraggingBlockId(null)
         setDropTarget(null)
       },
+    })
+  }, [])
+
+  useEffect(() => {
+    const body = bodyRef.current
+    if (!body) return
+    return autoScrollForElements({
+      element: body,
+      canScroll: ({ source }) => source.data.type === 'block',
     })
   }, [])
 

@@ -75,6 +75,18 @@ import {
   attachReorderDragListeners,
   consumeReorderClickSuppression,
 } from '../lib/reorderDrag'
+import {
+  autoScrollForElements,
+} from '@atlaskit/pragmatic-drag-and-drop-auto-scroll/element'
+import {
+  draggable,
+  dropTargetForElements,
+  monitorForElements,
+} from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
+import {
+  attachClosestEdge,
+  extractClosestEdge,
+} from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge'
 import { ArchivedPlansModal } from './ArchivedPlansModal'
 
 const timeFmt = new Intl.DateTimeFormat(undefined, {
@@ -1014,6 +1026,11 @@ function BlockGroupPanel({
   const { tasks, anchor } = group
   const enabled = isGroupEnabled(group)
   const [dragIndex, setDragIndex] = useState<number | null>(null)
+  const tasksRef = useRef(tasks)
+  tasksRef.current = tasks
+  const handleTaskDropRef = useRef<(insertAt: number, from: number) => void>(
+    () => {},
+  )
   const [insertDragSource, setInsertDragSource] = useState<
     'library' | 'custom' | null
   >(null)
@@ -1031,6 +1048,127 @@ function BlockGroupPanel({
 
   const listRef = useRef<HTMLUListElement>(null)
   const listMenuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const list = listRef.current
+    if (!list) return
+    return autoScrollForElements({
+      element: list,
+      canScroll: ({ source }) =>
+        source.data.type === 'task' && source.data.groupId === group.id,
+    })
+  }, [group.id])
+
+  useEffect(() => {
+    const list = listRef.current
+    if (!list) return
+    return dropTargetForElements({
+      element: list,
+      canDrop: ({ source }) =>
+        source.data.type === 'task' && source.data.groupId === group.id,
+      getData: () => ({ type: 'task-list', groupId: group.id }),
+    })
+  }, [group.id])
+
+  useEffect(() => {
+    const list = listRef.current
+    if (!list) return
+    const cleanups: Array<() => void> = []
+    list.querySelectorAll<HTMLElement>('[data-task-id]').forEach((card) => {
+      if (card.dataset.taskDraggable !== 'true') return
+      const taskId = card.dataset.taskId
+      const index = Number(card.dataset.taskIndex)
+      if (!taskId || !Number.isInteger(index)) return
+      cleanups.push(
+        draggable({
+          element: card,
+          getInitialData: () => ({
+            type: 'task',
+            groupId: group.id,
+            taskId,
+          }),
+        }),
+      )
+      cleanups.push(
+        dropTargetForElements({
+          element: card,
+          canDrop: ({ source }) =>
+            source.data.type === 'task' && source.data.groupId === group.id,
+          getData: ({ input, element }) =>
+            attachClosestEdge(
+              { type: 'task', groupId: group.id, taskId, index },
+              { input, element, allowedEdges: ['top', 'bottom'] },
+            ),
+        }),
+      )
+    })
+    return () => cleanups.forEach((cleanup) => cleanup())
+  }, [group.id, tasks, editingId])
+
+  useEffect(() => {
+    return monitorForElements({
+      onDragStart({ source }) {
+        const data = source.data as {
+          type?: string
+          groupId?: string
+          taskId?: string
+        }
+        if (data.type !== 'task' || data.groupId !== group.id || !data.taskId) {
+          return
+        }
+        const index = tasksRef.current.findIndex((task) => task.id === data.taskId)
+        setDragIndex(index >= 0 ? index : null)
+        setDropLineIndex(index >= 0 ? index : null)
+      },
+      onDrag({ source, location }) {
+        const sourceData = source.data as { type?: string; groupId?: string }
+        if (sourceData.type !== 'task' || sourceData.groupId !== group.id) return
+        const target = location.current.dropTargets[0]
+        const data = target?.data as
+          | { type?: string; groupId?: string; index?: number; taskId?: string; closestEdge?: 'top' | 'bottom' }
+          | undefined
+        if (!data || data.groupId !== group.id) {
+          setDropLineIndex(null)
+          return
+        }
+        if (data.type === 'task-list') {
+          setDropLineIndex(tasksRef.current.length)
+        } else if (data.type === 'task' && data.index != null) {
+          setDropLineIndex(
+            data.index + (extractClosestEdge(data) === 'bottom' ? 1 : 0),
+          )
+        }
+      },
+      onDrop({ source, location }) {
+        const sourceData = source.data as {
+          type?: string
+          groupId?: string
+          taskId?: string
+        }
+        if (sourceData.type === 'task' && sourceData.groupId === group.id && sourceData.taskId) {
+          const target = location.current.dropTargets[0]
+          const data = target?.data as
+            | { type?: string; groupId?: string; index?: number; closestEdge?: 'top' | 'bottom' }
+            | undefined
+          if (data?.groupId === group.id) {
+            const insertAt =
+              data.type === 'task-list'
+                ? tasksRef.current.length
+                : data.index != null
+                  ? data.index + (extractClosestEdge(data) === 'bottom' ? 1 : 0)
+                  : null
+            const from = tasksRef.current.findIndex((task) => task.id === sourceData.taskId)
+            if (insertAt != null && from >= 0) {
+              handleTaskDropRef.current(insertAt, from)
+            }
+          }
+        }
+        setDragIndex(null)
+        setDropLineIndex(null)
+        dropLineIndexRef.current = null
+      },
+    })
+  }, [group.id])
   const listMenu = useFixedMenu({
     open: listMenuOpen,
     align: 'end',
@@ -1509,6 +1647,7 @@ function BlockGroupPanel({
     const to = from < insertAt ? insertAt - 1 : insertAt
     onReorder(from, to)
   }
+  handleTaskDropRef.current = handleDropAt
 
   function lineIndexFromY(clientY: number): number {
     const list = listRef.current
@@ -1539,60 +1678,6 @@ function BlockGroupPanel({
   function showDropLineAt(index: number): boolean {
     if (dropLineIndex !== index || !dropLineActive) return false
     return dragIndex === null || (index !== dragIndex && index !== dragIndex + 1)
-  }
-
-  function beginTaskDrag(
-    e: React.PointerEvent<HTMLElement>,
-    index: number,
-  ) {
-    if (e.button !== 0 && e.pointerType === 'mouse') return
-    suppressClickRef.current = false
-
-    attachReorderDragListeners({
-      handle: e.currentTarget,
-      pointerId: e.pointerId,
-      pointerType: e.pointerType,
-      startX: e.clientX,
-      startY: e.clientY,
-      onActivate: () => {
-        dropLineIndexRef.current = index
-        setDragIndex(index)
-        setDropLineIndex(index)
-        document.body.classList.add('is-task-reordering')
-        if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-          navigator.vibrate?.(12)
-        }
-      },
-      onMove: (ev) => {
-        const nextLine = lineIndexFromY(ev.clientY)
-        if (dropLineIndexRef.current !== nextLine) {
-          dropLineIndexRef.current = nextLine
-          setDropLineIndex(nextLine)
-        }
-      },
-      onEnd: (ev, didActivate) => {
-        if (didActivate) {
-          const insertAt =
-            dropLineIndexRef.current ?? lineIndexFromY(ev.clientY)
-          handleDropAt(insertAt, index)
-        }
-        document.body.classList.remove('is-task-reordering')
-        setDragIndex(null)
-        setDropLineIndex(null)
-        dropLineIndexRef.current = null
-      },
-      onSuppressClick: () => {
-        suppressClickRef.current = true
-      },
-      autoScroll: true,
-      onAutoScroll: (clientY) => {
-        const nextLine = lineIndexFromY(clientY)
-        if (dropLineIndexRef.current !== nextLine) {
-          dropLineIndexRef.current = nextLine
-          setDropLineIndex(nextLine)
-        }
-      },
-    })
   }
 
   function beginInsertDrag(
@@ -2011,6 +2096,7 @@ function BlockGroupPanel({
               <li
                 data-task-index={index}
                 data-task-id={task.id}
+                data-task-draggable={!editing}
                 className={[
                 'task-card',
                 dragIndex === index ? 'is-dragging' : '',
@@ -2078,14 +2164,14 @@ function BlockGroupPanel({
                       }
                       aria-pressed={task.done === true}
                       title={task.done ? 'Finished' : 'Pending'}
+                      onPointerDown={(event) => event.stopPropagation()}
                       onClick={toggleTaskDone}
                     >
                       {task.done ? <FinishedCheckIcon /> : <PendingIcon />}
                     </button>
                     ))}
                   <div
-                    className="task-card-main task-card-drag"
-                    onPointerDown={(e) => beginTaskDrag(e, index)}
+                    className="task-card-main"
                     onClick={() => {
                       if (consumeReorderClickSuppression(suppressClickRef)) return
                       setFocusNoteOnEdit(false)
