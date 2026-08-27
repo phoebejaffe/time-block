@@ -8,6 +8,7 @@ import {
   createSavedBlock,
   formatDurationMinutes,
   isTaskEmpty,
+  moveSavedBlock,
   optionalNote,
   touchBlockLibrary,
 } from '../lib/tasks'
@@ -18,9 +19,14 @@ import type { NoticeOptions } from '../lib/notice'
 import { undoNoticeOptions } from '../lib/notice'
 import { useFixedMenu } from '../hooks/useFixedMenu'
 import {
-  attachReorderDragListeners,
-  consumeReorderClickSuppression,
-} from '../lib/reorderDrag'
+  draggable,
+  dropTargetForElements,
+  monitorForElements,
+} from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
+import {
+  attachClosestEdge,
+  extractClosestEdge,
+} from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge'
 
 type BlockLibraryModalProps = {
   library: BlockLibrary
@@ -31,6 +37,14 @@ type BlockLibraryModalProps = {
   focusBlockId?: string
   quickUndoSeconds?: number
   majorUndoSeconds?: number
+}
+
+type LibraryDropTarget = {
+  type: 'block' | 'category'
+  categoryId: string
+  blockId?: string
+  index?: number
+  closestEdge?: 'top' | 'bottom'
 }
 
 export function BlockLibraryModal({
@@ -51,6 +65,50 @@ export function BlockLibraryModal({
   const [categoryNameInput, setCategoryNameInput] = useState('')
   const bodyRef = useRef<HTMLDivElement>(null)
   const [highlightBlockId, setHighlightBlockId] = useState<string | null>(null)
+  const [draggingBlockId, setDraggingBlockId] = useState<string | null>(null)
+  const [dropTarget, setDropTarget] = useState<LibraryDropTarget | null>(null)
+  const libraryRef = useRef(library)
+  libraryRef.current = library
+  const moveBlockRef = useRef<
+    (blockId: string, target: LibraryDropTarget) => void
+  >(() => {})
+
+  useEffect(() => {
+    return monitorForElements({
+      onDragStart({ source }) {
+        const data = source.data as { type?: string; blockId?: string }
+        if (data.type !== 'block' || !data.blockId) return
+        setDraggingBlockId(data.blockId)
+      },
+      onDrag({ location }) {
+        const target = location.current.dropTargets[0]
+        const data = target?.data as LibraryDropTarget | undefined
+        if (!data || (data.type !== 'block' && data.type !== 'category')) {
+          setDropTarget(null)
+          return
+        }
+        setDropTarget(data)
+      },
+      onDrop({ source, location }) {
+        const sourceData = source.data as {
+          type?: string
+          blockId?: string
+        }
+        const target = location.current.dropTargets[0]
+        const targetData = target?.data as LibraryDropTarget | undefined
+        if (
+          sourceData.type === 'block' &&
+          sourceData.blockId &&
+          targetData &&
+          (targetData.type === 'block' || targetData.type === 'category')
+        ) {
+          moveBlockRef.current(sourceData.blockId, targetData)
+        }
+        setDraggingBlockId(null)
+        setDropTarget(null)
+      },
+    })
+  }, [])
 
   useLayoutEffect(() => {
     if (!focusBlockId) return
@@ -88,6 +146,18 @@ export function BlockLibraryModal({
   function commitCategories(categories: BlockLibraryCategory[]) {
     onChange(touchBlockLibrary(categories))
   }
+
+  function moveBlock(blockId: string, target: LibraryDropTarget) {
+    const categories = moveSavedBlock(
+      libraryRef.current.categories,
+      blockId,
+      target.categoryId,
+      target.blockId,
+      target.closestEdge,
+    )
+    if (categories !== libraryRef.current.categories) commitCategories(categories)
+  }
+  moveBlockRef.current = moveBlock
 
   function updateCategory(
     categoryId: string,
@@ -197,29 +267,6 @@ export function BlockLibraryModal({
     })
   }
 
-  function reorderBlocks(
-    categoryId: string,
-    fromIndex: number,
-    toIndex: number,
-  ) {
-    if (fromIndex === toIndex) return
-    updateCategory(categoryId, (c) => {
-      if (
-        fromIndex < 0 ||
-        toIndex < 0 ||
-        fromIndex >= c.blocks.length ||
-        toIndex >= c.blocks.length
-      ) {
-        return c
-      }
-      const blocks = [...c.blocks]
-      const [moved] = blocks.splice(fromIndex, 1)
-      if (!moved) return c
-      blocks.splice(toIndex, 0, moved)
-      return { ...c, blocks }
-    })
-  }
-
   function openRenameCategory(categoryId: string) {
     const category = library.categories.find((c) => c.id === categoryId)
     if (!category) return
@@ -300,9 +347,9 @@ export function BlockLibraryModal({
                 }
                 onRemoveBlock={(blockId) => removeBlock(category.id, blockId)}
                 onDiscardBlock={(blockId) => discardBlock(category.id, blockId)}
-                onReorderBlocks={(from, to) =>
-                  reorderBlocks(category.id, from, to)
-                }
+                draggingBlockId={draggingBlockId}
+                dropTarget={dropTarget}
+                onDropTargetChange={setDropTarget}
                 highlightBlockId={highlightBlockId}
               />
             ))
@@ -387,7 +434,9 @@ function CategorySection({
   onUpdateBlock,
   onRemoveBlock,
   onDiscardBlock,
-  onReorderBlocks,
+  draggingBlockId,
+  dropTarget,
+  onDropTargetChange,
   highlightBlockId,
 }: {
   category: BlockLibraryCategory
@@ -403,7 +452,9 @@ function CategorySection({
   onUpdateBlock: (blockId: string, next: Omit<SavedBlock, 'id'>) => void
   onRemoveBlock: (blockId: string) => void
   onDiscardBlock: (blockId: string) => void
-  onReorderBlocks: (fromIndex: number, toIndex: number) => void
+  draggingBlockId: string | null
+  dropTarget: LibraryDropTarget | null
+  onDropTargetChange: (target: LibraryDropTarget | null) => void
   highlightBlockId: string | null
 }) {
   const listRef = useRef<HTMLUListElement>(null)
@@ -414,77 +465,19 @@ function CategorySection({
     align: 'end',
     onClose: () => setMenuOpen(false),
   })
-  const [dragIndex, setDragIndex] = useState<number | null>(null)
-  const [dropLineIndex, setDropLineIndex] = useState<number | null>(null)
-  const dropLineIndexRef = useRef<number | null>(null)
-  const suppressClickRef = useRef(false)
+
+  useEffect(() => {
+    const list = listRef.current
+    if (!list) return
+    return dropTargetForElements({
+      element: list,
+      canDrop: ({ source }) => source.data.type === 'block',
+      getData: () => ({ type: 'category', categoryId: category.id }),
+    })
+  }, [category.id])
 
   function blockKey(blockId: string) {
     return `${category.id}:${blockId}`
-  }
-
-  function lineIndexFromY(clientY: number): number {
-    const list = listRef.current
-    if (!list) return 0
-    const cards = list.querySelectorAll<HTMLElement>('[data-block-index]')
-    for (let i = 0; i < cards.length; i++) {
-      const rect = cards[i]!.getBoundingClientRect()
-      if (clientY < rect.top + rect.height / 2) return i
-    }
-    return cards.length
-  }
-
-  function handleDropAt(insertAt: number, fromIndex: number) {
-    let toIndex = insertAt
-    if (fromIndex < insertAt) toIndex -= 1
-    if (toIndex === fromIndex) return
-    onReorderBlocks(fromIndex, toIndex)
-  }
-
-  function beginBlockDrag(
-    e: React.PointerEvent<HTMLElement>,
-    index: number,
-  ) {
-    if (e.button !== 0 && e.pointerType === 'mouse') return
-    suppressClickRef.current = false
-
-    attachReorderDragListeners({
-      handle: e.currentTarget,
-      pointerId: e.pointerId,
-      pointerType: e.pointerType,
-      startX: e.clientX,
-      startY: e.clientY,
-      onActivate: () => {
-        dropLineIndexRef.current = index
-        setDragIndex(index)
-        setDropLineIndex(index)
-        document.body.classList.add('is-task-reordering')
-        e.currentTarget.classList.add('is-dragging-original')
-      },
-      onMove: (ev) => {
-        const nextLine = lineIndexFromY(ev.clientY)
-        if (dropLineIndexRef.current !== nextLine) {
-          dropLineIndexRef.current = nextLine
-          setDropLineIndex(nextLine)
-        }
-      },
-      onEnd: (ev, didActivate) => {
-        if (didActivate) {
-          handleDropAt(
-            dropLineIndexRef.current ?? lineIndexFromY(ev.clientY),
-            index,
-          )
-        }
-        document.body.classList.remove('is-task-reordering')
-        e.currentTarget.classList.remove('is-dragging-original')
-        setDragIndex(null)
-        setDropLineIndex(null)
-        dropLineIndexRef.current = null
-      },
-      onSuppressClick: () => {
-        suppressClickRef.current = true
-      },
-    })
   }
 
   return (
@@ -569,108 +562,38 @@ function CategorySection({
         </div>
       </div>
 
-      <ul className="task-list block-library-list" ref={listRef}>
-        {category.blocks.map((block, index) => {
-          const key = blockKey(block.id)
-          const editing = editingKey === key
-          const showLineBefore =
-            dropLineIndex === index &&
-            dragIndex !== null &&
-            dropLineIndex !== dragIndex &&
-            dropLineIndex !== dragIndex + 1
-          const note = optionalNote(block.note)
-
-          return (
-            <li
-              key={block.id}
-              data-block-index={index}
-              data-block-id={block.id}
-              className={[
-                'task-card',
-                dragIndex === index ? 'is-dragging' : '',
-                showLineBefore ? 'drop-line-before' : '',
-                editing ? 'is-editing' : '',
-                isTaskEmpty(block) && !editing ? 'task-card-empty' : '',
-                highlightBlockId === block.id ? 'is-just-added' : '',
-              ]
-                .filter(Boolean)
-                .join(' ')}
-            >
-              {editing ? (
-                <TaskFieldsForm
-                  initialTitle={block.title}
-                  initialDuration={block.durationMinutes}
-                  initialEmpty={block.empty === true}
-                  initialNote={block.note ?? ''}
-                  submitLabel="Save"
-                  onCancel={() => {
-                    if (!block.title.trim()) onDiscardBlock(block.id)
-                    else onEditingKeyChange(null)
-                  }}
-                  onSubmit={(next) => {
-                    onUpdateBlock(block.id, next)
-                    onEditingKeyChange(null)
-                  }}
-                />
-              ) : (
-                <>
-                  <div
-                    className="task-card-main task-card-drag"
-                    onPointerDown={(e) => beginBlockDrag(e, index)}
-                    onClick={() => {
-                      if (consumeReorderClickSuppression(suppressClickRef)) return
-                      onEditingKeyChange(key)
-                    }}
-                  >
-                    <span className="task-title">
-                      <span className="task-title-text">
-                        {block.title.trim() || 'Untitled'}
-                      </span>
-                      <span className="muted task-duration">
-                        · {formatDurationMinutes(block.durationMinutes)}
-                      </span>
-                      {note && (
-                        <span
-                          className="task-note-icon"
-                          title={note}
-                          aria-hidden
-                        >
-                          <NoteIcon />
-                        </span>
-                      )}
-                    </span>
-                  </div>
-                  <div className="task-card-icons">
-                    <button
-                      type="button"
-                      className="icon-btn"
-                      aria-label={`Edit ${block.title}`}
-                      title="Edit"
-                      onClick={() => {
-                        if (consumeReorderClickSuppression(suppressClickRef)) return
-                        onEditingKeyChange(key)
-                      }}
-                    >
-                      <EditIcon />
-                    </button>
-                    <button
-                      type="button"
-                      className="icon-btn"
-                      aria-label={`Remove ${block.title}`}
-                      title="Remove"
-                      onClick={() => {
-                        if (consumeReorderClickSuppression(suppressClickRef)) return
-                        onRemoveBlock(block.id)
-                      }}
-                    >
-                      <TrashIcon />
-                    </button>
-                  </div>
-                </>
-              )}
-            </li>
-          )
-        })}
+      <ul
+        className={[
+          'task-list',
+          'block-library-list',
+          dropTarget?.type === 'category' && dropTarget.categoryId === category.id
+            ? 'is-drop-target'
+            : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+        ref={listRef}
+      >
+        {category.blocks.map((block, index) => (
+          <LibraryBlockRow
+            key={block.id}
+            block={block}
+            categoryId={category.id}
+            index={index}
+            editing={editingKey === blockKey(block.id)}
+            onEdit={() => onEditingKeyChange(blockKey(block.id))}
+            onUpdate={(next) => onUpdateBlock(block.id, next)}
+            onCancel={() => {
+              if (!block.title.trim()) onDiscardBlock(block.id)
+              else onEditingKeyChange(null)
+            }}
+            onRemove={() => onRemoveBlock(block.id)}
+            dragging={draggingBlockId === block.id}
+            dropTarget={dropTarget}
+            onDropTargetChange={onDropTargetChange}
+            highlight={highlightBlockId === block.id}
+          />
+        ))}
       </ul>
 
       <button
@@ -681,5 +604,153 @@ function CategorySection({
         New block +
       </button>
     </section>
+  )
+}
+
+function LibraryBlockRow({
+  block,
+  categoryId,
+  index,
+  editing,
+  onEdit,
+  onUpdate,
+  onCancel,
+  onRemove,
+  dragging,
+  dropTarget,
+  onDropTargetChange,
+  highlight,
+}: {
+  block: SavedBlock
+  categoryId: string
+  index: number
+  editing: boolean
+  onEdit: () => void
+  onUpdate: (next: Omit<SavedBlock, 'id'>) => void
+  onCancel: () => void
+  onRemove: () => void
+  dragging: boolean
+  dropTarget: LibraryDropTarget | null
+  onDropTargetChange: (target: LibraryDropTarget | null) => void
+  highlight: boolean
+}) {
+  const rowRef = useRef<HTMLLIElement>(null)
+  const isTarget =
+    dropTarget?.type === 'block' && dropTarget.blockId === block.id
+  const note = optionalNote(block.note)
+
+  useEffect(() => {
+    const row = rowRef.current
+    if (!row || editing) return
+    return draggable({
+      element: row,
+      getInitialData: () => ({
+        type: 'block',
+        blockId: block.id,
+        categoryId,
+      }),
+    })
+  }, [block.id, categoryId, editing])
+
+  useEffect(() => {
+    const row = rowRef.current
+    if (!row || editing) return
+    return dropTargetForElements({
+      element: row,
+      canDrop: ({ source }) => source.data.type === 'block',
+      getData: ({ input, element }) =>
+        attachClosestEdge(
+          {
+            type: 'block',
+            blockId: block.id,
+            categoryId,
+            index,
+          },
+          { input, element, allowedEdges: ['top', 'bottom'] },
+        ),
+      onDragLeave: () => onDropTargetChange(null),
+    })
+  }, [block.id, categoryId, editing, index, onDropTargetChange])
+
+  return (
+    <li
+      ref={rowRef}
+      data-block-index={index}
+      data-block-id={block.id}
+      className={[
+        'task-card',
+        dragging ? 'is-dragging' : '',
+        isTarget && extractClosestEdge(dropTarget) === 'top'
+          ? 'drop-line-before'
+          : '',
+        isTarget && extractClosestEdge(dropTarget) === 'bottom'
+          ? 'drop-line-after'
+          : '',
+        editing ? 'is-editing' : '',
+        isTaskEmpty(block) && !editing ? 'task-card-empty' : '',
+        highlight ? 'is-just-added' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+    >
+      {editing ? (
+        <TaskFieldsForm
+          initialTitle={block.title}
+          initialDuration={block.durationMinutes}
+          initialEmpty={block.empty === true}
+          initialNote={block.note ?? ''}
+          submitLabel="Save"
+          onCancel={onCancel}
+          onSubmit={(next) => {
+            onUpdate(next)
+            onCancel()
+          }}
+        />
+      ) : (
+        <>
+          <div className="task-card-main">
+            <button
+              type="button"
+              className="block-library-title-button"
+              onClick={onEdit}
+            >
+              <span className="task-title">
+                <span className="task-title-text">
+                  {block.title.trim() || 'Untitled'}
+                </span>
+                <span className="muted task-duration">
+                  · {formatDurationMinutes(block.durationMinutes)}
+                </span>
+                {note && (
+                  <span className="task-note-icon" title={note} aria-hidden>
+                    <NoteIcon />
+                  </span>
+                )}
+              </span>
+            </button>
+          </div>
+          <div className="task-card-icons">
+            <button
+              type="button"
+              className="icon-btn"
+              aria-label={`Edit ${block.title}`}
+              title="Edit"
+              onClick={onEdit}
+            >
+              <EditIcon />
+            </button>
+            <button
+              type="button"
+              className="icon-btn"
+              aria-label={`Remove ${block.title}`}
+              title="Remove"
+              onClick={onRemove}
+            >
+              <TrashIcon />
+            </button>
+          </div>
+        </>
+      )}
+    </li>
   )
 }

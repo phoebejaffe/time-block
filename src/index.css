@@ -2103,6 +2103,30 @@ body.is-datetime-scrubbing .task-form-duration input {
   border: 1px solid var(--line);
   border-radius: calc(var(--radius) - 2px);
   background: #fff;
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.block-library-list.is-drop-target {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 6%, #fff);
+}
+
+.block-library-list .task-card {
+  touch-action: pan-y;
+}
+
+.block-library-list .task-card:not(.is-editing) {
+  cursor: default;
+}
+
+.block-library-title-button {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+  cursor: inherit;
 }
 
 @keyframes library-block-highlight {

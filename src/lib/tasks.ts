@@ -1470,3 +1470,42 @@ export function touchBlockLibrary(
     updatedAt: new Date().toISOString(),
   }
 }
+
+export function moveSavedBlock(
+  categories: BlockLibraryCategory[],
+  blockId: string,
+  targetCategoryId: string,
+  targetBlockId?: string,
+  edge: 'top' | 'bottom' = 'top',
+): BlockLibraryCategory[] {
+  const next = categories.map((category) => ({
+    ...category,
+    blocks: [...category.blocks],
+  }))
+  const sourceCategory = next.find((category) =>
+    category.blocks.some((block) => block.id === blockId),
+  )
+  const targetCategory = next.find(
+    (category) => category.id === targetCategoryId,
+  )
+  if (!sourceCategory || !targetCategory) return categories
+
+  const sourceIndex = sourceCategory.blocks.findIndex(
+    (block) => block.id === blockId,
+  )
+  let insertAt = targetBlockId
+    ? targetCategory.blocks.findIndex((block) => block.id === targetBlockId)
+    : targetCategory.blocks.length
+  if (insertAt < 0) insertAt = targetCategory.blocks.length
+  if (edge === 'bottom' && targetBlockId) insertAt += 1
+  if (sourceCategory === targetCategory) {
+    if (insertAt === sourceIndex || insertAt === sourceIndex + 1) return categories
+    if (sourceIndex < insertAt) insertAt -= 1
+  }
+
+  const [block] = sourceCategory.blocks.splice(sourceIndex, 1)
+  if (!block) return categories
+  insertAt = Math.max(0, Math.min(insertAt, targetCategory.blocks.length))
+  targetCategory.blocks.splice(insertAt, 0, block)
+  return next
+}

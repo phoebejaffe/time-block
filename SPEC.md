@@ -298,7 +298,10 @@ group you're editing, one or many at a time, rather than replacing/
 restoring the whole list). Users create categories, add/edit/delete/
 reorder blocks within a category via drag, and rename/reorder/delete whole
 categories, from a dedicated "Block library" modal (opened from the app
-menu). A plan-row **Add to library** menu item can also append the
+menu). Each saved block row is draggable as a whole: a click on its title or
+duration opens editing, while a drag reorders within a category or moves the
+block between categories, including empty categories. Short vertical touch
+swipes remain normal list scrolling. A plan-row **Add to library** menu item can also append the
 current block (title/duration/`empty`/`note`) into a chosen category. When adding
 blocks from the library into a group, the user multi-selects blocks (in the
 picker they're numbered in selection order) and they get appended to the

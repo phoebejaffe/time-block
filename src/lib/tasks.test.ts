@@ -23,6 +23,7 @@ import {
   markCommittedDay,
   migratePlan,
   moveGroupInList,
+  moveSavedBlock,
   normalizeBlockLibrary,
   pickViewDate,
   resolveSavedBlocksFromKeys,
@@ -597,6 +598,37 @@ describe('block library', () => {
   it('normalizes invalid library payloads to empty categories', () => {
     expect(normalizeBlockLibrary(null).categories).toEqual([])
     expect(normalizeBlockLibrary({ categories: 'nope' }).categories).toEqual([])
+  })
+
+  it('reorders blocks within a category without changing their ids', () => {
+    const categories = [
+      {
+        id: 'morning',
+        name: 'Morning',
+        blocks: [
+          { id: 'a', title: 'A', durationMinutes: 5 },
+          { id: 'b', title: 'B', durationMinutes: 10 },
+          { id: 'c', title: 'C', durationMinutes: 15 },
+        ],
+      },
+    ]
+    const moved = moveSavedBlock(categories, 'a', 'morning', 'c', 'bottom')
+    expect(moved[0]!.blocks.map((block) => block.id)).toEqual(['b', 'c', 'a'])
+    expect(categories[0]!.blocks.map((block) => block.id)).toEqual(['a', 'b', 'c'])
+  })
+
+  it('moves blocks between categories and supports empty targets', () => {
+    const categories = [
+      {
+        id: 'morning',
+        name: 'Morning',
+        blocks: [{ id: 'a', title: 'A', durationMinutes: 5 }],
+      },
+      { id: 'evening', name: 'Evening', blocks: [] },
+    ]
+    const moved = moveSavedBlock(categories, 'a', 'evening')
+    expect(moved[0]!.blocks).toEqual([])
+    expect(moved[1]!.blocks.map((block) => block.id)).toEqual(['a'])
   })
 })
 

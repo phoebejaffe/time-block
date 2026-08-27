@@ -11,6 +11,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@atlaskit/pragmatic-drag-and-drop": "^3.0.0",
+    "@atlaskit/pragmatic-drag-and-drop-hitbox": "^1.2.0",
     "@fullcalendar/core": "^6.1.21",
     "@fullcalendar/interaction": "^6.1.21",
     "@fullcalendar/react": "^6.1.21",
