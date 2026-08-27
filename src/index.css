@@ -1839,6 +1839,8 @@ body.is-datetime-scrubbing .task-form-duration input {
 .task-new-menu-btn {
   width: 1.5rem;
   height: 1.5rem;
+  user-select: none;
+  -webkit-user-select: none;
   letter-spacing: 0.05em;
   font-size: 0.9rem;
   line-height: 1;
@@ -1873,6 +1875,11 @@ body.is-datetime-scrubbing .task-form-duration input {
 
 .task-new-menu-dropdown-fixed.is-over-modal {
   z-index: var(--z-modal-dropdown);
+}
+
+.block-library-block-menu {
+  min-width: 0;
+  width: max-content;
 }
 
 .task-new-commit {

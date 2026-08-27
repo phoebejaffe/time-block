@@ -13,7 +13,7 @@ import {
   touchBlockLibrary,
 } from '../lib/tasks'
 import { TaskFieldsForm } from './TaskFieldsForm'
-import { EditIcon, NoteIcon, TrashIcon } from './icons'
+import { NoteIcon } from './icons'
 import { FixedMenuPortal } from './FixedMenuPortal'
 import type { NoticeOptions } from '../lib/notice'
 import { undoNoticeOptions } from '../lib/notice'
@@ -483,12 +483,13 @@ export function BlockLibraryModal({
                 ×
               </button>
             </div>
-            <form
-              className="modal-form"
-              onSubmit={(event) => {
-                event.preventDefault()
-                duplicateBlock()
-              }}
+            <div className="modal-body">
+              <form
+                className="modal-form"
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  duplicateBlock()
+                }}
             >
               <label>
                 <span>Category</span>
@@ -522,7 +523,8 @@ export function BlockLibraryModal({
                   Duplicate
                 </button>
               </div>
-            </form>
+              </form>
+            </div>
           </div>
         </div>
       )}
@@ -868,7 +870,7 @@ function LibraryBlockRow({
               open={menuOpen}
               dropdownRef={menu.dropdownRef}
               style={menu.style}
-              className="task-new-menu-dropdown is-over-modal"
+              className="task-new-menu-dropdown block-library-block-menu is-over-modal"
             >
               <button
                 type="button"
@@ -879,7 +881,7 @@ function LibraryBlockRow({
                   onEdit()
                 }}
               >
-                <EditIcon /> Edit
+                Edit
               </button>
               <button
                 type="button"
@@ -902,7 +904,7 @@ function LibraryBlockRow({
                   onRemove()
                 }}
               >
-                <TrashIcon /> Delete
+                Delete
               </button>
             </FixedMenuPortal>
           </div>
