@@ -63,6 +63,11 @@ export function BlockLibraryModal({
     null,
   )
   const [categoryNameInput, setCategoryNameInput] = useState('')
+  const [duplicateSource, setDuplicateSource] = useState<{
+    categoryId: string
+    blockId: string
+  } | null>(null)
+  const [duplicateTargetCategoryId, setDuplicateTargetCategoryId] = useState('')
   const bodyRef = useRef<HTMLDivElement>(null)
   const [highlightBlockId, setHighlightBlockId] = useState<string | null>(null)
   const [draggingBlockId, setDraggingBlockId] = useState<string | null>(null)
@@ -137,11 +142,16 @@ export function BlockLibraryModal({
         closeCategoryNameDialog()
         return
       }
+      if (duplicateSource) {
+        event.preventDefault()
+        setDuplicateSource(null)
+        return
+      }
       onClose()
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [creatingCategory, renamingCategoryId, onClose])
+  }, [creatingCategory, renamingCategoryId, duplicateSource, onClose])
 
   function commitCategories(categories: BlockLibraryCategory[]) {
     onChange(touchBlockLibrary(categories))
@@ -158,6 +168,36 @@ export function BlockLibraryModal({
     if (categories !== libraryRef.current.categories) commitCategories(categories)
   }
   moveBlockRef.current = moveBlock
+
+  function openDuplicate(categoryId: string, blockId: string) {
+    setDuplicateSource({ categoryId, blockId })
+    setDuplicateTargetCategoryId(categoryId)
+  }
+
+  function duplicateBlock() {
+    if (!duplicateSource || !duplicateTargetCategoryId) return
+    const sourceCategory = libraryRef.current.categories.find(
+      (category) => category.id === duplicateSource.categoryId,
+    )
+    const sourceBlock = sourceCategory?.blocks.find(
+      (block) => block.id === duplicateSource.blockId,
+    )
+    if (!sourceBlock) return
+    const duplicate = createSavedBlock({
+      title: sourceBlock.title,
+      durationMinutes: sourceBlock.durationMinutes,
+      empty: sourceBlock.empty,
+      note: sourceBlock.note,
+    })
+    const categories = libraryRef.current.categories.map((category) =>
+      category.id === duplicateTargetCategoryId
+        ? { ...category, blocks: [...category.blocks, duplicate] }
+        : category,
+    )
+    commitCategories(categories)
+    setDuplicateSource(null)
+    setDuplicateTargetCategoryId('')
+  }
 
   function updateCategory(
     categoryId: string,
@@ -347,6 +387,7 @@ export function BlockLibraryModal({
                 }
                 onRemoveBlock={(blockId) => removeBlock(category.id, blockId)}
                 onDiscardBlock={(blockId) => discardBlock(category.id, blockId)}
+                onDuplicateBlock={(blockId) => openDuplicate(category.id, blockId)}
                 draggingBlockId={draggingBlockId}
                 dropTarget={dropTarget}
                 onDropTargetChange={setDropTarget}
@@ -416,6 +457,75 @@ export function BlockLibraryModal({
           </div>
         </div>
       )}
+
+      {duplicateSource && (
+        <div
+          className="modal-backdrop modal-backdrop-nested"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setDuplicateSource(null)
+          }}
+        >
+          <div
+            className="modal-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Duplicate block"
+          >
+            <div className="modal-header">
+              <h2>Duplicate block</h2>
+              <button
+                type="button"
+                className="icon-btn"
+                aria-label="Close"
+                onClick={() => setDuplicateSource(null)}
+              >
+                ×
+              </button>
+            </div>
+            <form
+              className="modal-form"
+              onSubmit={(event) => {
+                event.preventDefault()
+                duplicateBlock()
+              }}
+            >
+              <label>
+                <span>Category</span>
+                <select
+                  value={duplicateTargetCategoryId}
+                  onChange={(event) =>
+                    setDuplicateTargetCategoryId(event.target.value)
+                  }
+                  autoFocus
+                >
+                  {library.categories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name.trim() || 'Untitled'}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => setDuplicateSource(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary btn-sm"
+                  disabled={!duplicateTargetCategoryId}
+                >
+                  Duplicate
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -434,6 +544,7 @@ function CategorySection({
   onUpdateBlock,
   onRemoveBlock,
   onDiscardBlock,
+  onDuplicateBlock,
   draggingBlockId,
   dropTarget,
   onDropTargetChange,
@@ -452,6 +563,7 @@ function CategorySection({
   onUpdateBlock: (blockId: string, next: Omit<SavedBlock, 'id'>) => void
   onRemoveBlock: (blockId: string) => void
   onDiscardBlock: (blockId: string) => void
+  onDuplicateBlock: (blockId: string) => void
   draggingBlockId: string | null
   dropTarget: LibraryDropTarget | null
   onDropTargetChange: (target: LibraryDropTarget | null) => void
@@ -588,6 +700,7 @@ function CategorySection({
               else onEditingKeyChange(null)
             }}
             onRemove={() => onRemoveBlock(block.id)}
+            onDuplicate={() => onDuplicateBlock(block.id)}
             dragging={draggingBlockId === block.id}
             dropTarget={dropTarget}
             onDropTargetChange={onDropTargetChange}
@@ -616,6 +729,7 @@ function LibraryBlockRow({
   onUpdate,
   onCancel,
   onRemove,
+  onDuplicate,
   dragging,
   dropTarget,
   onDropTargetChange,
@@ -629,12 +743,20 @@ function LibraryBlockRow({
   onUpdate: (next: Omit<SavedBlock, 'id'>) => void
   onCancel: () => void
   onRemove: () => void
+  onDuplicate: () => void
   dragging: boolean
   dropTarget: LibraryDropTarget | null
   onDropTargetChange: (target: LibraryDropTarget | null) => void
   highlight: boolean
 }) {
   const rowRef = useRef<HTMLLIElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menu = useFixedMenu({
+    open: menuOpen,
+    align: 'end',
+    onClose: () => setMenuOpen(false),
+  })
   const isTarget =
     dropTarget?.type === 'block' && dropTarget.blockId === block.id
   const note = optionalNote(block.note)
@@ -729,25 +851,60 @@ function LibraryBlockRow({
               </span>
             </button>
           </div>
-          <div className="task-card-icons">
+          <div className="task-card-icons" ref={menuRef}>
             <button
               type="button"
-              className="icon-btn"
-              aria-label={`Edit ${block.title}`}
-              title="Edit"
-              onClick={onEdit}
+              ref={menu.triggerRef}
+              className="btn btn-text btn-icon task-new-menu-btn"
+              aria-label={`Options for ${block.title || 'Untitled'}`}
+              aria-expanded={menuOpen}
+              aria-haspopup="true"
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={() => setMenuOpen((open) => !open)}
             >
-              <EditIcon />
+              ···
             </button>
-            <button
-              type="button"
-              className="icon-btn"
-              aria-label={`Remove ${block.title}`}
-              title="Remove"
-              onClick={onRemove}
+            <FixedMenuPortal
+              open={menuOpen}
+              dropdownRef={menu.dropdownRef}
+              style={menu.style}
+              className="task-new-menu-dropdown is-over-modal"
             >
-              <TrashIcon />
-            </button>
+              <button
+                type="button"
+                role="menuitem"
+                className="calendar-menu-item"
+                onClick={() => {
+                  setMenuOpen(false)
+                  onEdit()
+                }}
+              >
+                <EditIcon /> Edit
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                className="calendar-menu-item"
+                onClick={() => {
+                  setMenuOpen(false)
+                  onDuplicate()
+                }}
+              >
+                Duplicate
+              </button>
+              <div className="calendar-menu-sep" role="separator" />
+              <button
+                type="button"
+                role="menuitem"
+                className="calendar-menu-item"
+                onClick={() => {
+                  setMenuOpen(false)
+                  onRemove()
+                }}
+              >
+                <TrashIcon /> Delete
+              </button>
+            </FixedMenuPortal>
           </div>
         </>
       )}
