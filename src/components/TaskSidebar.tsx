@@ -1051,7 +1051,7 @@ function BlockGroupPanel({
 
   useEffect(() => {
     const list = listRef.current
-    if (!list) return
+    if (!list || window.matchMedia('(pointer: coarse)').matches) return
     return autoScrollForElements({
       element: list,
       canScroll: ({ source }) =>
@@ -1076,7 +1076,7 @@ function BlockGroupPanel({
 
   useEffect(() => {
     const list = listRef.current
-    if (!list) return
+    if (!list || window.matchMedia('(pointer: coarse)').matches) return
     const cleanups: Array<() => void> = []
     list.querySelectorAll<HTMLElement>('[data-task-id]').forEach((card) => {
       if (card.dataset.taskDraggable !== 'true') return
@@ -1726,6 +1726,57 @@ function BlockGroupPanel({
     return dragIndex === null || (index !== dragIndex && index !== dragIndex + 1)
   }
 
+  function beginTaskTouchDrag(
+    e: React.PointerEvent<HTMLElement>,
+    index: number,
+  ) {
+    if (e.pointerType !== 'touch') return
+    suppressClickRef.current = false
+    attachReorderDragListeners({
+      handle: e.currentTarget,
+      pointerId: e.pointerId,
+      pointerType: e.pointerType,
+      startX: e.clientX,
+      startY: e.clientY,
+      onActivate: () => {
+        dropLineIndexRef.current = index
+        setDragIndex(index)
+        setDropLineIndex(index)
+        document.body.classList.add('is-task-reordering')
+      },
+      onMove: (ev) => {
+        insertDragXRef.current = ev.clientX
+        insertDragYRef.current = ev.clientY
+        const nextLine = insertionIndexAtPoint(ev.clientX, ev.clientY)
+        if (dropLineIndexRef.current !== nextLine) {
+          dropLineIndexRef.current = nextLine
+          setDropLineIndex(nextLine)
+        }
+      },
+      onEnd: (ev, didActivate) => {
+        const insertAt = didActivate
+          ? insertionIndexAtPoint(ev.clientX, ev.clientY)
+          : null
+        if (insertAt != null) handleDropAt(insertAt, index)
+        document.body.classList.remove('is-task-reordering')
+        setDragIndex(null)
+        setDropLineIndex(null)
+        dropLineIndexRef.current = null
+      },
+      onSuppressClick: () => {
+        suppressClickRef.current = true
+      },
+      autoScroll: true,
+      onAutoScroll: (clientY) => {
+        const nextLine = insertionIndexAtPoint(insertDragXRef.current, clientY)
+        if (dropLineIndexRef.current !== nextLine) {
+          dropLineIndexRef.current = nextLine
+          setDropLineIndex(nextLine)
+        }
+      },
+    })
+  }
+
   function beginInsertDrag(
     e: React.PointerEvent<HTMLButtonElement>,
     source: 'library' | 'custom',
@@ -2218,6 +2269,7 @@ function BlockGroupPanel({
                     ))}
                   <div
                     className="task-card-main"
+                    onPointerDown={(event) => beginTaskTouchDrag(event, index)}
                     onClick={() => {
                       if (consumeReorderClickSuppression(suppressClickRef)) return
                       setFocusNoteOnEdit(false)
