@@ -1055,9 +1055,11 @@ function BlockGroupPanel({
     return autoScrollForElements({
       element: list,
       canScroll: ({ source }) =>
-        source.data.type === 'task' && source.data.groupId === group.id,
+        source.data.type === 'task' &&
+        source.data.groupId === group.id &&
+        source.data.mode === mode,
     })
-  }, [group.id])
+  }, [group.id, mode])
 
   useEffect(() => {
     const list = listRef.current
@@ -1065,10 +1067,12 @@ function BlockGroupPanel({
     return dropTargetForElements({
       element: list,
       canDrop: ({ source }) =>
-        source.data.type === 'task' && source.data.groupId === group.id,
-      getData: () => ({ type: 'task-list', groupId: group.id }),
+        source.data.type === 'task' &&
+        source.data.groupId === group.id &&
+        source.data.mode === mode,
+      getData: () => ({ type: 'task-list', groupId: group.id, mode }),
     })
-  }, [group.id])
+  }, [group.id, mode])
 
   useEffect(() => {
     const list = listRef.current
@@ -1085,6 +1089,7 @@ function BlockGroupPanel({
           getInitialData: () => ({
             type: 'task',
             groupId: group.id,
+            mode,
             taskId,
           }),
         }),
@@ -1093,27 +1098,39 @@ function BlockGroupPanel({
         dropTargetForElements({
           element: card,
           canDrop: ({ source }) =>
-            source.data.type === 'task' && source.data.groupId === group.id,
+            source.data.type === 'task' &&
+            source.data.groupId === group.id &&
+            source.data.mode === mode,
           getData: ({ input, element }) =>
             attachClosestEdge(
-              { type: 'task', groupId: group.id, taskId, index },
+              { type: 'task', groupId: group.id, mode, taskId, index },
               { input, element, allowedEdges: ['top', 'bottom'] },
             ),
         }),
       )
     })
     return () => cleanups.forEach((cleanup) => cleanup())
-  }, [group.id, tasks, editingId])
+  }, [group.id, mode, tasks, editingId])
 
   useEffect(() => {
     return monitorForElements({
+      canMonitor: ({ source }) =>
+        source.data.type === 'task' &&
+        source.data.groupId === group.id &&
+        source.data.mode === mode,
       onDragStart({ source }) {
         const data = source.data as {
           type?: string
           groupId?: string
+          mode?: 'planning' | 'execution'
           taskId?: string
         }
-        if (data.type !== 'task' || data.groupId !== group.id || !data.taskId) {
+        if (
+          data.type !== 'task' ||
+          data.groupId !== group.id ||
+          data.mode !== mode ||
+          !data.taskId
+        ) {
           return
         }
         const index = tasksRef.current.findIndex((task) => task.id === data.taskId)
@@ -1121,13 +1138,30 @@ function BlockGroupPanel({
         setDropLineIndex(index >= 0 ? index : null)
       },
       onDrag({ source, location }) {
-        const sourceData = source.data as { type?: string; groupId?: string }
-        if (sourceData.type !== 'task' || sourceData.groupId !== group.id) return
+        const sourceData = source.data as {
+          type?: string
+          groupId?: string
+          mode?: 'planning' | 'execution'
+        }
+        if (
+          sourceData.type !== 'task' ||
+          sourceData.groupId !== group.id ||
+          sourceData.mode !== mode
+        ) {
+          return
+        }
         const target = location.current.dropTargets[0]
         const data = target?.data as
-          | { type?: string; groupId?: string; index?: number; taskId?: string; closestEdge?: 'top' | 'bottom' }
+          | {
+              type?: string
+              groupId?: string
+              mode?: 'planning' | 'execution'
+              index?: number
+              taskId?: string
+              closestEdge?: 'top' | 'bottom'
+            }
           | undefined
-        if (!data || data.groupId !== group.id) {
+        if (!data || data.groupId !== group.id || data.mode !== mode) {
           setDropLineIndex(null)
           return
         }
@@ -1143,14 +1177,26 @@ function BlockGroupPanel({
         const sourceData = source.data as {
           type?: string
           groupId?: string
+          mode?: 'planning' | 'execution'
           taskId?: string
         }
-        if (sourceData.type === 'task' && sourceData.groupId === group.id && sourceData.taskId) {
+        if (
+          sourceData.type === 'task' &&
+          sourceData.groupId === group.id &&
+          sourceData.mode === mode &&
+          sourceData.taskId
+        ) {
           const target = location.current.dropTargets[0]
           const data = target?.data as
-            | { type?: string; groupId?: string; index?: number; closestEdge?: 'top' | 'bottom' }
+            | {
+                type?: string
+                groupId?: string
+                mode?: 'planning' | 'execution'
+                index?: number
+                closestEdge?: 'top' | 'bottom'
+              }
             | undefined
-          if (data?.groupId === group.id) {
+          if (data?.groupId === group.id && data.mode === mode) {
             const insertAt =
               data.type === 'task-list'
                 ? tasksRef.current.length
@@ -1168,7 +1214,7 @@ function BlockGroupPanel({
         dropLineIndexRef.current = null
       },
     })
-  }, [group.id])
+  }, [group.id, mode])
   const listMenu = useFixedMenu({
     open: listMenuOpen,
     align: 'end',
