@@ -2697,6 +2697,15 @@ body.is-task-reordering .task-sidebar {
   opacity: 1;
 }
 
+.task-touch-drag-preview {
+  position: fixed;
+  z-index: var(--z-toast);
+  width: min(18rem, calc(100vw - 1.5rem));
+  pointer-events: none;
+  background: #fff;
+  box-shadow: var(--shadow);
+}
+
 .task-card-empty .task-card-main {
   opacity: 0.45;
 }
