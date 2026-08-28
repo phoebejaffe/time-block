@@ -1747,7 +1747,7 @@ body.is-datetime-scrubbing .task-form-duration input {
 }
 
 .task-list > .task-card:not(.task-card-new) {
-  touch-action: pan-y;
+  touch-action: none;
 }
 
 .task-card-new:not(.is-editing) {
