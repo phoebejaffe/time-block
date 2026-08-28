@@ -915,7 +915,7 @@ library category)
 Pressing and dragging on a task/block row's main content area (title +
 duration, not the trailing controls) reorders it within its list:
 
-- On **touch**, the pointer must be held still for 0.3 seconds before a
+- On **touch**, the pointer must be held still for 0.15 seconds before a
   drag can activate (movement beyond the threshold during that hold cancels
   the gesture so scrolling and taps still work). **Mouse** drag activates
   immediately once the movement threshold is met.

@@ -1,5 +1,5 @@
 export const REORDER_DRAG_ACTIVATE_PX = 5
-export const REORDER_TOUCH_HOLD_MS = 300
+export const REORDER_TOUCH_HOLD_MS = 150
 export const REORDER_CLICK_SUPPRESS_PX = 3
 export const REORDER_AUTO_SCROLL_EDGE_PX = 72
 export const REORDER_AUTO_SCROLL_MAX_PX = 8
