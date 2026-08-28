@@ -18,6 +18,7 @@ import { FixedMenuPortal } from './FixedMenuPortal'
 import type { NoticeOptions } from '../lib/notice'
 import { undoNoticeOptions } from '../lib/notice'
 import { useFixedMenu } from '../hooks/useFixedMenu'
+import { attachReorderDragListeners } from '../lib/reorderDrag'
 import {
   autoScrollForElements,
 } from '@atlaskit/pragmatic-drag-and-drop-auto-scroll/element'
@@ -80,6 +81,7 @@ export function BlockLibraryModal({
   const moveBlockRef = useRef<
     (blockId: string, target: LibraryDropTarget) => void
   >(() => {})
+  const touchDropTargetRef = useRef<LibraryDropTarget | null>(null)
 
   useEffect(() => {
     return monitorForElements({
@@ -120,7 +122,7 @@ export function BlockLibraryModal({
 
   useEffect(() => {
     const body = bodyRef.current
-    if (!body) return
+    if (!body || window.matchMedia('(pointer: coarse)').matches) return
     return autoScrollForElements({
       element: body,
       canScroll: ({ source }) => source.data.type === 'block',
@@ -180,6 +182,76 @@ export function BlockLibraryModal({
     if (categories !== libraryRef.current.categories) commitCategories(categories)
   }
   moveBlockRef.current = moveBlock
+
+  function touchDropTargetAt(
+    clientX: number,
+    clientY: number,
+  ): LibraryDropTarget | null {
+    const element = document.elementFromPoint(clientX, clientY)
+    const row = element?.closest<HTMLElement>('[data-block-id]')
+    if (row?.dataset.categoryId && row.dataset.blockId) {
+      const rect = row.getBoundingClientRect()
+      return {
+        type: 'block',
+        categoryId: row.dataset.categoryId,
+        blockId: row.dataset.blockId,
+        index: Number(row.dataset.blockIndex),
+        closestEdge: clientY < rect.top + rect.height / 2 ? 'top' : 'bottom',
+      }
+    }
+    const list = element?.closest<HTMLElement>('[data-category-id]')
+    if (list?.dataset.categoryId) {
+      return { type: 'category', categoryId: list.dataset.categoryId }
+    }
+    return null
+  }
+
+  function beginTouchBlockDrag(
+    e: React.PointerEvent<HTMLElement>,
+    blockId: string,
+  ) {
+    if (e.pointerType !== 'touch') return
+    const startX = e.clientX
+    const startY = e.clientY
+    touchDropTargetRef.current = null
+    attachReorderDragListeners({
+      handle: e.currentTarget,
+      pointerId: e.pointerId,
+      pointerType: e.pointerType,
+      startX,
+      startY,
+      onActivate: () => {
+        setDraggingBlockId(blockId)
+        const target = touchDropTargetAt(startX, startY)
+        touchDropTargetRef.current = target
+        setDropTarget(target)
+        document.body.classList.add('is-task-reordering')
+      },
+      onMove: (event) => {
+        const target = touchDropTargetAt(event.clientX, event.clientY)
+        touchDropTargetRef.current = target
+        setDropTarget(target)
+      },
+      onEnd: (event, didActivate) => {
+        if (didActivate) {
+          const target =
+            touchDropTargetRef.current ??
+            touchDropTargetAt(event.clientX, event.clientY)
+          if (target) moveBlockRef.current(blockId, target)
+        }
+        document.body.classList.remove('is-task-reordering')
+        touchDropTargetRef.current = null
+        setDraggingBlockId(null)
+        setDropTarget(null)
+      },
+      autoScroll: true,
+      onAutoScroll: (clientY) => {
+        const target = touchDropTargetAt(startX, clientY)
+        touchDropTargetRef.current = target
+        setDropTarget(target)
+      },
+    })
+  }
 
   function openDuplicate(categoryId: string, blockId: string) {
     setDuplicateSource({ categoryId, blockId })
@@ -400,6 +472,7 @@ export function BlockLibraryModal({
                 onRemoveBlock={(blockId) => removeBlock(category.id, blockId)}
                 onDiscardBlock={(blockId) => discardBlock(category.id, blockId)}
                 onDuplicateBlock={(blockId) => openDuplicate(category.id, blockId)}
+                onTouchDragStart={beginTouchBlockDrag}
                 draggingBlockId={draggingBlockId}
                 dropTarget={dropTarget}
                 onDropTargetChange={setDropTarget}
@@ -559,6 +632,7 @@ function CategorySection({
   onRemoveBlock,
   onDiscardBlock,
   onDuplicateBlock,
+  onTouchDragStart,
   draggingBlockId,
   dropTarget,
   onDropTargetChange,
@@ -578,6 +652,10 @@ function CategorySection({
   onRemoveBlock: (blockId: string) => void
   onDiscardBlock: (blockId: string) => void
   onDuplicateBlock: (blockId: string) => void
+  onTouchDragStart: (
+    event: React.PointerEvent<HTMLElement>,
+    blockId: string,
+  ) => void
   draggingBlockId: string | null
   dropTarget: LibraryDropTarget | null
   onDropTargetChange: (target: LibraryDropTarget | null) => void
@@ -594,7 +672,7 @@ function CategorySection({
 
   useEffect(() => {
     const list = listRef.current
-    if (!list) return
+    if (!list || window.matchMedia('(pointer: coarse)').matches) return
     return dropTargetForElements({
       element: list,
       canDrop: ({ source }) => source.data.type === 'block',
@@ -699,6 +777,7 @@ function CategorySection({
           .filter(Boolean)
           .join(' ')}
         ref={listRef}
+        data-category-id={category.id}
       >
         {category.blocks.map((block, index) => (
           <LibraryBlockRow
@@ -715,6 +794,7 @@ function CategorySection({
             }}
             onRemove={() => onRemoveBlock(block.id)}
             onDuplicate={() => onDuplicateBlock(block.id)}
+            onTouchDragStart={onTouchDragStart}
             dragging={draggingBlockId === block.id}
             dropTarget={dropTarget}
             onDropTargetChange={onDropTargetChange}
@@ -744,6 +824,7 @@ function LibraryBlockRow({
   onCancel,
   onRemove,
   onDuplicate,
+  onTouchDragStart,
   dragging,
   dropTarget,
   onDropTargetChange,
@@ -758,6 +839,10 @@ function LibraryBlockRow({
   onCancel: () => void
   onRemove: () => void
   onDuplicate: () => void
+  onTouchDragStart: (
+    event: React.PointerEvent<HTMLElement>,
+    blockId: string,
+  ) => void
   dragging: boolean
   dropTarget: LibraryDropTarget | null
   onDropTargetChange: (target: LibraryDropTarget | null) => void
@@ -777,7 +862,13 @@ function LibraryBlockRow({
 
   useEffect(() => {
     const row = rowRef.current
-    if (!row || editing) return
+    if (
+      !row ||
+      editing ||
+      window.matchMedia('(pointer: coarse)').matches
+    ) {
+      return
+    }
     return draggable({
       element: row,
       getInitialData: () => ({
@@ -790,7 +881,13 @@ function LibraryBlockRow({
 
   useEffect(() => {
     const row = rowRef.current
-    if (!row || editing) return
+    if (
+      !row ||
+      editing ||
+      window.matchMedia('(pointer: coarse)').matches
+    ) {
+      return
+    }
     return dropTargetForElements({
       element: row,
       canDrop: ({ source }) => source.data.type === 'block',
@@ -813,6 +910,7 @@ function LibraryBlockRow({
       ref={rowRef}
       data-block-index={index}
       data-block-id={block.id}
+      data-category-id={categoryId}
       className={[
         'task-card',
         dragging ? 'is-dragging' : '',
@@ -844,7 +942,10 @@ function LibraryBlockRow({
         />
       ) : (
         <>
-          <div className="task-card-main">
+          <div
+            className="task-card-main"
+            onPointerDown={(event) => onTouchDragStart(event, block.id)}
+          >
             <button
               type="button"
               className="block-library-title-button"

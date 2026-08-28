@@ -2123,6 +2123,14 @@ body.is-datetime-scrubbing .task-form-duration input {
   touch-action: pan-y;
 }
 
+.block-library-list .task-card:not(.is-editing) > .task-card-main {
+  touch-action: none;
+}
+
+.block-library-list .task-card:not(.is-editing) > .task-card-icons {
+  touch-action: pan-y;
+}
+
 .block-library-list .task-card:not(.is-editing) {
   cursor: default;
 }
@@ -3477,6 +3485,7 @@ body.is-task-reordering .task-sidebar {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: var(--title-lines, 1);
+  line-clamp: var(--title-lines, 1);
   min-width: 0;
   white-space: normal;
   overflow: hidden;
@@ -3595,6 +3604,7 @@ body.is-task-reordering .task-sidebar {
   overflow: visible;
   text-overflow: unset;
   -webkit-line-clamp: unset;
+  line-clamp: unset;
   white-space: nowrap;
 }
 
