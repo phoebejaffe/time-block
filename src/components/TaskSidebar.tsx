@@ -1026,6 +1026,11 @@ function BlockGroupPanel({
   const { tasks, anchor } = group
   const enabled = isGroupEnabled(group)
   const [dragIndex, setDragIndex] = useState<number | null>(null)
+  const [touchDragPreview, setTouchDragPreview] = useState<{
+    task: Task
+    x: number
+    y: number
+  } | null>(null)
   const tasksRef = useRef(tasks)
   tasksRef.current = tasks
   const handleTaskDropRef = useRef<(insertAt: number, from: number) => void>(
@@ -1732,6 +1737,11 @@ function BlockGroupPanel({
   ) {
     if (e.pointerType !== 'touch') return
     suppressClickRef.current = false
+    const rect = e.currentTarget.getBoundingClientRect()
+    const grabOffsetX = e.clientX - rect.left
+    const grabOffsetY = e.clientY - rect.top
+    insertDragXRef.current = e.clientX
+    insertDragYRef.current = e.clientY
     attachReorderDragListeners({
       handle: e.currentTarget,
       pointerId: e.pointerId,
@@ -1739,12 +1749,28 @@ function BlockGroupPanel({
       startX: e.clientX,
       startY: e.clientY,
       onActivate: () => {
+        const task = tasksRef.current[index]
+        if (!task) return
         dropLineIndexRef.current = index
         setDragIndex(index)
         setDropLineIndex(index)
+        setTouchDragPreview({
+          task,
+          x: e.clientX - grabOffsetX,
+          y: e.clientY - grabOffsetY,
+        })
         document.body.classList.add('is-task-reordering')
       },
       onMove: (ev) => {
+        setTouchDragPreview((preview) =>
+          preview
+            ? {
+                ...preview,
+                x: ev.clientX - grabOffsetX,
+                y: ev.clientY - grabOffsetY,
+              }
+            : preview,
+        )
         insertDragXRef.current = ev.clientX
         insertDragYRef.current = ev.clientY
         const nextLine = insertionIndexAtPoint(ev.clientX, ev.clientY)
@@ -1759,6 +1785,7 @@ function BlockGroupPanel({
           : null
         if (insertAt != null) handleDropAt(insertAt, index)
         document.body.classList.remove('is-task-reordering')
+        setTouchDragPreview(null)
         setDragIndex(null)
         setDropLineIndex(null)
         dropLineIndexRef.current = null
@@ -1768,6 +1795,15 @@ function BlockGroupPanel({
       },
       autoScroll: true,
       onAutoScroll: (clientY) => {
+        setTouchDragPreview((preview) =>
+          preview
+            ? {
+                ...preview,
+                x: insertDragXRef.current - grabOffsetX,
+                y: clientY - grabOffsetY,
+              }
+            : preview,
+        )
         const nextLine = insertionIndexAtPoint(insertDragXRef.current, clientY)
         if (dropLineIndexRef.current !== nextLine) {
           dropLineIndexRef.current = nextLine
@@ -1940,6 +1976,27 @@ function BlockGroupPanel({
 
   return (
     <section className="block-group" data-group-id={group.id} style={groupStyle}>
+      {touchDragPreview && (
+        <div
+          className="task-card task-touch-drag-preview"
+          aria-hidden="true"
+          style={{
+            left: `${touchDragPreview.x + 12}px`,
+            top: `${touchDragPreview.y + 12}px`,
+          }}
+        >
+          <div className="task-card-main">
+            <span className="task-title">
+              <span className="task-title-text">
+                {touchDragPreview.task.title}
+              </span>
+              <span className="muted task-duration">
+                · {formatDurationMinutes(touchDragPreview.task.durationMinutes)}
+              </span>
+            </span>
+          </div>
+        </div>
+      )}
       <div className="stack-anchor">
         {mode !== 'execution' && (
           <div className="stack-anchor-name-row">
