@@ -1747,7 +1747,17 @@ body.is-datetime-scrubbing .task-form-duration input {
 }
 
 .task-list > .task-card:not(.task-card-new) {
+  touch-action: pan-y;
+}
+
+.task-list > .task-card:not(.task-card-new) > .task-card-main {
   touch-action: none;
+}
+
+.task-list > .task-card:not(.task-card-new) > .task-card-icons,
+.task-list > .task-card:not(.task-card-new) > .task-done-btn,
+.task-list > .task-card:not(.task-card-new) > .task-done-btn-spacer {
+  touch-action: pan-y;
 }
 
 .task-card-new:not(.is-editing) {
