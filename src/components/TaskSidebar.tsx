@@ -887,7 +887,7 @@ export function TaskSidebar({
   }
 }
 
-type BlockGroupPanelProps = {
+export type BlockGroupPanelProps = {
   group: BlockGroup
   collapsedLabel: string
   canDeleteGroup: boolean
@@ -978,7 +978,7 @@ function planMenuItemProps(run: () => void) {
   }
 }
 
-function BlockGroupPanel({
+export function BlockGroupPanel({
   group,
   collapsedLabel,
   canDeleteGroup,

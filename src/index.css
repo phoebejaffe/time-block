@@ -3628,6 +3628,24 @@ body.is-task-reordering .task-sidebar {
   box-shadow: none;
 }
 
+.e2e-harness {
+  width: min(420px, 100vw);
+  min-height: 100vh;
+  padding: 1rem;
+  background: var(--paper);
+}
+
+.e2e-harness-toolbar {
+  margin-bottom: 0.75rem;
+}
+
+.e2e-harness-panel {
+  height: 520px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  background: var(--paper-2);
+}
+
 .app-gate {
   position: relative;
   display: flex;
