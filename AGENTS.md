@@ -43,7 +43,7 @@ signed-in user. Sign-in is mandatory — there's no local-only mode.
 ## Commands
 
 ```bash
-npm run dev      # local dev server (localhost:5173)
+npm run dev      # local dev server (localhost:3410; sites may select a range fallback)
 npm run build    # tsc -b && vite build (typecheck is part of the build)
 npm run test     # unit tests + Playwright e2e
 npm run test:unit # Vitest unit tests only

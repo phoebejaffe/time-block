@@ -25,7 +25,7 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:5173](http://localhost:5173).
+Open [http://localhost:3410](http://localhost:3410).
 
 ### 2. Google Cloud Console
 
@@ -37,8 +37,8 @@ Open [http://localhost:5173](http://localhost:5173).
    - `openid`, `email`, `profile` (for Firebase Auth — usually added automatically when you sign in)
 4. Create credentials → **OAuth client ID** → Application type **Web application**.
 5. Under **Authorized JavaScript origins**, add:
-   - `http://localhost:5173`
-   - `http://127.0.0.1:5173`
+   - `http://localhost:3410`
+   - `http://127.0.0.1:3410`
    - Your GitHub Pages origin (e.g. `https://<user>.github.io`)
 6. Copy the client ID into `.env`:
 

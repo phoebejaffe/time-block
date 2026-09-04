@@ -21,7 +21,7 @@ gcloud functions deploy auth \
   --entry-point auth \
   --trigger-http \
   --allow-unauthenticated \
-  --set-env-vars "^@^GOOGLE_CLIENT_ID=<client id>@GOOGLE_CLIENT_SECRET=<client secret>@ALLOWED_ORIGINS=https://phoebejaffe.github.io,http://localhost:5173"
+  --set-env-vars "^@^GOOGLE_CLIENT_ID=<client id>@GOOGLE_CLIENT_SECRET=<client secret>@ALLOWED_ORIGINS=https://phoebejaffe.github.io,http://localhost:5173,http://localhost:3410,http://127.0.0.1:3410"
 ```
 
 The client secret comes from Google Cloud console → APIs & Services →
@@ -45,5 +45,5 @@ After deploying this function, also:
 ```bash
 cd server && npm install
 GOOGLE_CLIENT_ID=... GOOGLE_CLIENT_SECRET=... \
-ALLOWED_ORIGINS=http://localhost:5173 npm start
+ALLOWED_ORIGINS=http://localhost:3410,http://127.0.0.1:3410 npm start
 ```
