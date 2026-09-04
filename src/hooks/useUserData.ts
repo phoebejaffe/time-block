@@ -295,15 +295,17 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
     lastSyncedAtRef.current = updatedAt
   }, [])
 
-  const pushArchiveNow = useCallback(async (uid: string) => {
-    const { planArchive: pa } = stateRef.current
-    const updatedAt = new Date().toISOString()
-    await savePlanArchive(uid, {
-      updatedAt,
-      planArchive: pa,
-    })
-    lastArchiveSyncedAtRef.current = updatedAt
-  }, [])
+  const pushArchiveNow = useCallback(
+    async (uid: string, archive = stateRef.current.planArchive) => {
+      const updatedAt = new Date().toISOString()
+      await savePlanArchive(uid, {
+        updatedAt,
+        planArchive: archive,
+      })
+      lastArchiveSyncedAtRef.current = updatedAt
+    },
+    [],
+  )
 
   const startLegacyArchiveMigration = useCallback((uid: string, legacy: unknown) => {
     if (archiveMigrateStartedRef.current) return
@@ -369,7 +371,7 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
             setPlanArchive(normalized)
             lastArchiveSyncedAtRef.current = normalized.updatedAt
             legacyPlanArchiveRef.current = null
-            void pushArchiveNow(uid).then(settleOk).catch(settleErr)
+            void pushArchiveNow(uid, normalized).then(settleOk).catch(settleErr)
             return
           }
           settleOk()

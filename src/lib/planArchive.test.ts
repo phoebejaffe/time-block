@@ -109,6 +109,7 @@ describe('plan archive', () => {
     let archive = addArchivedPlan(defaultPlanArchive(), archived)
     expect(archive.folders[0]!.plans).toHaveLength(1)
     archive = addArchiveFolder(archive, 'Work')
+    expect(archive.folders[0]!.plans[0]!.id).toBe(archived.id)
     const workId = archive.folders[1]!.id
     archive = moveArchivedPlanToFolder(archive, archived.id, workId)
     expect(archive.folders[0]!.plans).toHaveLength(0)
