@@ -30,9 +30,11 @@ import {
   type Plan,
 } from '../lib/tasks'
 import {
+  planArchiveShrinks,
   defaultPlanArchive,
   normalizePlanArchive,
   type PlanArchive,
+  type PlanArchiveChangeOptions,
 } from '../lib/planArchive'
 import {
   normalizeSavedCalendarUsers,
@@ -110,6 +112,8 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
   const planArchiveLoadPromiseRef = useRef<Promise<void> | null>(null)
   const skipNextArchivePushRef = useRef(false)
   const archivePushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const archiveWriteChainRef = useRef<Promise<void>>(Promise.resolve())
+  const archiveDestructiveWriteRef = useRef<PlanArchive | null>(null)
   const lastArchiveSyncedAtRef = useRef<string | null>(null)
   const legacyPlanArchiveRef = useRef<unknown>(null)
   const archiveMigrateStartedRef = useRef(false)
@@ -192,6 +196,9 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
 
   const applyRemoteArchive = useCallback(
     (remote: { updatedAt: string; planArchive: PlanArchive }) => {
+      if (planArchiveShrinks(remote.planArchive, stateRef.current.planArchive)) {
+        return
+      }
       const isNewer =
         !lastArchiveSyncedAtRef.current ||
         new Date(remote.updatedAt) > new Date(lastArchiveSyncedAtRef.current)
@@ -298,11 +305,22 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
   const pushArchiveNow = useCallback(
     async (uid: string, archive = stateRef.current.planArchive) => {
       const updatedAt = new Date().toISOString()
-      await savePlanArchive(uid, {
-        updatedAt,
-        planArchive: archive,
-      })
+      const allowDestructive = archiveDestructiveWriteRef.current === archive
       lastArchiveSyncedAtRef.current = updatedAt
+      const write = archiveWriteChainRef.current.then(() => {
+        if (
+          !allowDestructive &&
+          planArchiveShrinks(archive, stateRef.current.planArchive)
+        ) {
+          return
+        }
+        return savePlanArchive(uid, {
+          updatedAt,
+          planArchive: archive,
+        })
+      })
+      archiveWriteChainRef.current = write.catch(() => undefined)
+      await write
     },
     [],
   )
@@ -310,14 +328,18 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
   const startLegacyArchiveMigration = useCallback((uid: string, legacy: unknown) => {
     if (archiveMigrateStartedRef.current) return
     archiveMigrateStartedRef.current = true
-    archiveMigratePromiseRef.current = migrateLegacyPlanArchive(uid, legacy).catch(
+    archiveMigratePromiseRef.current = migrateLegacyPlanArchive(
+      uid,
+      legacy,
+      (archiveUid, payload) => pushArchiveNow(archiveUid, payload.planArchive),
+    ).catch(
       (err) => {
         archiveMigrateStartedRef.current = false
         archiveMigratePromiseRef.current = null
         throw err
       },
     )
-  }, [])
+  }, [pushArchiveNow])
 
   const finishPlanArchiveLoad = useCallback(() => {
     planArchiveLoadedRef.current = true
@@ -509,11 +531,22 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
     setBlockLibrary(next)
   }, [])
 
-  const replacePlanArchive = useCallback((next: PlanArchive) => {
-    planArchiveLoadedRef.current = true
-    setPlanArchiveSyncEnabled(true)
-    setPlanArchive(next)
-  }, [])
+  const replacePlanArchive = useCallback(
+    (next: PlanArchive, options: PlanArchiveChangeOptions = {}) => {
+      if (
+        !options.allowDestructive &&
+        planArchiveShrinks(next, stateRef.current.planArchive)
+      ) {
+        return
+      }
+      archiveDestructiveWriteRef.current = options.allowDestructive ? next : null
+      stateRef.current.planArchive = next
+      planArchiveLoadedRef.current = true
+      setPlanArchiveSyncEnabled(true)
+      setPlanArchive(next)
+    },
+    [],
+  )
 
   const setTargetCalendarId = useCallback((id: string) => {
     setTargetCalendarIdState(id)

@@ -42,6 +42,10 @@ export type PlanArchive = {
   updatedAt: string
 }
 
+export type PlanArchiveChangeOptions = {
+  allowDestructive?: boolean
+}
+
 export const UNFILED_FOLDER_ID = 'unfiled'
 export const UNFILED_FOLDER_NAME = 'Unfiled'
 
@@ -265,6 +269,16 @@ export function normalizePlanArchive(raw: unknown): PlanArchive {
 
 export function archivedPlanCount(archive: PlanArchive): number {
   return archive.folders.reduce((sum, folder) => sum + folder.plans.length, 0)
+}
+
+export function planArchiveShrinks(
+  next: PlanArchive,
+  current: PlanArchive,
+): boolean {
+  return (
+    archivedPlanCount(next) < archivedPlanCount(current) ||
+    next.folders.length < current.folders.length
+  )
 }
 
 export function findArchivedPlan(

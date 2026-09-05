@@ -1207,7 +1207,12 @@ whenever the calendar's visible date range changes.
   overwrite the
   whole main document with a fresh `updatedAt` — last-write-wins at the
   document level; no field-level merge/CRDT logic. Archived-plan edits debounce
-  separately to the fragment document once the archive has been loaded.
+  separately to the fragment document once the archive has been loaded, and
+  writes are serialized so an older in-flight archive snapshot cannot overwrite
+  a newer folder change. Incoming or outgoing archive snapshots that would
+  reduce the plan count or folder count are rejected unless they came from an
+  explicit destructive action (such as deleting a plan, deleting a folder, or
+  importing a replacement archive).
 - **Loading state**: while signed in but the Firestore user isn't
   established yet, or while waiting for the very first snapshot, the app
   shows the full-screen loading gate rather than a half-populated UI. If

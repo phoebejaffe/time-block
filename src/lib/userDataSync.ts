@@ -198,11 +198,12 @@ export async function savePlanArchive(
 export async function migrateLegacyPlanArchive(
   uid: string,
   legacy: unknown,
+  save: typeof savePlanArchive = savePlanArchive,
 ): Promise<void> {
   const existing = await fetchPlanArchive(uid)
   if (existing) return
   const planArchive = normalizePlanArchive(legacy)
-  await savePlanArchive(uid, {
+  await save(uid, {
     updatedAt: planArchive.updatedAt || new Date().toISOString(),
     planArchive,
   })

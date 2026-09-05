@@ -449,6 +449,7 @@ export default function App() {
         plan.insertGroupAt(group, index)
         userData.replacePlanArchive(
           removeArchivedPlan(nextArchive, snapshot.id).archive,
+          { allowDestructive: true },
         )
         clear()
       }),

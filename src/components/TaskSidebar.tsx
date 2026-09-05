@@ -70,7 +70,11 @@ import {
 } from './icons'
 import type { NoticeOptions } from '../lib/notice'
 import type { SessionDiagnostics } from '../lib/google'
-import type { ArchivedPlan, PlanArchive } from '../lib/planArchive'
+import type {
+  ArchivedPlan,
+  PlanArchive,
+  PlanArchiveChangeOptions,
+} from '../lib/planArchive'
 import {
   attachReorderDragListeners,
   consumeReorderClickSuppression,
@@ -213,7 +217,10 @@ type TaskSidebarProps = {
   planArchive: PlanArchive
   planArchiveLoading?: boolean
   onEnsurePlanArchiveLoaded?: () => Promise<void>
-  onReplacePlanArchive: (archive: PlanArchive) => void
+  onReplacePlanArchive: (
+    archive: PlanArchive,
+    options?: PlanArchiveChangeOptions,
+  ) => void
   onAddArchivedToHome: (plan: ArchivedPlan) => string
   onShowNotice?: (text: string, options?: NoticeOptions) => void
   onClearNotice?: () => void

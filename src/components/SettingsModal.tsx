@@ -19,6 +19,7 @@ import {
   defaultPlanArchive,
   normalizePlanArchive,
   type PlanArchive,
+  type PlanArchiveChangeOptions,
 } from '../lib/planArchive'
 import type { SessionDiagnostics } from '../lib/google'
 import type { UserSettings } from '../lib/userSettings'
@@ -50,7 +51,10 @@ type SettingsModalProps = {
   plan: Plan
   onReplacePlan: (plan: Plan) => void
   planArchive: PlanArchive
-  onReplacePlanArchive: (archive: PlanArchive) => void
+  onReplacePlanArchive: (
+    archive: PlanArchive,
+    options?: PlanArchiveChangeOptions,
+  ) => void
   onShowNotice?: (text: string) => void
   authDiagnostics?: SessionDiagnostics
   authSignedIn?: boolean
@@ -242,7 +246,7 @@ export function SettingsModal({
         return
       }
       onReplacePlan(nextPlan)
-      onReplacePlanArchive(nextArchive)
+      onReplacePlanArchive(nextArchive, { allowDestructive: true })
       onShowNotice?.('Plans imported.')
     } catch (err) {
       setDataError(err instanceof Error ? err.message : 'Import failed.')

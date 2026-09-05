@@ -17,6 +17,7 @@ import {
   type ArchivedPlan,
   type ArchiveFolder,
   type PlanArchive,
+  type PlanArchiveChangeOptions,
 } from '../lib/planArchive'
 import {
   DEFAULT_GROUP_COLOR,
@@ -38,7 +39,10 @@ import {
 type ArchivedPlansModalProps = {
   archive: PlanArchive
   loading?: boolean
-  onChange: (archive: PlanArchive) => void
+  onChange: (
+    archive: PlanArchive,
+    options?: PlanArchiveChangeOptions,
+  ) => void
   onAddToHome: (plan: ArchivedPlan) => void
   onClose: () => void
   onShowNotice?: (text: string, options?: NoticeOptions) => void
@@ -171,7 +175,9 @@ export function ArchivedPlansModal({
     if (folder.plans.length === 0) {
       const previous = archive
       const label = folder.name.trim() || 'Untitled'
-      onChange(removeArchiveFolder(archive, folderId))
+      onChange(removeArchiveFolder(archive, folderId), {
+        allowDestructive: true,
+      })
       onShowNotice?.(`“${label}” folder deleted`, {
         ...undoNoticeOptions(majorUndoSeconds, () => {
           onChange(previous)
@@ -187,7 +193,7 @@ export function ArchivedPlansModal({
     const label = plan.name?.trim() || 'Untitled plan'
     const { archive: next, removed } = removeArchivedPlan(archive, plan.id)
     if (!removed) return
-    onChange(next)
+    onChange(next, { allowDestructive: true })
     if (expandedPlanId === plan.id) setExpandedPlanId(null)
     onShowNotice?.(`“${label}” deleted from archive`, {
       ...undoNoticeOptions(majorUndoSeconds, () => {
@@ -382,6 +388,7 @@ export function ArchivedPlansModal({
             const label = deletingFolder.name.trim() || 'Untitled'
             onChange(
               removeArchiveFolder(archive, deletingFolder.id, folderId),
+              { allowDestructive: true },
             )
             closeNested()
             onShowNotice?.(`“${label}” folder deleted`, {

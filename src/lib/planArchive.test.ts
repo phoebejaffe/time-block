@@ -11,6 +11,7 @@ import {
   moveArchivedPlanToFolder,
   moveArchiveFolder,
   normalizePlanArchive,
+  planArchiveShrinks,
   removeArchiveFolder,
   removeArchivedPlan,
   renameArchiveFolder,
@@ -195,6 +196,24 @@ describe('plan archive', () => {
     expect(normalizePlanArchive({ folders: 'nope' }).folders[0]!.id).toBe(
       UNFILED_FOLDER_ID,
     )
+  })
+
+  it('detects plans or folders being lost', () => {
+    const archived = archivedPlanFromGroup(group)
+    const current = addArchiveFolder(
+      addArchivedPlan(defaultPlanArchive(), archived),
+      'Work',
+    )
+    const moved = moveArchivedPlanToFolder(
+      current,
+      archived.id,
+      current.folders[1]!.id,
+    )
+    expect(planArchiveShrinks(moved, current)).toBe(false)
+    expect(
+      planArchiveShrinks(addArchivedPlan(defaultPlanArchive(), archived), current),
+    ).toBe(true)
+    expect(planArchiveShrinks(defaultPlanArchive(), current)).toBe(true)
   })
 
   it('reorders folders including Unfiled', () => {
