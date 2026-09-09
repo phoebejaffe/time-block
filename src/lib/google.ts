@@ -15,11 +15,12 @@ const REMEMBER_KEY = 'time-blocking.google-remember'
 const AUTH_ENDPOINT_FALLBACK =
   'https://us-west1-time-blocker-502417.cloudfunctions.net/auth'
 
-/** Refresh a few minutes before Google's ~1h access token expires. */
-const REFRESH_BEFORE_MS = 5 * 60_000
+/** Refresh 30 minutes before Google's ~1h access token expires. */
+const REFRESH_BEFORE_MS = 30 * 60_000
 const REFRESH_CHECK_MS = 60_000
 /** Quiet in-tab refreshes should be snappy. */
 const REFRESH_TIMEOUT_MS = 15_000
+const FOCUS_CHECK_MIN_INTERVAL_MS = 30_000
 /**
  * Boot restore may hit a cold Cloud Function after a day away — give it longer
  * and retry before forcing the user through OAuth again.
@@ -108,6 +109,7 @@ let restorePromise: Promise<boolean> | null = null
 let refreshTimer: ReturnType<typeof setInterval> | null = null
 let refreshInFlight: Promise<boolean> | null = null
 let refreshLoopActive = false
+let lastFocusCheckAt = 0
 let restoreAttempted = false
 let restoreSucceeded = false
 let restoreDetail: string | null = null
@@ -592,29 +594,17 @@ async function refreshAccessToken(
   return refreshInFlight
 }
 
-function onVisibilityOrFocusRefresh(): void {
-  if (
-    typeof document !== 'undefined' &&
-    document.visibilityState === 'hidden'
-  ) {
-    return
-  }
-  void maybeRefreshTokenQuietly('focus')
-}
-
 function stopTokenRefreshLoop(): void {
   refreshLoopActive = false
   if (refreshTimer) {
     clearInterval(refreshTimer)
     refreshTimer = null
   }
-  document.removeEventListener('visibilitychange', onVisibilityOrFocusRefresh)
-  window.removeEventListener('focus', onVisibilityOrFocusRefresh)
 }
 
 /**
  * While the tab stays open, refresh before expiry via the backend.
- * Also refreshes when the tab becomes visible again (background timers throttle).
+ * Background timers are supplemented by the hook-level focus check.
  */
 function startTokenRefreshLoop(): void {
   stopTokenRefreshLoop()
@@ -622,8 +612,6 @@ function startTokenRefreshLoop(): void {
   refreshTimer = setInterval(() => {
     void maybeRefreshTokenQuietly('timer')
   }, REFRESH_CHECK_MS)
-  document.addEventListener('visibilitychange', onVisibilityOrFocusRefresh)
-  window.addEventListener('focus', onVisibilityOrFocusRefresh)
   void maybeRefreshTokenQuietly('timer')
 }
 
@@ -637,6 +625,24 @@ async function maybeRefreshTokenQuietly(
   if (msLeft > REFRESH_BEFORE_MS) return true
 
   return refreshAccessToken(source)
+}
+
+/** Validate and refresh the active session after the app regains focus. */
+export async function checkSessionOnFocus(): Promise<boolean> {
+  const session = readStoredSession()
+  if (!session) return false
+  if (Date.now() - lastFocusCheckAt < FOCUS_CHECK_MIN_INTERVAL_MS) {
+    return Date.now() < session.expires_at
+  }
+  lastFocusCheckAt = Date.now()
+
+  if (!(await maybeRefreshTokenQuietly('focus'))) return false
+
+  const next = readStoredSession()
+  if (!next || Date.now() >= next.expires_at) return false
+  setGapiToken(next.access_token)
+  await ensureFirebaseSession(next.access_token)
+  return true
 }
 
 /**
@@ -750,6 +756,7 @@ export function signOut(): void {
   restoreSucceeded = false
   restoreDetail = null
   lastRefresh = null
+  lastFocusCheckAt = 0
 
   const session = readStoredSession()
   if (session?.refresh_token) {

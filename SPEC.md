@@ -475,10 +475,13 @@ Cross-cutting behavior:
    session, it's remembered (checked against an in-memory `grantedScopes`
    set) so later pushes don't re-prompt.
 5. **Background refresh loop**: while the tab is open, a timer checks every
-   ~60s whether the stored access token will expire within 5 minutes and,
-   if so, silently refreshes it via the backend; also refreshes
-   immediately whenever the tab regains focus/visibility (to counteract
-   background-tab timer throttling).
+   ~60s whether the stored access token will expire within 30 minutes and,
+   if so, silently refreshes it via the backend. The session hook also runs a
+   proactive expiry check when the tab regains focus or visibility (throttled
+   to once per 30 seconds; it only calls the refresh endpoint inside the same
+   30-minute expiry window as the background loop), updates the signed-in
+   state if the refresh token has been revoked, and re-links Firebase when
+   needed.
 6. **Sign out**: confirm via a native `confirm()` dialog; revoke the
    refresh token (or, if none, revoke the access token directly via GIS);
    sign out of Firebase; clear all stored tokens and in-memory scope state.

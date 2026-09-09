@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { formatError } from '../lib/errors'
 import {
+  checkSessionOnFocus,
   getSessionDiagnostics,
   hasAccessToken,
   initGoogle,
@@ -28,6 +29,31 @@ export function useGoogleSession() {
   useEffect(() => {
     const id = window.setInterval(refreshDiagnostics, 5_000)
     return () => window.clearInterval(id)
+  }, [refreshDiagnostics])
+
+  useEffect(() => {
+    let cancelled = false
+    const check = () => {
+      if (document.visibilityState === 'hidden') return
+      void checkSessionOnFocus().then((ok) => {
+        if (cancelled) return
+        refreshDiagnostics()
+        if (ok) {
+          setSignedIn(true)
+          return
+        }
+        if (!getSessionDiagnostics().hasStoredSession) {
+          setSignedIn(false)
+        }
+      })
+    }
+    window.addEventListener('focus', check)
+    document.addEventListener('visibilitychange', check)
+    return () => {
+      cancelled = true
+      window.removeEventListener('focus', check)
+      document.removeEventListener('visibilitychange', check)
+    }
   }, [refreshDiagnostics])
 
   useEffect(() => {
