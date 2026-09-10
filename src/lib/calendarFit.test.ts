@@ -136,7 +136,7 @@ describe('enabledPlansTimeRange', () => {
     ).toEqual({ minMinutes: -24 * 60, maxMinutes: 48 * 60 })
   })
 
-  it('fingerprint changes when a group is enabled or the stack moves', () => {
+  it('fingerprint changes only when a group is enabled or disabled', () => {
     const group = createBlockGroup({
       id: 'g1',
       tasks: [createTask({ title: 'A', durationMinutes: 30 })],
@@ -144,11 +144,13 @@ describe('enabledPlansTimeRange', () => {
     })
     const a = enabledPlansFingerprint([group])
     const b = enabledPlansFingerprint([{ ...group, enabled: false }])
-    const c = enabledPlansFingerprint([
-      { ...group, anchor: { kind: 'start', at: at(10) } },
-    ])
+    const moved = {
+      ...group,
+      anchor: { kind: 'start' as const, at: at(10) },
+      tasks: [{ ...group.tasks[0]!, durationMinutes: 60 }],
+    }
     expect(a).not.toBe(b)
-    expect(a).not.toBe(c)
+    expect(enabledPlansFingerprint([moved])).toBe(a)
     expect(enabledPlansFingerprint([group])).toBe(a)
   })
 

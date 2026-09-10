@@ -125,16 +125,13 @@ export function calendarSlotBounds(
   }
 }
 
-/** Stable key for “should we consider a fit pass?” — ignores titles/notes. */
+/** Stable key for fit passes — changes only when plans are enabled/disabled. */
 export function enabledPlansFingerprint(groups: BlockGroup[]): string {
-  const ids = groups
+  return groups
     .filter(isGroupEnabled)
     .map((g) => g.id)
     .sort()
     .join(',')
-  const range = enabledPlansTimeRange(groups)
-  if (!range) return `none|${ids}`
-  return `${ids}|${range.startMinutes.toFixed(2)}|${range.endMinutes.toFixed(2)}`
 }
 
 export function scrollTopForSlotMinChange(

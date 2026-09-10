@@ -1142,9 +1142,8 @@ whenever the calendar's visible date range changes.
   time-grid scroller so content under that point stays put instead of
   stretching from the top. Starting a pinch while a block drag is in
   progress cancels the drag/discards its pending move.
-- **Fit enabled plans**: when a plan is enabled or disabled, or when
-  enabled stacks' occupied times change (Starts/Ends clock, duration that
-  moves the union range), the time grid scrolls so every enabled stack is
+- **Fit enabled plans**: when a plan is enabled or disabled, the time grid
+  scrolls so every enabled stack is
   in view — 0.5s ease-out, **centered** in the time grid. If they already
   fit in the viewport, it does not scroll. When it does scroll, if today's
   current-time bar can share that viewport with the stacks, extra space is
