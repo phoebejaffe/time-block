@@ -1155,8 +1155,10 @@ whenever the calendar's visible date range changes.
   zoom is not animated when it does not change. Debounced (~250ms) and
   skipped while the user is scrubbing a time, dragging a stack, or pinching
   zoom, so it does not fight live interaction. Not run on the main
-  calendar's first layout (keeps FullCalendar's 6am `scrollTime`);
-  execution's calendar does fit on mount.
+  calendar's first layout, which instead scrolls once to center
+  today's current-time indicator in the time grid (clamped to the
+  scrollable range; the fixed 6am `scrollTime` still applies when
+  the range excludes now); execution's calendar does fit on mount.
 - **View controls**: Day / 3-Day / Week view switch (Week hidden on narrow
   viewports); Previous/Next/Today navigation; a "not today or tomorrow"
   warning icon appears next to Today when the visible range is neither

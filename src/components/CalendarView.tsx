@@ -36,6 +36,8 @@ import { useFitEnabledPlans } from '../hooks/useFitEnabledPlans'
 import {
   CALENDAR_SLOT_MINUTES,
   calendarSlotBounds,
+  clockMinutes,
+  contentYForMinutes,
   enabledPlansTimeRange,
   scrollTopForSlotMinChange,
 } from '../lib/calendarFit'
@@ -332,6 +334,8 @@ export function CalendarView({
     scrollTop: number
     slotHeight: number
   } | null>(null)
+  /** Latched once first layout centers the now-indicator. */
+  const centeredNowRef = useRef(false)
   /** Pixel height — `height="100%"` breaks after the OAuth gate; numeric height sticks across re-renders. */
   const [calendarHeight, setCalendarHeight] = useState(0)
   const dragOriginStartRef = useRef<number | null>(null)
@@ -723,6 +727,50 @@ export function CalendarView({
       max: formatSlotMinutes(bounds.maxMinutes),
     }
   }, [groups])
+
+  // First layout: center the now-indicator instead of keeping the fixed
+  // scrollTime. Execution's mount-fit owns its own initial scroll.
+  useLayoutEffect(() => {
+    if (scrollTasksIntoViewOnMount || centeredNowRef.current) return
+    if (calendarHeight < 2) return
+    const range = viewRangeRef.current
+    const now = new Date()
+    if (range && !(now >= range.start && now < range.end)) {
+      // The now-indicator isn't rendered on a range that excludes today.
+      centeredNowRef.current = true
+      return
+    }
+    const body = calendarBodyRef.current
+    if (!body) return
+    const scroller = findTimegridScroller(body)
+    const slot = scroller?.querySelector<HTMLElement>('.fc-timegrid-slot')
+    if (!scroller || !slot) return
+    const slotHeight = slot.getBoundingClientRect().height
+    if (slotHeight <= 0) return
+
+    const nowY = contentYForMinutes(
+      clockMinutes(now),
+      slotRange.minMinutes,
+      slotRange.maxMinutes,
+      CALENDAR_SLOT_MINUTES,
+      slotHeight,
+    )
+    const contentHeight =
+      ((slotRange.maxMinutes - slotRange.minMinutes) /
+        CALENDAR_SLOT_MINUTES) *
+      slotHeight
+    const maxScroll = Math.max(0, contentHeight - scroller.clientHeight)
+    scroller.scrollTop = Math.max(
+      0,
+      Math.min(maxScroll, nowY - scroller.clientHeight / 2),
+    )
+    centeredNowRef.current = true
+  }, [
+    calendarHeight,
+    slotRange.minMinutes,
+    slotRange.maxMinutes,
+    scrollTasksIntoViewOnMount,
+  ])
 
   useLayoutEffect(() => {
     const body = calendarBodyRef.current
