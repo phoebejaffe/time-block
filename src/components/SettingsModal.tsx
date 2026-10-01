@@ -20,6 +20,7 @@ import {
   normalizePlanArchive,
   type PlanArchive,
   type PlanArchiveChangeOptions,
+  type PlanArchiveUpdate,
 } from '../lib/planArchive'
 import type { SessionDiagnostics } from '../lib/google'
 import type { UserSettings } from '../lib/userSettings'
@@ -52,7 +53,7 @@ type SettingsModalProps = {
   onReplacePlan: (plan: Plan) => void
   planArchive: PlanArchive
   onReplacePlanArchive: (
-    archive: PlanArchive,
+    update: PlanArchiveUpdate,
     options?: PlanArchiveChangeOptions,
   ) => void
   onShowNotice?: (text: string) => void

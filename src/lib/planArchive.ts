@@ -46,6 +46,11 @@ export type PlanArchiveChangeOptions = {
   allowDestructive?: boolean
 }
 
+/** An archive value, or a function applied to the freshest known archive. */
+export type PlanArchiveUpdate =
+  | PlanArchive
+  | ((current: PlanArchive) => PlanArchive)
+
 export const UNFILED_FOLDER_ID = 'unfiled'
 export const UNFILED_FOLDER_NAME = 'Unfiled'
 

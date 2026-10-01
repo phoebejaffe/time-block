@@ -74,6 +74,7 @@ import type {
   ArchivedPlan,
   PlanArchive,
   PlanArchiveChangeOptions,
+  PlanArchiveUpdate,
 } from '../lib/planArchive'
 import {
   attachReorderDragListeners,
@@ -218,7 +219,7 @@ type TaskSidebarProps = {
   planArchiveLoading?: boolean
   onEnsurePlanArchiveLoaded?: () => Promise<void>
   onReplacePlanArchive: (
-    archive: PlanArchive,
+    update: PlanArchiveUpdate,
     options?: PlanArchiveChangeOptions,
   ) => void
   onAddArchivedToHome: (plan: ArchivedPlan) => string

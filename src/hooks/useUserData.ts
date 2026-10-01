@@ -35,6 +35,7 @@ import {
   normalizePlanArchive,
   type PlanArchive,
   type PlanArchiveChangeOptions,
+  type PlanArchiveUpdate,
 } from '../lib/planArchive'
 import {
   normalizeSavedCalendarUsers,
@@ -204,7 +205,9 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
         new Date(remote.updatedAt) > new Date(lastArchiveSyncedAtRef.current)
       if (!isNewer) return
       skipNextArchivePushRef.current = true
-      setPlanArchive(normalizePlanArchive(remote.planArchive))
+      const normalized = normalizePlanArchive(remote.planArchive)
+      stateRef.current.planArchive = normalized
+      setPlanArchive(normalized)
       lastArchiveSyncedAtRef.current = remote.updatedAt
     },
     [],
@@ -390,12 +393,16 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
           if (legacyPlanArchiveRef.current != null) {
             const normalized = normalizePlanArchive(legacyPlanArchiveRef.current)
             skipNextArchivePushRef.current = true
+            stateRef.current.planArchive = normalized
             setPlanArchive(normalized)
             lastArchiveSyncedAtRef.current = normalized.updatedAt
             legacyPlanArchiveRef.current = null
             void pushArchiveNow(uid, normalized).then(settleOk).catch(settleErr)
             return
           }
+          // Nothing local changed — don't push an empty default archive over
+          // a fragment another device may have just created.
+          skipNextArchivePushRef.current = true
           settleOk()
         },
         settleErr,
@@ -532,18 +539,24 @@ export function useUserData({ signedIn, plan, onRemotePlan }: UseUserDataOptions
   }, [])
 
   const replacePlanArchive = useCallback(
-    (next: PlanArchive, options: PlanArchiveChangeOptions = {}) => {
+    (next: PlanArchiveUpdate, options: PlanArchiveChangeOptions = {}) => {
+      const resolved =
+        typeof next === 'function' ? next(stateRef.current.planArchive) : next
       if (
         !options.allowDestructive &&
-        planArchiveShrinks(next, stateRef.current.planArchive)
+        planArchiveShrinks(resolved, stateRef.current.planArchive)
       ) {
         return
       }
-      archiveDestructiveWriteRef.current = options.allowDestructive ? next : null
-      stateRef.current.planArchive = next
+      archiveDestructiveWriteRef.current = options.allowDestructive
+        ? resolved
+        : null
+      stateRef.current.planArchive = resolved
+      // A local edit batched with a remote apply still needs its own push.
+      skipNextArchivePushRef.current = false
       planArchiveLoadedRef.current = true
       setPlanArchiveSyncEnabled(true)
-      setPlanArchive(next)
+      setPlanArchive(resolved)
     },
     [],
   )

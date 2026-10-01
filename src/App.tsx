@@ -438,8 +438,9 @@ export default function App() {
     }
 
     const snapshot = archivedPlanFromGroup(group)
-    const nextArchive = addArchivedPlan(userData.planArchive, snapshot)
-    userData.replacePlanArchive(nextArchive)
+    userData.replacePlanArchive((current) =>
+      addArchivedPlan(current, snapshot),
+    )
     plan.removeGroup(groupId)
     handleEditingIdChange(null)
 
@@ -448,7 +449,7 @@ export default function App() {
       ...undoNoticeOptions(userData.settings.quickUndoSeconds, () => {
         plan.insertGroupAt(group, index)
         userData.replacePlanArchive(
-          removeArchivedPlan(nextArchive, snapshot.id).archive,
+          (current) => removeArchivedPlan(current, snapshot.id).archive,
           { allowDestructive: true },
         )
         clear()

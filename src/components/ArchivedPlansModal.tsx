@@ -18,6 +18,7 @@ import {
   type ArchiveFolder,
   type PlanArchive,
   type PlanArchiveChangeOptions,
+  type PlanArchiveUpdate,
 } from '../lib/planArchive'
 import {
   DEFAULT_GROUP_COLOR,
@@ -40,7 +41,7 @@ type ArchivedPlansModalProps = {
   archive: PlanArchive
   loading?: boolean
   onChange: (
-    archive: PlanArchive,
+    update: PlanArchiveUpdate,
     options?: PlanArchiveChangeOptions,
   ) => void
   onAddToHome: (plan: ArchivedPlan) => void
@@ -152,20 +153,24 @@ export function ArchivedPlansModal({
   function handleRenameFolder(e: React.FormEvent) {
     e.preventDefault()
     if (!renamingFolderId) return
-    onChange(renameArchiveFolder(archive, renamingFolderId, nameInput))
+    onChange((current) =>
+      renameArchiveFolder(current, renamingFolderId, nameInput),
+    )
     closeNested()
   }
 
   function handleRenamePlan(e: React.FormEvent) {
     e.preventDefault()
     if (!renamingPlanId) return
-    onChange(renameArchivedPlan(archive, renamingPlanId, nameInput))
+    onChange((current) =>
+      renameArchivedPlan(current, renamingPlanId, nameInput),
+    )
     closeNested()
   }
 
   function handleCreateFolder(e: React.FormEvent) {
     e.preventDefault()
-    onChange(addArchiveFolder(archive, nameInput))
+    onChange((current) => addArchiveFolder(current, nameInput))
     closeNested()
   }
 
@@ -175,7 +180,7 @@ export function ArchivedPlansModal({
     if (folder.plans.length === 0) {
       const previous = archive
       const label = folder.name.trim() || 'Untitled'
-      onChange(removeArchiveFolder(archive, folderId), {
+      onChange((current) => removeArchiveFolder(current, folderId), {
         allowDestructive: true,
       })
       onShowNotice?.(`“${label}” folder deleted`, {
@@ -191,13 +196,13 @@ export function ArchivedPlansModal({
 
   function handleDeletePlan(plan: ArchivedPlan, folder: ArchiveFolder) {
     const label = plan.name?.trim() || 'Untitled plan'
-    const { archive: next, removed } = removeArchivedPlan(archive, plan.id)
-    if (!removed) return
-    onChange(next, { allowDestructive: true })
+    onChange((current) => removeArchivedPlan(current, plan.id).archive, {
+      allowDestructive: true,
+    })
     if (expandedPlanId === plan.id) setExpandedPlanId(null)
     onShowNotice?.(`“${label}” deleted from archive`, {
       ...undoNoticeOptions(majorUndoSeconds, () => {
-        onChange(addArchivedPlan(next, removed, folder.id))
+        onChange((current) => addArchivedPlan(current, plan, folder.id))
         onClearNotice?.()
       }),
     })
@@ -212,7 +217,7 @@ export function ArchivedPlansModal({
       setNameInput(plan.name ?? '')
     },
     onSetColor: (plan: ArchivedPlan, color: string | undefined) => {
-      onChange(setArchivedPlanColor(archive, plan.id, color))
+      onChange((current) => setArchivedPlanColor(current, plan.id, color))
     },
     onMove: (plan: ArchivedPlan) => setMovingPlanId(plan.id),
     onDelete: handleDeletePlan,
@@ -300,10 +305,14 @@ export function ArchivedPlansModal({
                   setNameInput(folder.name)
                 }}
                 onMoveUp={() =>
-                  onChange(moveArchiveFolder(archive, folder.id, -1))
+                  onChange((current) =>
+                    moveArchiveFolder(current, folder.id, -1),
+                  )
                 }
                 onMoveDown={() =>
-                  onChange(moveArchiveFolder(archive, folder.id, 1))
+                  onChange((current) =>
+                    moveArchiveFolder(current, folder.id, 1),
+                  )
                 }
                 onDelete={() => handleDeleteFolder(folder.id)}
                 onToggleExpanded={toggleExpanded}
@@ -313,7 +322,9 @@ export function ArchivedPlansModal({
                 onMovePlan={rowActions.onMove}
                 onDeletePlan={(plan) => handleDeletePlan(plan, folder)}
                 onReorder={(from, to) =>
-                  onChange(reorderArchivedPlans(archive, folder.id, from, to))
+                  onChange((current) =>
+                    reorderArchivedPlans(current, folder.id, from, to),
+                  )
                 }
               />
             ))
@@ -370,8 +381,8 @@ export function ArchivedPlansModal({
           folders={archive.folders}
           currentFolderId={movingFromFolder.id}
           onPick={(folderId) => {
-            onChange(
-              moveArchivedPlanToFolder(archive, movingPlan.id, folderId),
+            onChange((current) =>
+              moveArchivedPlanToFolder(current, movingPlan.id, folderId),
             )
             closeNested()
           }}
@@ -387,7 +398,8 @@ export function ArchivedPlansModal({
             const previous = archive
             const label = deletingFolder.name.trim() || 'Untitled'
             onChange(
-              removeArchiveFolder(archive, deletingFolder.id, folderId),
+              (current) =>
+                removeArchiveFolder(current, deletingFolder.id, folderId),
               { allowDestructive: true },
             )
             closeNested()

@@ -8,7 +8,12 @@ import type {
   Task,
 } from '../lib/tasks'
 import { stackOccupiedLocalDays, startOfLocalDay } from '../lib/tasks'
-import type { ArchivedPlan, PlanArchive } from '../lib/planArchive'
+import type {
+  ArchivedPlan,
+  PlanArchive,
+  PlanArchiveChangeOptions,
+  PlanArchiveUpdate,
+} from '../lib/planArchive'
 import type { NoticeOptions } from '../lib/notice'
 import type { PushedEvent, PushSnapshot } from '../lib/pushedEvents'
 import type { SavedCalendarUser } from '../lib/savedCalendarUsers'
@@ -67,7 +72,10 @@ type ExecutionModalProps = {
   planArchive: PlanArchive
   planArchiveLoading?: boolean
   onEnsurePlanArchiveLoaded?: () => Promise<void>
-  onReplacePlanArchive: (archive: PlanArchive) => void
+  onReplacePlanArchive: (
+    update: PlanArchiveUpdate,
+    options?: PlanArchiveChangeOptions,
+  ) => void
   onAddArchivedToHome: (plan: ArchivedPlan) => string
   onShowNotice?: (text: string, options?: NoticeOptions) => void
   onClearNotice?: () => void

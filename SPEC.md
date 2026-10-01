@@ -1194,7 +1194,10 @@ whenever the calendar's visible date range changes.
   `users/{uid}/fragments/planArchive` (`updatedAt` + `planArchive`). Lazy-loaded
   on first open of the Archived plans modal (or before the first Archive action
   from Home). Legacy inline `planArchive` on the main user doc is migrated to
-  the fragment on sign-in when present.
+  the fragment on sign-in when present. Loading alone never writes the
+  fragment — it is created by the first local archive edit or by the legacy
+  migration, so a fresh load can't clobber a fragment another device just
+  created.
 - **On sign-in**, subscribe to that document in real time:
   - If it exists and its `updatedAt` is newer than the last value this tab
     itself wrote, replace all local state with the remote values
@@ -1213,7 +1216,11 @@ whenever the calendar's visible date range changes.
   document level; no field-level merge/CRDT logic. Archived-plan edits debounce
   separately to the fragment document once the archive has been loaded, and
   writes are serialized so an older in-flight archive snapshot cannot overwrite
-  a newer folder change. Incoming or outgoing archive snapshots that would
+  a newer folder change. Archive mutations (archive-from-Home, folder
+  create/move/rename, plan edits, deletes) apply to the freshest synced
+  archive rather than the last-rendered value, so a lazy load or remote
+  update landing mid-edit can't drop plans. Incoming or outgoing archive
+  snapshots that would
   reduce the plan count or folder count are rejected unless they came from an
   explicit destructive action (such as deleting a plan, deleting a folder, or
   importing a replacement archive).

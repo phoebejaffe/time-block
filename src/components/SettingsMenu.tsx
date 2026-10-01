@@ -4,7 +4,11 @@ import { BlockLibraryModal } from './BlockLibraryModal'
 import { FixedMenuPortal } from './FixedMenuPortal'
 import { SettingsModal } from './SettingsModal'
 import type { BlockLibrary, Plan } from '../lib/tasks'
-import type { PlanArchive } from '../lib/planArchive'
+import type {
+  PlanArchive,
+  PlanArchiveChangeOptions,
+  PlanArchiveUpdate,
+} from '../lib/planArchive'
 import type { SavedCalendarUser } from '../lib/savedCalendarUsers'
 import type { NoticeOptions } from '../lib/notice'
 import type { SessionDiagnostics } from '../lib/google'
@@ -27,7 +31,10 @@ type SettingsMenuProps = {
   plan: Plan
   onReplacePlan: (plan: Plan) => void
   planArchive: PlanArchive
-  onReplacePlanArchive: (archive: PlanArchive) => void
+  onReplacePlanArchive: (
+    update: PlanArchiveUpdate,
+    options?: PlanArchiveChangeOptions,
+  ) => void
   onOpenArchivedPlans?: () => void
   onShowNotice?: (text: string, options?: NoticeOptions) => void
   onClearNotice?: () => void
