@@ -42,6 +42,7 @@ import {
   getStackEndStatus,
   prepareGroupForExecution,
   stackDayBoundaryOffsets,
+  stackDayKey,
   stackOccupiedLocalDays,
   canNavigateCalendarRange,
   type BlockLibrary,
@@ -183,6 +184,54 @@ describe('anchorOnDay', () => {
     expect(d.getDate()).toBe(20)
     expect(d.getHours()).toBe(9)
     expect(d.getMinutes()).toBe(30)
+  })
+})
+
+describe('stackDayKey', () => {
+  const overnight: Task[] = [
+    { id: 'a', title: 'A', durationMinutes: 60 },
+    { id: 'b', title: 'B', durationMinutes: 60 },
+  ]
+
+  it('is the same under start- and end-anchors for a midnight-crossing stack', () => {
+    // 11pm–1am: start anchor sits on the 23rd, end anchor on the 24th,
+    // but the stack's day is the 23rd either way.
+    const startAnchor: StackAnchor = {
+      kind: 'start',
+      at: new Date(2026, 6, 23, 23, 0, 0).toISOString(),
+    }
+    const endAnchor: StackAnchor = {
+      kind: 'end',
+      at: new Date(2026, 6, 24, 1, 0, 0).toISOString(),
+    }
+    expect(stackDayKey(overnight, endAnchor)).toBe('2026-07-23')
+    expect(stackDayKey(overnight, startAnchor)).toBe('2026-07-23')
+  })
+
+  it('matches the anchor day for stacks that stay within one day', () => {
+    const tasks: Task[] = [{ id: 'a', title: 'A', durationMinutes: 60 }]
+    const startAnchor: StackAnchor = {
+      kind: 'start',
+      at: new Date(2026, 6, 23, 9, 0, 0).toISOString(),
+    }
+    const endAnchor: StackAnchor = {
+      kind: 'end',
+      at: new Date(2026, 6, 23, 10, 0, 0).toISOString(),
+    }
+    expect(stackDayKey(tasks, startAnchor)).toBe('2026-07-23')
+    expect(stackDayKey(tasks, endAnchor)).toBe('2026-07-23')
+  })
+
+  it('falls back to the anchor day when nothing resolves', () => {
+    const disabled: Task[] = [
+      { id: 'a', title: 'A', durationMinutes: 60, disabled: true },
+    ]
+    const anchor: StackAnchor = {
+      kind: 'end',
+      at: new Date(2026, 6, 24, 1, 0, 0).toISOString(),
+    }
+    expect(stackDayKey(disabled, anchor)).toBe('2026-07-24')
+    expect(stackDayKey([], anchor)).toBe('2026-07-24')
   })
 })
 
@@ -1125,6 +1174,64 @@ describe('execution helpers', () => {
       new Date(2026, 6, 18, 10, 30, 0).toISOString(),
     )
     expect(shouldAutoEndExecution(next, now)).toBe(false)
+  })
+
+  it('prepareGroupForExecution keeps a still-running overnight occurrence', () => {
+    // Starts-anchored stack Sep 18 22:00 → Sep 19 00:30; starting the run at
+    // 00:15 must pin that stored occurrence, not copy 22:00 onto today.
+    const group = {
+      id: 'g',
+      tasks: [
+        { id: 'a', title: 'A', durationMinutes: 90 },
+        { id: 'b', title: 'B', durationMinutes: 60 },
+      ],
+      anchor: {
+        kind: 'start' as const,
+        at: new Date(2026, 6, 18, 22, 0, 0).toISOString(),
+      },
+    }
+    const now = new Date(2026, 6, 19, 0, 15, 0)
+    expect(isGroupExecutableNow(group, now)).toBe(true)
+    const next = prepareGroupForExecution(group, now)
+    expect(next.anchor).toEqual(group.anchor)
+    expect(next.intendedEndAt).toBe(
+      new Date(2026, 6, 19, 0, 30, 0).toISOString(),
+    )
+    expect(shouldAutoEndExecution(next, now)).toBe(false)
+  })
+
+  it('prepareGroupForExecution remaps an overnight anchor once the window passes', () => {
+    const group = {
+      id: 'g',
+      tasks: [{ id: 'a', title: 'A', durationMinutes: 150 }],
+      anchor: {
+        kind: 'start' as const,
+        at: new Date(2026, 6, 18, 22, 0, 0).toISOString(),
+      },
+    }
+    const now = new Date(2026, 6, 19, 21, 0, 0)
+    const next = prepareGroupForExecution(group, now)
+    expect(next.anchor).toEqual({
+      kind: 'start',
+      at: new Date(2026, 6, 19, 22, 0, 0).toISOString(),
+    })
+  })
+
+  it('prepareGroupForExecution is a no-op on a live run past midnight', () => {
+    const group = {
+      id: 'g',
+      tasks: [{ id: 'a', title: 'A', durationMinutes: 150 }],
+      anchor: {
+        kind: 'start' as const,
+        at: new Date(2026, 6, 18, 22, 0, 0).toISOString(),
+      },
+      intendedEndAt: new Date(2026, 6, 19, 0, 30, 0).toISOString(),
+    }
+    const next = prepareGroupForExecution(
+      group,
+      new Date(2026, 6, 19, 0, 45, 0),
+    )
+    expect(next).toBe(group)
   })
 
   it('prepareGroupForExecution keeps an existing intendedEndAt', () => {

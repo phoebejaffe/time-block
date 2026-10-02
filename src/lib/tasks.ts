@@ -1096,19 +1096,21 @@ export function getStackDelayOverrun(
 }
 
 /**
- * Flip a group to start-anchored (preserving stack position), place the
- * stored anchor on `now`'s local day (so Start eligibility and auto-end
- * agree), and capture `intendedEndAt` from the resolved end when not
- * already set.
+ * Flip a group to start-anchored (preserving stack position), pin it to the
+ * occurrence `now` belongs to — the stored one while `now` is still inside
+ * its ±1h window (e.g. an overnight run past midnight), otherwise the clock
+ * time remapped onto `now`'s local day, matching `isGroupExecutableNow`'s
+ * notion of "now" — and capture `intendedEndAt` from the resolved end when
+ * not already set.
  */
 export function prepareGroupForExecution(
   group: BlockGroup,
   now: Date = new Date(),
 ): BlockGroup {
   const totalMinutes = stackDurationMinutes(group.tasks)
-  // Remap the original occurrence first. Flipping an early Ends anchor after
+  // Resolve the occurrence first. Flipping an early Ends anchor after
   // remapping would otherwise move its previous-day start onto tomorrow.
-  const occurrenceAnchor = anchorOnDay(group.anchor, now)
+  const occurrenceAnchor = occurrenceAnchorForNow(group.tasks, group.anchor, now)
   const anchor =
     occurrenceAnchor.kind === 'start'
       ? occurrenceAnchor
@@ -1176,6 +1178,17 @@ export function stackOccupiedLocalDays(
   )
   if (last.getTime() < first.getTime()) return { first, last: first }
   return { first, last }
+}
+
+/**
+ * Local day the resolved stack starts on — the day pushed-event history is
+ * scoped by. Unlike the anchor's own day, this stays the same whether the
+ * stack is anchored from its start or its end, so toggling Starts/Ends on a
+ * midnight-crossing stack can't orphan its push records.
+ */
+export function stackDayKey(tasks: Task[], anchor: StackAnchor): string {
+  const days = stackOccupiedLocalDays({ tasks, anchor })
+  return days ? localDateKey(days.first) : localDateKey(anchor.at)
 }
 
 /**

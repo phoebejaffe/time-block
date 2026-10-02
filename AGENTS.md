@@ -130,8 +130,11 @@ testing.
   off while executing; planning Starts/Ends remains available after ending
   execution. Per-block `done` toggles (pending ↔ finished) live only in the
   execution sidebar and clear when execution ends. **`prepareGroupForExecution`**
-  flips to Starts if needed and writes the anchor onto **today's** local day
-  (same clock time) so Start eligibility and auto-end agree. A run auto-ends
+  flips to Starts if needed and pins the anchor to the occurrence `now`
+  belongs to — the stored day while `now` is still within the stack's ±1h
+  window (e.g. an overnight run past midnight), else today's local day at the
+  same clock time — the same selection `isGroupExecutableNow` uses, so Start
+  eligibility and auto-end agree. A run auto-ends
   N hours after the last non-disabled block (N from Settings, default 2).
   Opening or reopening a run expands the group; the execution sidebar never
   renders it collapsed.

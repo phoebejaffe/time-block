@@ -4,7 +4,7 @@ import {
   syncGroupToCalendars,
   syncTasksToCalendar,
 } from './calendarApi'
-import type { Task } from './tasks'
+import { toggleAnchorPreservingStack, type Task } from './tasks'
 
 type FakeEvent = {
   id: string
@@ -230,11 +230,45 @@ describe('syncTasksToCalendar — per-day isolation', () => {
       [],
     )
 
-    expect(result.pushedEvents[0]).toMatchObject({ dayKey: '2026-07-24' })
+    // Keyed by the day the stack starts, not the anchor's day.
+    expect(result.pushedEvents[0]).toMatchObject({ dayKey: '2026-07-23' })
     expect([...store.values()][0]).toMatchObject({
       start: new Date(2026, 6, 23, 23, 0, 0).toISOString(),
       end: endAt.toISOString(),
     })
+  })
+
+  it('keeps updating the same events after toggling anchor kind on an overnight stack', async () => {
+    const tasks: Task[] = [
+      { id: 't1', title: 'Wind down', durationMinutes: 60 },
+      { id: 't2', title: 'Sleep prep', durationMinutes: 60 },
+    ]
+    const endAnchor = {
+      kind: 'end' as const,
+      at: new Date(2026, 6, 24, 1, 0, 0).toISOString(),
+    }
+    const first = await syncTasksToCalendar(
+      'cal-1',
+      'group-1',
+      tasks,
+      endAnchor,
+      [],
+    )
+    expect(first.created).toBe(2)
+
+    // Toggling to "starts at 11pm" keeps the same resolved times but moves
+    // the anchor to the previous day — the day key must not change.
+    const startAnchor = toggleAnchorPreservingStack(endAnchor, 120)
+    const second = await syncTasksToCalendar(
+      'cal-1',
+      'group-1',
+      tasks,
+      startAnchor,
+      first.pushedEvents,
+    )
+    expect(second.created).toBe(0)
+    expect(second.updated).toBe(2)
+    expect(second.removed).toBe(0)
   })
 
   it('updates and deletes the same spillover occurrence', async () => {

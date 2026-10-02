@@ -231,11 +231,13 @@ calendar view always shows "if this group's tasks happened today [or
 whatever day is in view], here's when," and only committing an edit persists
 that day. Default: a new group uses the Settings default anchor (Starts/Ends
 + time; factory default is "ends at 9:00am today"). When execution starts, the
-clock-time template is remapped onto today's local day once and becomes a
-concrete occurrence; an early Ends anchor may therefore resolve to a start on
-the previous local day, and a late Starts anchor may resolve to an end on the
-next local day. The concrete execution occurrence is not remapped again at
-midnight.
+template resolves to a concrete occurrence: if wall-clock now is still within
+an hour of the stored stack (e.g. an overnight plan still running after
+midnight), that stored occurrence is kept; otherwise the clock time is
+remapped onto today's local day once — the same selection "Start plan"
+eligibility uses. An early Ends anchor may resolve to a start on the previous
+local day, and a late Starts anchor may resolve to an end on the next local
+day. The concrete execution occurrence is not remapped again at midnight.
 
 ### 4.6 Block-group checkpoint (save/revert a group's "default" blocks)
 
@@ -320,7 +322,8 @@ type PushedEvent = {
   eventId: string     // Google Calendar event id
   taskId: string       // the Task.id this event represents
   groupId: string
-  dayKey: string        // 'YYYY-MM-DD' local date the stack was pushed for
+  dayKey: string        // 'YYYY-MM-DD' local date the stack's first block
+                        // starts on — identical under Starts/Ends anchoring
   pushedAt: string       // ISO
 }
 
@@ -336,7 +339,10 @@ type PushSnapshot = {
 - `PushedEvent` is one row per Google Calendar event the app created,
   scoped by `(calendarId, groupId, dayKey)` — i.e. a given block, pushed for
   a given group on a given day, to a given calendar, maps to exactly one
-  tracked Google event id. Retained for ~31 days, then pruned (both on
+  tracked Google event id. `dayKey` is the local date of the stack's first
+  non-disabled block (`stackDayKey`), so a midnight-crossing stack keeps the
+  same key whether anchored from its start (evening day) or its end
+  (morning day). Retained for ~31 days, then pruned (both on
   read and after every push/delete).
 - `PushSnapshot` is one row per `(calendarId, groupId, dayKey)` capturing a
   fingerprint of exactly what was written on the last *fully successful*
@@ -715,7 +721,8 @@ Top to bottom:
        button whenever the group has drifted from its saved checkpoint
        (§4.6); then an **"Add to calendar"** / **"Update calendar"** /
        **"Update calendars"** button (label swaps to Update once anything
-       has been pushed for this group on the viewed day; plural when that
+       has been pushed for this group on the stack's day — the local date
+       its first block starts on; plural when that
        group+day was pushed to more than one calendar; disabled while
        nothing has ever been pushed and the group has zero tasks; visually
        "soft-disabled" — clickable but styled inert — when the stack
@@ -950,9 +957,11 @@ for running one group against the clock:
    group is executing, the same button stays available (labeled **Running**)
    even if the group is collapsed, to expand it and reopen the run modal.
 2. Entering execution: persist `executingGroupId` on the user sync document;
-   remap the anchor's clock time onto today's local day and, if needed, flip
+   pin the occurrence `now` belongs to — the stored one when `now` is within
+   an hour of its stack (e.g. a plan still running past midnight), otherwise
+   the clock time remapped onto today's local day — and, if needed, flip
    to `anchor.kind: 'start'` via `toggleAnchorPreservingStack` while preserving
-   the concrete occurrence (including a previous-day start for an early Ends
+   that occurrence (including a previous-day start for an early Ends
    plan); set
    `intendedEndAt` from the resolved stack end if not already set for this
    run; turn the group on (`enabled: true`) if it was collapsed; open a

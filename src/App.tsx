@@ -40,9 +40,9 @@ import {
   executionAutoEndAt,
   isGroupEnabled,
   isTaskDelay,
-  localDateKey,
   pickViewDate,
   shiftAnchor,
+  stackDayKey,
   shouldAutoEndExecution,
   startOfLocalDay,
   type CalendarGuest,
@@ -543,7 +543,7 @@ export default function App() {
       executingGroupId === groupId
         ? group.anchor
         : anchorOnDay(group.anchor, viewDate)
-    const dayKey = localDateKey(anchor.at)
+    const dayKey = stackDayKey(group.tasks, anchor)
     const isUpdate = hasPushedGroupOnDay(userData.pushedEvents, groupId, dayKey)
     if (calendarIds.length === 0 && !isUpdate) {
       show('info', 'Choose at least one calendar.')
@@ -653,7 +653,7 @@ export default function App() {
       executingGroupId === groupId
         ? group.anchor
         : anchorOnDay(group.anchor, viewDate)
-    const dayKey = localDateKey(anchor.at)
+    const dayKey = stackDayKey(group.tasks, anchor)
     if (!hasPushedGroupOnDay(userData.pushedEvents, groupId, dayKey)) return
     const calendarNames = calendarNamesForPushedGroupDay(
       userData.pushedEvents,

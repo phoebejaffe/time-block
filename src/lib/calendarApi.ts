@@ -7,7 +7,7 @@ import {
   type PushedEvent,
 } from './pushedEvents'
 import type { Task } from './tasks'
-import { localDateKey, isTaskDisabled, isTaskEmpty, resolveStack, type StackAnchor } from './tasks'
+import { isTaskDisabled, isTaskEmpty, resolveStack, stackDayKey, type StackAnchor } from './tasks'
 import type { CalendarGuest } from './savedCalendarUsers'
 
 export type GoogleCalendar = {
@@ -273,7 +273,7 @@ export function countTasksSyncOps(
   pushedEvents: PushedEvent[],
 ): number {
   const resolved = resolveStack(tasks, anchor)
-  const dayKey = localDateKey(anchor.at)
+  const dayKey = stackDayKey(tasks, anchor)
   const unusedDay = pushedEvents.filter(
     (e) =>
       e.calendarId === calendarId &&
@@ -405,7 +405,7 @@ export async function syncTasksToCalendar(
   guests: CalendarGuest[] = [],
 ): Promise<SyncTasksResult> {
   const resolved = resolveStack(tasks, anchor)
-  const dayKey = localDateKey(anchor.at)
+  const dayKey = stackDayKey(tasks, anchor)
   let tracked = [...pushedEvents]
   let updated = 0
   let created = 0
@@ -763,7 +763,7 @@ export async function syncGroupToCalendars(
   onProgress?: SyncProgressCallback,
   guestsByCalendar: Record<string, CalendarGuest[]> = {},
 ): Promise<SyncGroupCalendarsResult> {
-  const dayKey = localDateKey(anchor.at)
+  const dayKey = stackDayKey(tasks, anchor)
   const previouslyPushed = [
     ...new Set(
       pushedEvents

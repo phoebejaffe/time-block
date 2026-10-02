@@ -32,12 +32,12 @@ import {
   isTaskDisabled,
   isTaskEmpty,
   isTaskInBlockLibrary,
-  localDateKey,
   groupMatchesCheckpoint,
   optionalNote,
   resolveSavedBlocksFromKeys,
   resolveStack,
   stackDayBoundaryOffsets,
+  stackDayKey,
   stackDurationMinutes,
   stepLocalTime,
   toggleAnchorPreservingStack,
@@ -382,7 +382,7 @@ export function TaskSidebar({
     }
     if (kind === 'commit') {
       const group = groups.find((g) => g.id === groupId)
-      const dayKey = group ? localDateKey(group.anchor.at) : ''
+      const dayKey = group ? stackDayKey(group.tasks, group.anchor) : ''
       const pushedCalIds = pushedCalendarIdsForGroupDay(
         pushedEvents,
         groupId,
@@ -422,7 +422,7 @@ export function TaskSidebar({
     setCommitLastGuestsByCalendar({})
   }
 
-  const modalDayKey = modalGroup ? localDateKey(modalGroup.anchor.at) : ''
+  const modalDayKey = modalGroup ? stackDayKey(modalGroup.tasks, modalGroup.anchor) : ''
   const modalIsUpdate =
     Boolean(modalGroupId) &&
     hasPushedGroupOnDay(pushedEvents, modalGroupId || '', modalDayKey)
@@ -1377,7 +1377,7 @@ export function BlockGroupPanel({
         </span>
       </>
     )
-  const dayKey = localDateKey(anchor.at)
+  const dayKey = stackDayKey(tasks, anchor)
   const onCalendar = hasPushedGroupOnDay(pushedEvents, group.id, dayKey)
   const isUpdate = onCalendar
   const commitLabel = calendarCommitLabel(

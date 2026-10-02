@@ -1,10 +1,15 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { BlockLibraryModal } from './components/BlockLibraryModal'
+import { ExecutionModal } from './components/ExecutionModal'
 import { BlockGroupPanel, type BlockGroupPanelProps } from './components/TaskSidebar'
+import type { GoogleCalendar } from './lib/calendarApi'
+import type { PushedEvent } from './lib/pushedEvents'
+import { usePlan } from './hooks/usePlan'
 import {
   createBlockGroup,
   createSavedBlock,
   createTask,
+  stackDayKey,
   type BlockLibrary,
   type BlockGroup,
   type Task,
@@ -33,7 +38,131 @@ function makeLibrary(): BlockLibrary {
   }
 }
 
+const OVERNIGHT_CALENDAR: GoogleCalendar = {
+  id: 'e2e-overnight-calendar',
+  summary: 'E2E Calendar',
+  backgroundColor: '#4285f4',
+  foregroundColor: '#ffffff',
+  primary: true,
+  accessRole: 'owner',
+}
+
+/**
+ * Repro scenario for overnight runs: a Starts-anchored plan that began
+ * yesterday at 22:00 and ends ~00:30, already pushed under yesterday's day
+ * key. "Start overnight run" enters execution through the real
+ * `usePlan.beginExecution` path.
+ */
+function OvernightRunHarness() {
+  const plan = usePlan()
+  const { beginExecution, replacePlan } = plan
+  const [runOpen, setRunOpen] = useState(false)
+  const [pushedEvents, setPushedEvents] = useState<PushedEvent[]>([])
+
+  useEffect(() => {
+    const start = new Date()
+    start.setDate(start.getDate() - 1)
+    start.setHours(22, 0, 0, 0)
+    const group = createBlockGroup({
+      id: 'e2e-overnight',
+      name: 'Overnight plan',
+      anchor: { kind: 'start', at: start.toISOString() },
+      tasks: [
+        createTask({ title: 'Wind down', durationMinutes: 90 }),
+        createTask({ title: 'Sleep prep', durationMinutes: 60 }),
+      ],
+    })
+    const dayKey = stackDayKey(group.tasks, group.anchor)
+    setPushedEvents(
+      group.tasks.map((task) => ({
+        calendarId: OVERNIGHT_CALENDAR.id,
+        eventId: `e2e-ev-${task.id}`,
+        taskId: task.id,
+        groupId: group.id,
+        dayKey,
+        pushedAt: new Date().toISOString(),
+      })),
+    )
+    replacePlan({ groups: [group] })
+  }, [replacePlan])
+
+  const group = plan.plan.groups.find((g) => g.id === 'e2e-overnight')
+
+  return (
+    <div className="e2e-harness">
+      <div className="e2e-harness-toolbar">
+        <button
+          type="button"
+          disabled={!group}
+          onClick={() => {
+            beginExecution('e2e-overnight')
+            setRunOpen(true)
+          }}
+        >
+          Start overnight run
+        </button>
+      </div>
+      {runOpen && group && (
+        <ExecutionModal
+          group={group}
+          groupsForSidebar={[group]}
+          calendarGroups={[group]}
+          googleEvents={[]}
+          calendars={[OVERNIGHT_CALENDAR]}
+          visibleCalendarIds={new Set([OVERNIGHT_CALENDAR.id])}
+          onToggleCalendar={noop}
+          writableCalendars={[OVERNIGHT_CALENDAR]}
+          onAdd={plan.addTask}
+          onAddBlocks={plan.addTasks}
+          onUpdate={plan.updateTask}
+          onRemove={plan.removeTask}
+          onReorder={plan.reorderTasks}
+          onAnchorChange={plan.setAnchor}
+          onGotDelayed={(groupId) =>
+            plan.insertGotDelayed(groupId, new Date(), true)
+          }
+          onIntendedEndChange={plan.setIntendedEndAt}
+          onSaveCheckpoint={plan.saveCheckpoint}
+          onRevertToCheckpoint={plan.revertToCheckpoint}
+          onSetGroupName={plan.setGroupName}
+          onSetGroupColor={plan.setGroupColor}
+          onSetGroupEnabled={plan.setGroupEnabled}
+          onCommit={async () => true}
+          onDeleteFromCalendar={async () => {}}
+          onTaskEditPreview={noop}
+          editingId={null}
+          onEditingIdChange={noop}
+          onDatesSet={noop}
+          onTaskClick={noop}
+          targetCalendarId={OVERNIGHT_CALENDAR.id}
+          onTargetCalendarChange={noop}
+          pushedEvents={pushedEvents}
+          pushSnapshots={[]}
+          blockLibrary={{ updatedAt: '', categories: [] }}
+          onReplaceBlockLibrary={noop}
+          planArchive={{ folders: [], updatedAt: '' }}
+          onReplacePlanArchive={noop}
+          onAddArchivedToHome={() => ''}
+          savedCalendarUsers={[]}
+          onReplaceSavedCalendarUsers={noop}
+          onClose={() => setRunOpen(false)}
+          onEndExecution={() => setRunOpen(false)}
+        />
+      )}
+    </div>
+  )
+}
+
 export function E2eHarness() {
+  if (
+    new URLSearchParams(window.location.search).get('e2e') === 'overnight-run'
+  ) {
+    return <OvernightRunHarness />
+  }
+  return <PanelHarness />
+}
+
+function PanelHarness() {
   const [group, setGroup] = useState<BlockGroup>(() =>
     createBlockGroup({ id: 'e2e-group', name: 'E2E plan', tasks: makeTasks() }),
   )
