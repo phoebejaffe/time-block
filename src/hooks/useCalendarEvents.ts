@@ -47,13 +47,20 @@ export function useCalendarEvents({
     [calendars],
   )
 
-  const overlayIds = useMemo(() => {
+  const overlayIdsNext = useMemo(() => {
     const next = new Set<string>()
     for (const id of visibleIds) {
       if (!hiddenIds.has(id)) next.add(id)
     }
     return next
   }, [visibleIds, hiddenIds])
+  // Firestore echoes hand us a fresh hiddenIds Set even when unchanged; keep
+  // overlayIds referentially stable so refreshEvents doesn't refetch.
+  const overlayIdsRef = useRef(overlayIdsNext)
+  if (!sameCalendarIdSet(overlayIdsRef.current, overlayIdsNext)) {
+    overlayIdsRef.current = overlayIdsNext
+  }
+  const overlayIds = overlayIdsRef.current
 
   const reset = useCallback(() => {
     setCalendars([])
