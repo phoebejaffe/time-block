@@ -15,7 +15,7 @@ import {
 
 type UseCalendarEventsOptions = {
   signedIn: boolean
-  onError?: (message: string) => void
+  onError?: (message: string | null) => void
   hiddenIds?: Set<string>
   storedVisibleIds?: string[]
   settingsReady?: boolean
@@ -101,6 +101,7 @@ export function useCalendarEvents({
       try {
         setBusy(true)
         await refreshCalendars()
+        if (!cancelled) onErrorRef.current?.(null)
       } catch (err) {
         if (!cancelled) {
           onErrorRef.current?.(formatError(err))
@@ -120,6 +121,7 @@ export function useCalendarEvents({
     ;(async () => {
       try {
         await refreshEvents()
+        if (!cancelled) onErrorRef.current?.(null)
       } catch (err) {
         if (!cancelled) {
           onErrorRef.current?.(formatError(err))

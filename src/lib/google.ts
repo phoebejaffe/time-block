@@ -121,7 +121,12 @@ let lastRefresh: {
   durationMs: number
 } | null = null
 
-export type RefreshAttemptSource = 'boot' | 'timer' | 'focus' | 'manual'
+export type RefreshAttemptSource =
+  | 'boot'
+  | 'timer'
+  | 'focus'
+  | 'manual'
+  | 'retry'
 
 export type SessionDiagnostics = {
   hasStoredSession: boolean
@@ -141,7 +146,7 @@ export type SessionDiagnostics = {
   lastRefreshError: string | null
   lastRefreshMs: number | null
   authEndpoint: string
-  /** Checks every 60s; refreshes when access token has ≤5 min left. */
+  /** Checks every 60s; refreshes when access token has ≤30 min left. */
   refreshCheckIntervalMs: number
   refreshBeforeExpiryMs: number
 }
@@ -503,8 +508,10 @@ function isAbortError(err: unknown): boolean {
  * Mint a new access token from the stored refresh token. No user gesture
  * needed, works on cold loads and on Safari/iOS. Returns false when there is
  * no refresh token or it has been revoked (user must sign in again).
+ * Concurrent callers share the in-flight refresh; once it settles, the next
+ * call always starts a real refresh.
  */
-async function refreshAccessToken(
+export async function refreshAccessToken(
   source: RefreshAttemptSource,
 ): Promise<boolean> {
   const session = readStoredSession()
@@ -519,11 +526,11 @@ async function refreshAccessToken(
   const attempts =
     source === 'boot' || source === 'manual' ? BOOT_REFRESH_ATTEMPTS : 1
   const timeoutMs =
-    source === 'boot' || source === 'manual'
-      ? BOOT_REFRESH_TIMEOUT_MS
-      : REFRESH_TIMEOUT_MS
+    source === 'timer' || source === 'focus'
+      ? REFRESH_TIMEOUT_MS
+      : BOOT_REFRESH_TIMEOUT_MS
 
-  refreshInFlight = (async () => {
+  const flight = (async () => {
     const started = Date.now()
     let lastError: string | null = null
 
@@ -540,6 +547,17 @@ async function refreshAccessToken(
             source,
             false,
             lastError,
+            Date.now() - started,
+          )
+          return false
+        }
+        // Sign-out (or a newer interactive sign-in) may have replaced the
+        // stored session while this request was in flight — don't resurrect it.
+        if (readStoredSession()?.refresh_token !== refreshToken) {
+          recordRefreshAttempt(
+            source,
+            false,
+            'Stored session changed while refresh was in flight',
             Date.now() - started,
           )
           return false
@@ -591,7 +609,12 @@ async function refreshAccessToken(
     return false
   })()
 
-  return refreshInFlight
+  refreshInFlight = flight
+  try {
+    return await flight
+  } finally {
+    if (refreshInFlight === flight) refreshInFlight = null
+  }
 }
 
 function stopTokenRefreshLoop(): void {
@@ -757,6 +780,7 @@ export function signOut(): void {
   restoreDetail = null
   lastRefresh = null
   lastFocusCheckAt = 0
+  refreshInFlight = null
 
   const session = readStoredSession()
   if (session?.refresh_token) {

@@ -1,4 +1,5 @@
 import { formatError } from './errors'
+import { refreshAccessToken } from './google'
 import {
   calendarEventDescription,
   prunePushedEvents,
@@ -53,10 +54,26 @@ function darkenHex(hex: string, amount = 0.28): string {
   return `#${channel(0)}${channel(2)}${channel(4)}`
 }
 
+/**
+ * Run one gapi Calendar call; on an auth error, silently refresh the access
+ * token and retry the call once before surfacing the error.
+ */
+async function withAuthRetry<T>(call: () => Promise<T>): Promise<T> {
+  try {
+    return await call()
+  } catch (err) {
+    if (!isAuthError(err)) throw err
+    if (!(await refreshAccessToken('retry'))) throw err
+    return await call()
+  }
+}
+
 export async function listCalendars(): Promise<GoogleCalendar[]> {
-  const res = await gapi.client.calendar.calendarList.list({
-    minAccessRole: 'reader',
-  })
+  const res = await withAuthRetry(() =>
+    gapi.client.calendar.calendarList.list({
+      minAccessRole: 'reader',
+    }),
+  )
   const items = res.result.items ?? []
   return items
     .filter((c): c is NonNullable<typeof c> & { id: string } => Boolean(c.id))
@@ -104,14 +121,16 @@ export async function listEvents(
   timeMax: Date,
   color: string,
 ): Promise<CalendarEvent[]> {
-  const res = await gapi.client.calendar.events.list({
-    calendarId,
-    timeMin: timeMin.toISOString(),
-    timeMax: timeMax.toISOString(),
-    singleEvents: true,
-    orderBy: 'startTime',
-    maxResults: 2500,
-  })
+  const res = await withAuthRetry(() =>
+    gapi.client.calendar.events.list({
+      calendarId,
+      timeMin: timeMin.toISOString(),
+      timeMax: timeMax.toISOString(),
+      singleEvents: true,
+      orderBy: 'startTime',
+      maxResults: 2500,
+    }),
+  )
 
   const items = res.result.items ?? []
   const events: CalendarEvent[] = []
@@ -201,6 +220,89 @@ export function isNotFoundError(err: unknown): boolean {
   )
 }
 
+/**
+ * Exported for tests — gapi error shapes vary by browser/client version.
+ * Detects 401/UNAUTHENTICATED failures (expired/invalid access token), which
+ * a token refresh can fix — deliberately not 403s, which need consent/scope.
+ */
+export function isAuthError(err: unknown): boolean {
+  if (err == null) return false
+
+  if (typeof err === 'string') {
+    const lower = err.toLowerCase()
+    return (
+      lower.includes('invalid credentials') ||
+      lower.includes('invalid authentication') ||
+      lower.includes('unauthorized') ||
+      lower.includes('unauthenticated') ||
+      lower.includes('"code": 401')
+    )
+  }
+
+  if (typeof err !== 'object') return false
+  const e = err as {
+    status?: number | string
+    statusCode?: number
+    message?: string
+    body?: string
+    error?:
+      | string
+      | {
+          code?: number
+          status?: string
+          message?: string
+          errors?: Array<{ reason?: string }>
+        }
+    result?: {
+      error?: {
+        code?: number
+        status?: string
+        message?: string
+        errors?: Array<{ reason?: string }>
+      }
+    }
+  }
+
+  const errorObj = typeof e.error === 'object' ? e.error : undefined
+
+  const code =
+    e.statusCode ?? e.result?.error?.code ?? errorObj?.code ?? e.status
+  if (code === 401) return true
+
+  const statuses = [e.status, e.result?.error?.status, errorObj?.status]
+  if (
+    statuses.some(
+      (s) => typeof s === 'string' && s.toUpperCase() === 'UNAUTHENTICATED',
+    )
+  ) {
+    return true
+  }
+
+  const reasons = [
+    ...(e.result?.error?.errors ?? []),
+    ...(errorObj?.errors ?? []),
+  ]
+  if (reasons.some((r) => r.reason === 'authError')) return true
+
+  const message = [
+    e.message,
+    e.result?.error?.message,
+    typeof e.error === 'string' ? e.error : errorObj?.message,
+    e.body,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+  return (
+    message.includes('invalid credentials') ||
+    message.includes('invalid authentication') ||
+    message.includes('unauthorized') ||
+    message.includes('unauthenticated') ||
+    message.includes('"code": 401') ||
+    message.includes('login required')
+  )
+}
+
 function eventResource(
   task: {
     title: string
@@ -229,10 +331,12 @@ async function getActiveCalendarEvent(
   eventId: string,
 ): Promise<gapi.client.calendar.Event | null> {
   try {
-    const res = await gapi.client.calendar.events.get({
-      calendarId,
-      eventId,
-    })
+    const res = await withAuthRetry(() =>
+      gapi.client.calendar.events.get({
+        calendarId,
+        eventId,
+      }),
+    )
     if (!res.result.id || res.result.status === 'cancelled') return null
     return res.result
   } catch (err) {
@@ -512,11 +616,13 @@ export async function syncTasksToCalendar(
               op.event.eventId,
             )
             if (stillThere) {
-              await gapi.client.calendar.events.delete({
-                calendarId,
-                eventId: op.event.eventId,
-                sendUpdates: 'none',
-              })
+              await withAuthRetry(() =>
+                gapi.client.calendar.events.delete({
+                  calendarId,
+                  eventId: op.event.eventId,
+                  sendUpdates: 'none',
+                }),
+              )
             }
             return { kind: 'removed', event: op.event }
           } catch (err) {
@@ -545,16 +651,18 @@ export async function syncTasksToCalendar(
             if (existing) {
               try {
                 // update replaces attendees; patch can leave removed guests.
-                await gapi.client.calendar.events.update({
-                  calendarId,
-                  eventId: match.eventId,
-                  sendUpdates: 'none',
-                  resource: {
-                    ...existing,
-                    ...resource,
-                    attendees: resource.attendees ?? [],
-                  },
-                })
+                await withAuthRetry(() =>
+                  gapi.client.calendar.events.update({
+                    calendarId,
+                    eventId: match.eventId,
+                    sendUpdates: 'none',
+                    resource: {
+                      ...existing,
+                      ...resource,
+                      attendees: resource.attendees ?? [],
+                    },
+                  }),
+                )
                 return {
                   kind: 'updated',
                   event: {
@@ -595,11 +703,13 @@ export async function syncTasksToCalendar(
         }
 
         try {
-          const res = await gapi.client.calendar.events.insert({
-            calendarId,
-            sendUpdates: 'none',
-            resource,
-          })
+          const res = await withAuthRetry(() =>
+            gapi.client.calendar.events.insert({
+              calendarId,
+              sendUpdates: 'none',
+              resource,
+            }),
+          )
           const eventId = res.result.id
           if (!eventId) {
             throw new Error('Google Calendar did not return an event id')
@@ -918,11 +1028,13 @@ export async function deleteGroupFromCalendarOnCalendar(
           event.eventId,
         )
         if (stillThere) {
-          await gapi.client.calendar.events.delete({
-            calendarId: event.calendarId,
-            eventId: event.eventId,
-            sendUpdates: 'none',
-          })
+          await withAuthRetry(() =>
+            gapi.client.calendar.events.delete({
+              calendarId: event.calendarId,
+              eventId: event.eventId,
+              sendUpdates: 'none',
+            }),
+          )
         }
         onOp?.()
         return { ok: true as const, event }
@@ -999,11 +1111,13 @@ export async function deleteGroupFromCalendar(
           event.eventId,
         )
         if (stillThere) {
-          await gapi.client.calendar.events.delete({
-            calendarId: event.calendarId,
-            eventId: event.eventId,
-            sendUpdates: 'none',
-          })
+          await withAuthRetry(() =>
+            gapi.client.calendar.events.delete({
+              calendarId: event.calendarId,
+              eventId: event.eventId,
+              sendUpdates: 'none',
+            }),
+          )
         }
         tick('Removing')
         return { ok: true as const, event }
