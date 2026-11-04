@@ -51,6 +51,12 @@ type LibraryDropTarget = {
   closestEdge?: 'top' | 'bottom'
 }
 
+// Desktop drops carry the edge in pragmatic's symbol slot; the touch path
+// sets it as a plain field — read both.
+function dropTargetEdge(target: LibraryDropTarget): 'top' | 'bottom' | null {
+  return extractClosestEdge(target) ?? target.closestEdge ?? null
+}
+
 export function BlockLibraryModal({
   library,
   onChange,
@@ -914,10 +920,10 @@ function LibraryBlockRow({
       className={[
         'task-card',
         dragging ? 'is-dragging' : '',
-        isTarget && extractClosestEdge(dropTarget) === 'top'
+        isTarget && dropTargetEdge(dropTarget) === 'top'
           ? 'drop-line-before'
           : '',
-        isTarget && extractClosestEdge(dropTarget) === 'bottom'
+        isTarget && dropTargetEdge(dropTarget) === 'bottom'
           ? 'drop-line-after'
           : '',
         editing ? 'is-editing' : '',
