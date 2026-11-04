@@ -143,7 +143,10 @@ testing.
   comparing title/duration/empty/delay/disabled/note in order plus anchor
   kind/clock time (ids don't count). UI label is **Save as default** until
   one exists, then **Update default**. Toggling Starts/Ends shifts `anchor.at`
-  by the stack duration so blocks keep their calendar position.
+  by the stack duration so blocks keep their calendar position; when that
+  lands the anchor on a neighboring local day (midnight-crossing stacks),
+  the calendar view follows the anchor's new day so the displayed stack —
+  and its `stackDayKey` push tracking — stays put.
 - **Push tracking (`PushedEvent`/`PushSnapshot`) is what makes "Add" vs.
   "Update" and the synced/out-of-sync icons work** — it's how the app knows
   what it already wrote to Google without re-fetching. Any change to the

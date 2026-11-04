@@ -11,6 +11,15 @@ export type StackAnchor = {
   at: string // ISO datetime
 }
 
+/**
+ * Sidebar anchor edits. `followAnchorDay` asks the calendar to move its view
+ * day to the new anchor's local day — used by the Starts/Ends toggle so a
+ * midnight-crossing stack keeps its displayed occurrence (and push day key).
+ */
+export type AnchorChangeOptions = {
+  followAnchorDay?: boolean
+}
+
 export type Task = {
   id: string
   title: string
@@ -1214,13 +1223,23 @@ export function canNavigateCalendarRange(
 
 /**
  * Pick the day blocks should attach to for a FullCalendar visible range.
- * Prefer today when it falls in the range; otherwise the range start.
+ * Prefer `preferred` when set and inside the range (e.g. the anchor day after
+ * a Starts/Ends toggle), then today; otherwise the range start.
  */
 export function pickViewDate(
   rangeStart: Date,
   rangeEnd: Date,
   now: Date = new Date(),
+  preferred?: Date | null,
 ): Date {
+  if (
+    preferred &&
+    !Number.isNaN(preferred.getTime()) &&
+    preferred >= rangeStart &&
+    preferred < rangeEnd
+  ) {
+    return startOfLocalDay(preferred)
+  }
   if (now >= rangeStart && now < rangeEnd) {
     return startOfLocalDay(now)
   }

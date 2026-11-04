@@ -86,6 +86,11 @@ type CalendarViewProps = {
   scrollTasksIntoViewOnMount?: boolean
   /** Initial local day for an execution occurrence. */
   initialDate?: Date
+  /**
+   * Move the grid to this local day (e.g. a Starts/Ends toggle that lands the
+   * anchor on another day). New object identity re-triggers the navigation.
+   */
+  focusDay?: { day: Date } | null
 }
 
 type ResolvedTaskEvent = {
@@ -324,6 +329,7 @@ export function CalendarView({
   navDayBounds = null,
   scrollTasksIntoViewOnMount = false,
   initialDate,
+  focusDay = null,
 }: CalendarViewProps) {
   const calendarRef = useRef<FullCalendar>(null)
   const shellRef = useRef<HTMLDivElement>(null)
@@ -951,7 +957,9 @@ export function CalendarView({
     const now = new Date()
     setIsOnToday(now >= rangeStart && now < rangeEnd)
     setFarFromTodayOrTomorrow(
-      !isTodayOrTomorrow(pickViewDate(rangeStart, rangeEnd, now)),
+      !isTodayOrTomorrow(
+        pickViewDate(rangeStart, rangeEnd, now, focusDay?.day),
+      ),
     )
     syncNavDisabled(rangeStart, rangeEnd)
     onDatesSet(rangeStart, rangeEnd)
@@ -974,6 +982,12 @@ export function CalendarView({
       !canNavigateCalendarRange(range.start, range.end, navDayBounds, 'next'),
     )
   }, [navDayBounds])
+
+  // Follow requests to move the grid to a specific day (anchor-kind toggle).
+  useEffect(() => {
+    if (!focusDay) return
+    calendarRef.current?.getApi().gotoDate(focusDay.day)
+  }, [focusDay])
 
   function changeView(next: CalendarViewType) {
     calendarRef.current?.getApi().changeView(next)

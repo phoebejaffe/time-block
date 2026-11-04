@@ -238,6 +238,12 @@ remapped onto today's local day once — the same selection "Start plan"
 eligibility uses. An early Ends anchor may resolve to a start on the previous
 local day, and a late Starts anchor may resolve to an end on the next local
 day. The concrete execution occurrence is not remapped again at midnight.
+Toggling Starts/Ends keeps the resolved stack on the same calendar times
+(§6.3), so for a stack that crosses local midnight the flipped anchor lands
+on the neighboring local day — in that case the calendar view follows the
+anchor to its new day (start→end steps a day forward, end→start a day back)
+rather than letting the displayed stack jump a day. Editing the anchor's
+clock time directly does not move the view.
 
 ### 4.6 Block-group checkpoint (save/revert a group's "default" blocks)
 
@@ -487,8 +493,14 @@ Cross-cutting behavior:
    to once per 30 seconds; it only calls the refresh endpoint inside the same
    30-minute expiry window as the background loop), updates the signed-in
    state if the refresh token has been revoked, and re-links Firebase when
-   needed.
-6. **Sign out**: confirm via a native `confirm()` dialog; revoke the
+   needed. Concurrent refresh calls share a single in-flight request.
+6. **Reactive retry on auth errors**: if a Calendar API call still fails
+   with an auth error (401/`UNAUTHENTICATED` — e.g. the tab slept through
+   the refresh window), the app makes one silent token refresh and retries
+   that call once before surfacing the error. Only auth-shaped errors
+   trigger this — 403s (missing scope/permission) and other failures surface
+   immediately without refreshing.
+7. **Sign out**: confirm via a native `confirm()` dialog; revoke the
    refresh token (or, if none, revoke the access token directly via GIS);
    sign out of Firebase; clear all stored tokens and in-memory scope state.
 
@@ -651,7 +663,10 @@ Top to bottom:
        (tapping flips the anchor's `kind` and shifts `at` by the stack's
        total duration so the resolved blocks stay on the same calendar
        times — start→end moves `at` forward by the duration; end→start
-       moves it backward); the word "at"; a native time input showing the
+       moves it backward; if the flipped anchor lands on a neighboring
+       local day, the calendar view moves to that day so the stack and its
+       pushed events keep their day); the word "at"; a native time input
+       showing the
        anchor's local time (`HH:mm`, step from Settings); and, if the group has
        any tasks, a read-only summary of the whole stack's start–end time
        range. If the range starts on the local day before the anchor, the

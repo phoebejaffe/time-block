@@ -253,6 +253,26 @@ describe('pickViewDate', () => {
       startOfLocalDay(start).getTime(),
     )
   })
+
+  it('prefers the requested day over today when both are in range', () => {
+    const start = new Date(2026, 6, 13)
+    const end = new Date(2026, 6, 20)
+    const now = new Date(2026, 6, 15, 14, 0)
+    const preferred = new Date(2026, 6, 17, 8, 30)
+    expect(pickViewDate(start, end, now, preferred).getTime()).toBe(
+      startOfLocalDay(preferred).getTime(),
+    )
+  })
+
+  it('falls back to today when the requested day leaves the range', () => {
+    const start = new Date(2026, 6, 13)
+    const end = new Date(2026, 6, 20)
+    const now = new Date(2026, 6, 15, 14, 0)
+    const preferred = new Date(2026, 7, 1)
+    expect(pickViewDate(start, end, now, preferred).getTime()).toBe(
+      startOfLocalDay(now).getTime(),
+    )
+  })
 })
 
 describe('migratePlan', () => {

@@ -40,6 +40,7 @@ import {
   executionAutoEndAt,
   isGroupEnabled,
   isTaskDelay,
+  localDateKey,
   pickViewDate,
   shiftAnchor,
   stackDayKey,
@@ -98,6 +99,8 @@ export default function App() {
   const [commitBusy, setCommitBusy] = useState(false)
   const [commitProgress, setCommitProgress] = useState<SyncProgress | null>(null)
   const [viewDate, setViewDate] = useState(() => startOfLocalDay())
+  /** Day the calendar was asked to show; biases viewDate while in range. */
+  const [focusDay, setFocusDay] = useState<{ day: Date } | null>(null)
   const [executionModalOpen, setExecutionModalOpen] = useState(false)
   const [stackDragPreview, setStackDragPreview] = useState<{
     groupId: string
@@ -229,10 +232,14 @@ export default function App() {
     const eventsEnd = new Date(end)
     eventsEnd.setDate(eventsEnd.getDate() + 1)
     calendars.setDates(eventsStart, eventsEnd)
-    const next = pickViewDate(start, end)
+    const preferred = focusDay?.day ?? null
+    const next = pickViewDate(start, end, new Date(), preferred)
     setViewDate((prev) =>
       prev.getTime() === next.getTime() ? prev : next,
     )
+    if (preferred && !(preferred >= start && preferred < end)) {
+      setFocusDay(null)
+    }
     setStackDragPreview(null)
     setTaskEditPreview(null)
   }
@@ -915,9 +922,19 @@ export default function App() {
             onUpdate={handleUpdateTask}
             onRemove={handleRemoveTask}
             onReorder={plan.reorderTasks}
-            onAnchorChange={(groupId, next) => {
+            onAnchorChange={(groupId, next, options) => {
               setStackDragPreview(null)
               plan.setAnchor(groupId, next)
+              if (!options?.followAnchorDay) return
+              const day = startOfLocalDay(new Date(next.at))
+              if (
+                Number.isNaN(day.getTime()) ||
+                localDateKey(day) === localDateKey(viewDate)
+              ) {
+                return
+              }
+              setFocusDay({ day })
+              setViewDate(day)
             }}
             onDeleteGroup={handleDeleteGroup}
             onDuplicateGroup={handleDuplicateGroup}
@@ -998,6 +1015,7 @@ export default function App() {
               onTaskClick={handleCalendarTaskClick}
               busy={busy}
               calendarsLoading={calendars.busy}
+              focusDay={focusDay}
             />
           </main>
         </div>

@@ -8,6 +8,7 @@ import {
 } from 'react'
 import type { GoogleCalendar, SyncProgress } from '../lib/calendarApi'
 import type {
+  AnchorChangeOptions,
   BlockGroup,
   BlockLibrary,
   CalendarGuest,
@@ -165,7 +166,11 @@ type TaskSidebarProps = {
   onUpdate: (groupId: string, task: Task) => void
   onRemove: (groupId: string, id: string) => void
   onReorder: (groupId: string, fromIndex: number, toIndex: number) => void
-  onAnchorChange: (groupId: string, anchor: StackAnchor) => void
+  onAnchorChange: (
+    groupId: string,
+    anchor: StackAnchor,
+    options?: AnchorChangeOptions,
+  ) => void
   onDeleteGroup: (groupId: string) => void
   onDuplicateGroup: (groupId: string) => void
   onArchiveGroup: (groupId: string) => void
@@ -536,7 +541,9 @@ export function TaskSidebar({
             onUpdate={(task) => onUpdate(group.id, task)}
             onRemove={(id) => onRemove(group.id, id)}
             onReorder={(from, to) => onReorder(group.id, from, to)}
-            onAnchorChange={(anchor) => onAnchorChange(group.id, anchor)}
+            onAnchorChange={(anchor, options) =>
+              onAnchorChange(group.id, anchor, options)
+            }
             onDeleteGroup={() => onDeleteGroup(group.id)}
             onDuplicateGroup={() => onDuplicateGroup(group.id)}
             onArchiveGroup={() => onArchiveGroup(group.id)}
@@ -915,7 +922,7 @@ export type BlockGroupPanelProps = {
   onUpdate: (task: Task) => void
   onRemove: (id: string) => void
   onReorder: (fromIndex: number, toIndex: number) => void
-  onAnchorChange: (anchor: StackAnchor) => void
+  onAnchorChange: (anchor: StackAnchor, options?: AnchorChangeOptions) => void
   onDeleteGroup: () => void
   onDuplicateGroup: () => void
   onArchiveGroup: () => void
@@ -2107,6 +2114,7 @@ export function BlockGroupPanel({
                   onClick={() =>
                     onAnchorChange(
                       toggleAnchorPreservingStack(anchor, totalDurationMinutes),
+                      { followAnchorDay: true },
                     )
                   }
                 >

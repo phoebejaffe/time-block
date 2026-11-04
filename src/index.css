@@ -3639,6 +3639,22 @@ body.is-task-reordering .block-library-body {
   background: var(--paper);
 }
 
+.e2e-harness-split {
+  display: flex;
+  gap: 0.75rem;
+  width: 100%;
+  min-height: 100vh;
+}
+
+.e2e-harness-split .e2e-harness-panel {
+  flex: 0 0 340px;
+}
+
+.e2e-harness-split .main-panel {
+  flex: 1;
+  min-width: 0;
+}
+
 .e2e-harness-toolbar {
   margin-bottom: 0.75rem;
 }

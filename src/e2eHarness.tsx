@@ -1,15 +1,20 @@
 import { useEffect, useState } from 'react'
 import { BlockLibraryModal } from './components/BlockLibraryModal'
+import { CalendarView } from './components/CalendarView'
 import { ExecutionModal } from './components/ExecutionModal'
 import { BlockGroupPanel, type BlockGroupPanelProps } from './components/TaskSidebar'
 import type { GoogleCalendar } from './lib/calendarApi'
 import type { PushedEvent } from './lib/pushedEvents'
 import { usePlan } from './hooks/usePlan'
 import {
+  anchorOnDay,
   createBlockGroup,
   createSavedBlock,
   createTask,
+  localDateKey,
+  pickViewDate,
   stackDayKey,
+  startOfLocalDay,
   type BlockLibrary,
   type BlockGroup,
   type Task,
@@ -153,11 +158,161 @@ function OvernightRunHarness() {
   )
 }
 
+/**
+ * Repro scenario for the Starts/Ends toggle on a midnight-crossing plan:
+ * today 22:00 → tomorrow 00:30, already pushed under today's stack day key.
+ * Mirrors App's viewDate/focusDay plumbing so the toggle must move the
+ * calendar to the new anchor's day without moving the stack.
+ */
+function ToggleDayHarness() {
+  const [{ group: seededGroup, pushed: seededPushed }] = useState(() => {
+    const start = new Date()
+    start.setHours(22, 0, 0, 0)
+    const group = createBlockGroup({
+      id: 'e2e-overnight',
+      name: 'Overnight plan',
+      anchor: { kind: 'start', at: start.toISOString() },
+      tasks: [
+        createTask({ title: 'Wind down', durationMinutes: 90 }),
+        createTask({ title: 'Sleep prep', durationMinutes: 60 }),
+      ],
+    })
+    const dayKey = stackDayKey(group.tasks, group.anchor)
+    const pushed = group.tasks.map((task) => ({
+      calendarId: OVERNIGHT_CALENDAR.id,
+      eventId: `e2e-ev-${task.id}`,
+      taskId: task.id,
+      groupId: group.id,
+      dayKey,
+      pushedAt: new Date().toISOString(),
+    }))
+    return { group, pushed }
+  })
+  const [group, setGroup] = useState<BlockGroup>(seededGroup)
+  const [pushedEvents] = useState<PushedEvent[]>(seededPushed)
+  const [viewDate, setViewDate] = useState(() => startOfLocalDay())
+  const [focusDay, setFocusDay] = useState<{ day: Date } | null>(null)
+
+  const viewGroup = { ...group, anchor: anchorOnDay(group.anchor, viewDate) }
+
+  function handleDatesSet(start: Date, end: Date) {
+    const preferred = focusDay?.day ?? null
+    const next = pickViewDate(start, end, new Date(), preferred)
+    setViewDate((prev) =>
+      prev.getTime() === next.getTime() ? prev : next,
+    )
+    if (preferred && !(preferred >= start && preferred < end)) {
+      setFocusDay(null)
+    }
+  }
+
+  const panelProps: BlockGroupPanelProps = {
+    group: viewGroup,
+    collapsedLabel: 'Overnight plan',
+    canDeleteGroup: false,
+    canMoveGroupUp: false,
+    canMoveGroupDown: false,
+    mode: 'planning',
+    pushedEvents,
+    pushSnapshots: [],
+    editingId: null,
+    adding: false,
+    onEditingIdChange: noop,
+    onStartAdd: noop,
+    onCancelAdd: noop,
+    onAdd: (task, index) =>
+      setGroup((current) => ({
+        ...current,
+        tasks:
+          index == null
+            ? [...current.tasks, createTask(task)]
+            : [
+                ...current.tasks.slice(0, index),
+                createTask(task),
+                ...current.tasks.slice(index),
+              ],
+      })),
+    onUpdate: (task) =>
+      setGroup((current) => ({
+        ...current,
+        tasks: current.tasks.map((item) => (item.id === task.id ? task : item)),
+      })),
+    onRemove: (id) =>
+      setGroup((current) => ({
+        ...current,
+        tasks: current.tasks.filter((task) => task.id !== id),
+      })),
+    onReorder: (from, to) =>
+      setGroup((current) => {
+        const tasks = [...current.tasks]
+        const [task] = tasks.splice(from, 1)
+        if (!task) return current
+        tasks.splice(to, 0, task)
+        return { ...current, tasks }
+      }),
+    onAnchorChange: (anchor, options) => {
+      setGroup((current) => ({ ...current, anchor }))
+      if (!options?.followAnchorDay) return
+      const day = startOfLocalDay(new Date(anchor.at))
+      if (
+        Number.isNaN(day.getTime()) ||
+        localDateKey(day) === localDateKey(viewDate)
+      ) {
+        return
+      }
+      setFocusDay({ day })
+      setViewDate(day)
+    },
+    onDeleteGroup: noop,
+    onDuplicateGroup: noop,
+    onArchiveGroup: noop,
+    onMoveGroupUp: noop,
+    onMoveGroupDown: noop,
+    onSaveCheckpoint: noop,
+    onRevertToCheckpoint: noop,
+    onGotDelayed: noop,
+    onSetGroupEnabled: noop,
+    onOpenCommit: noop,
+    onDeleteFromCalendar: noop,
+    onTaskEditPreview: noop,
+    onOpenName: noop,
+    onSetGroupColor: noop,
+    blockLibrary: { updatedAt: '', categories: [] },
+    onAddFromLibrary: noop,
+    onAddToLibrary: noop,
+    timeStepMinutes: 5,
+    defaultBlockMinutes: 30,
+  }
+
+  return (
+    <div className="e2e-harness e2e-harness-split">
+      <div className="e2e-harness-panel">
+        <BlockGroupPanel {...panelProps} />
+      </div>
+      <main className="main-panel">
+        <CalendarView
+          googleEvents={[]}
+          calendars={[OVERNIGHT_CALENDAR]}
+          visibleCalendarIds={new Set([OVERNIGHT_CALENDAR.id])}
+          onToggleCalendar={noop}
+          groups={[viewGroup]}
+          onDatesSet={handleDatesSet}
+          onAnchorCommit={noop}
+          onTaskClick={noop}
+          focusDay={focusDay}
+        />
+      </main>
+    </div>
+  )
+}
+
 export function E2eHarness() {
-  if (
-    new URLSearchParams(window.location.search).get('e2e') === 'overnight-run'
-  ) {
+  const scenario = new URLSearchParams(window.location.search).get('e2e')
+  if (scenario === 'overnight-run') {
     return <OvernightRunHarness />
+  }
+  if (scenario === 'toggle-day') {
+    return <ToggleDayHarness />
   }
   return <PanelHarness />
 }
