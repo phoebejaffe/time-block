@@ -2133,6 +2133,9 @@ body.is-datetime-scrubbing .task-form-duration input {
 
 .block-library-list .task-card:not(.is-editing) {
   cursor: default;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .block-library-title-button {
@@ -2702,7 +2705,8 @@ body.is-task-reordering {
   cursor: grabbing;
 }
 
-body.is-task-reordering .task-sidebar {
+body.is-task-reordering .task-sidebar,
+body.is-task-reordering .block-library-body {
   touch-action: none;
   overscroll-behavior: none;
 }
