@@ -18,7 +18,10 @@ import { FixedMenuPortal } from './FixedMenuPortal'
 import type { NoticeOptions } from '../lib/notice'
 import { undoNoticeOptions } from '../lib/notice'
 import { useFixedMenu } from '../hooks/useFixedMenu'
-import { attachReorderDragListeners } from '../lib/reorderDrag'
+import {
+  attachReorderDragListeners,
+  consumeReorderClickSuppression,
+} from '../lib/reorderDrag'
 import {
   autoScrollForElements,
 } from '@atlaskit/pragmatic-drag-and-drop-auto-scroll/element'
@@ -89,6 +92,7 @@ export function BlockLibraryModal({
     (blockId: string, target: LibraryDropTarget) => void
   >(() => {})
   const touchDropTargetRef = useRef<LibraryDropTarget | null>(null)
+  const suppressClickRef = useRef(false)
 
   useEffect(() => {
     return monitorForElements({
@@ -148,6 +152,11 @@ export function BlockLibraryModal({
     }, 6000)
     return () => window.clearTimeout(timeout)
   }, [focusBlockId])
+
+  function handleEditingKeyChange(key: string | null) {
+    if (key != null && consumeReorderClickSuppression(suppressClickRef)) return
+    setEditingKey(key)
+  }
 
   function closeCategoryNameDialog() {
     setCreatingCategory(false)
@@ -218,6 +227,7 @@ export function BlockLibraryModal({
     blockId: string,
   ) {
     if (e.pointerType !== 'touch') return
+    suppressClickRef.current = false
     const startX = e.clientX
     const startY = e.clientY
     touchDropTargetRef.current = null
@@ -250,6 +260,9 @@ export function BlockLibraryModal({
         touchDropTargetRef.current = null
         setDraggingBlockId(null)
         setDropTarget(null)
+      },
+      onSuppressClick: () => {
+        suppressClickRef.current = true
       },
       autoScroll: true,
       onAutoScroll: (clientY) => {
@@ -465,7 +478,7 @@ export function BlockLibraryModal({
                 key={category.id}
                 category={category}
                 editingKey={editingKey}
-                onEditingKeyChange={setEditingKey}
+                onEditingKeyChange={handleEditingKeyChange}
                 canMoveUp={categoryIndex > 0}
                 canMoveDown={categoryIndex < library.categories.length - 1}
                 onOpenRename={() => openRenameCategory(category.id)}
