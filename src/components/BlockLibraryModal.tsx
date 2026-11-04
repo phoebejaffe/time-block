@@ -54,7 +54,8 @@ type LibraryDropTarget = {
 // Desktop drops carry the edge in pragmatic's symbol slot; the touch path
 // sets it as a plain field — read both.
 function dropTargetEdge(target: LibraryDropTarget): 'top' | 'bottom' | null {
-  return extractClosestEdge(target) ?? target.closestEdge ?? null
+  const edge = extractClosestEdge(target) ?? target.closestEdge
+  return edge === 'top' || edge === 'bottom' ? edge : null
 }
 
 export function BlockLibraryModal({
