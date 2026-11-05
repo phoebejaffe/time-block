@@ -7,7 +7,6 @@ import {
   defaultBlockLibrary,
   formatCalendarDay,
   formatCalendarRange,
-  applyDurationSpinnerStep,
   combineDurationMinutes,
   formatDurationMinutes,
   splitDurationMinutes,
@@ -546,18 +545,6 @@ describe('stepLocalTime', () => {
     const next = new Date(stepLocalTime(at, 'hour', -1))
     expect(next.getHours()).toBe(9)
     expect(next.getMinutes()).toBe(30)
-  })
-})
-
-describe('applyDurationSpinnerStep', () => {
-  it('corrects native +1 spinner clicks to the 5-minute grid', () => {
-    expect(applyDurationSpinnerStep(30, 31)).toBe(35)
-    expect(applyDurationSpinnerStep(32, 33)).toBe(35)
-    expect(applyDurationSpinnerStep(35, 34)).toBe(30)
-  })
-
-  it('preserves manually typed values', () => {
-    expect(applyDurationSpinnerStep(30, 47)).toBe(47)
   })
 })
 

@@ -295,26 +295,6 @@ export function stepDurationMinutes(
   return Math.max(1, Math.floor(value / step) * step)
 }
 
-/** Correct native number spinners that nudge by 1 (or mis-step by the grid). */
-export function applyDurationSpinnerStep(
-  prevTotal: number,
-  nextTotal: number,
-  stepMinutes = 5,
-): number {
-  const step = Math.max(1, Math.round(stepMinutes) || 5)
-  const prev = Math.max(1, Math.round(prevTotal))
-  const next = Math.max(1, Math.round(nextTotal))
-  const delta = next - prev
-  if (delta === 0) return prev
-  if (
-    Math.abs(delta) === 1 ||
-    (Math.abs(delta) === step && prev % step !== 0)
-  ) {
-    return stepDurationMinutes(prev, delta > 0 ? 'up' : 'down', step)
-  }
-  return next
-}
-
 /** Overlay in-progress sidebar edits onto groups for live calendar preview. */
 export function applyTaskEditPreview(
   groups: BlockGroup[],

@@ -228,26 +228,8 @@ export function TaskFieldsForm({
     }
     const next = Number(raw)
     if (!Number.isFinite(next)) return
-    const prev = typeof minutes === 'number' ? minutes : 0
-    const hoursVal = hours === '' ? 0 : hours
-    const delta = next - prev
-    if (next !== prev) {
-      const isSpinner =
-        Math.abs(delta) === 1 ||
-        (Math.abs(delta) === step && prev % step !== 0)
-      if (isSpinner) {
-        const prevTotal = combineDurationMinutes(hoursVal, prev)
-        const nextTotal = combineDurationMinutes(hoursVal, next)
-        setTotalDuration(
-          stepDurationMinutes(
-            prevTotal,
-            nextTotal > prevTotal ? 'up' : 'down',
-            step,
-          ),
-        )
-        return
-      }
-    }
+    // Native spinner ticks already land on the step grid; anything else is a
+    // typed value and must be kept verbatim.
     setMinutes(Math.max(0, Math.round(next)))
   }
 
