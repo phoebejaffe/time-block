@@ -720,7 +720,11 @@ Top to bottom:
        editing): two side-by-side triggers — **"Library block"** opens a
        **block library picker** dropdown (grouped by category, each block
        showing its title + duration and a note icon when it has a note, multi-selectable with a running numeric
-       selection order, plus an "Add N block(s)" confirm button; shows an
+       selection order, plus an "Add N block(s)" confirm button; a filter
+       field at the top narrows the list by block title — categories with no
+       matching blocks are hidden, selections survive filtering, and the
+       field clears on close; an "Edit" link beside it opens the
+       Block library modal; shows an
        empty-state message pointing at the header menu → Block library if the
        library has no categories yet) and **"Custom"** opens the inline
        task editor directly for a one-off task. Clicking either trigger retains

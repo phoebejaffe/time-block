@@ -581,6 +581,7 @@ export function TaskSidebar({
               setAddToLibraryCategoryId(blockLibrary.categories[0]?.id ?? '')
               setAddToLibraryCategoryName('')
             }}
+            onOpenBlockLibrary={() => setBlockLibraryOpen(true)}
             timeStepMinutes={settings.timeStepMinutes}
             defaultBlockMinutes={settings.defaultBlockMinutes}
           />
@@ -950,6 +951,7 @@ export type BlockGroupPanelProps = {
   blockLibrary: BlockLibrary
   onAddFromLibrary: (inputs: Omit<Task, 'id'>[], index?: number) => void
   onAddToLibrary: (task: Task) => void
+  onOpenBlockLibrary?: () => void
   timeStepMinutes?: number
   defaultBlockMinutes?: number
 }
@@ -1035,6 +1037,7 @@ export function BlockGroupPanel({
   blockLibrary,
   onAddFromLibrary,
   onAddToLibrary,
+  onOpenBlockLibrary,
   timeStepMinutes = 5,
   defaultBlockMinutes = 30,
 }: BlockGroupPanelProps) {
@@ -1064,6 +1067,8 @@ export function BlockGroupPanel({
   const [listMenuOpen, setListMenuOpen] = useState(false)
   const [libraryOpen, setLibraryOpen] = useState(false)
   const [librarySelection, setLibrarySelection] = useState<string[]>([])
+  const [libraryFilter, setLibraryFilter] = useState('')
+  const libraryFilterRef = useRef<HTMLInputElement>(null)
   const [focusNoteOnEdit, setFocusNoteOnEdit] = useState(false)
 
   const listRef = useRef<HTMLUListElement>(null)
@@ -1280,6 +1285,17 @@ export function BlockGroupPanel({
   }, [dropLineIndex])
 
   useEffect(() => {
+    if (!libraryOpen) {
+      setLibraryFilter('')
+      return
+    }
+    // Desktop gets a ready-to-type filter; on touch, autofocus would pop the
+    // keyboard over the picker.
+    if (window.matchMedia('(pointer: coarse)').matches) return
+    libraryFilterRef.current?.focus()
+  }, [libraryOpen])
+
+  useEffect(() => {
     tasksLengthRef.current = tasks.length
   }, [tasks.length])
 
@@ -1316,6 +1332,18 @@ export function BlockGroupPanel({
       return [...prev, key]
     })
   }
+
+  const libraryQuery = libraryFilter.trim().toLowerCase()
+  const visibleLibraryCategories = libraryQuery
+    ? blockLibrary.categories
+        .map((category) => ({
+          ...category,
+          blocks: category.blocks.filter((block) =>
+            block.title.toLowerCase().includes(libraryQuery),
+          ),
+        }))
+        .filter((category) => category.blocks.length > 0)
+    : blockLibrary.categories
 
   function handleAddFromLibrary() {
     const blocks = resolveSavedBlocksFromKeys(blockLibrary, librarySelection)
@@ -2479,14 +2507,32 @@ export function BlockGroupPanel({
                     role="listbox"
                     aria-multiselectable
                   >
+                        {blockLibrary.categories.length > 0 && (
+                          <div className="block-library-picker-filter">
+                            <input
+                              ref={libraryFilterRef}
+                              type="search"
+                              value={libraryFilter}
+                              onChange={(e) =>
+                                setLibraryFilter(e.target.value)
+                              }
+                              placeholder="Filter blocks"
+                              aria-label="Filter blocks"
+                            />
+                          </div>
+                        )}
                         <div className="block-library-picker-list">
                           {blockLibrary.categories.length === 0 ? (
                             <p className="muted block-library-picker-empty">
                               No saved blocks yet. Add some from the menu →
                               Block library.
                             </p>
+                          ) : visibleLibraryCategories.length === 0 ? (
+                            <p className="muted block-library-picker-empty">
+                              No matching blocks.
+                            </p>
                           ) : (
-                            blockLibrary.categories.map((category) => (
+                            visibleLibraryCategories.map((category) => (
                               <div
                                 key={category.id}
                                 className="block-library-picker-category"
@@ -2567,6 +2613,20 @@ export function BlockGroupPanel({
                                 : 'Add blocks'}
                           </button>
                         </div>
+                        {blockLibrary.categories.length > 0 &&
+                          onOpenBlockLibrary && (
+                            <button
+                              type="button"
+                              className="block-library-picker-edit"
+                              onClick={() => {
+                                setLibraryOpen(false)
+                                setPendingInsertIndex(null)
+                                onOpenBlockLibrary()
+                              }}
+                            >
+                              Edit
+                            </button>
+                          )}
                       </FixedMenuPortal>
                 </div>
                 <button

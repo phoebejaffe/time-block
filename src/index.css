@@ -1942,11 +1942,46 @@ body.is-datetime-scrubbing .task-form-duration input {
 .block-library-picker {
   display: flex;
   flex-direction: column;
+  position: relative;
+  border-radius: 8px;
   min-width: 14rem;
   max-width: min(18rem, 92vw);
   max-height: min(75vh, 36rem);
   overflow: hidden;
   padding: 0;
+}
+
+.block-library-picker-filter {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  height: 2rem;
+  /* Right space reserved for the absolutely-positioned Edit link. */
+  padding: 0.25rem 2.4rem 0.25rem 0.35rem;
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--line);
+}
+
+.block-library-picker-filter input {
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0.3rem 0.45rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.75rem;
+}
+
+.block-library-picker-filter input::placeholder {
+  color: color-mix(in srgb, var(--ink-muted) 55%, transparent);
+}
+
+.block-library-picker-filter input:focus {
+  outline: none;
 }
 
 .block-library-picker-list {
@@ -1985,7 +2020,6 @@ body.is-datetime-scrubbing .task-form-duration input {
   margin: 0;
   padding: 0.38rem 0.45rem;
   border: 0;
-  border-radius: calc(var(--radius) - 2px);
   background: transparent;
   color: inherit;
   font: inherit;
@@ -2042,6 +2076,29 @@ body.is-datetime-scrubbing .task-form-duration input {
 .block-library-picker-duration {
   flex-shrink: 0;
   font-size: 0.72rem;
+}
+
+/* Rendered last in DOM for the tab order but overlaid on the filter row. */
+.block-library-picker-edit {
+  position: absolute;
+  top: 0;
+  right: 0.4rem;
+  height: 2rem;
+  display: inline-flex;
+  align-items: center;
+  margin: 0;
+  padding: 0 0.1rem;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: 0.72rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.block-library-picker-edit:hover {
+  text-decoration-thickness: 2px;
 }
 
 .block-library-picker-actions {
@@ -2216,7 +2273,8 @@ body.is-datetime-scrubbing .task-form-duration input {
   outline-offset: 1px;
 }
 
-.archived-plans-search input[type='search']::-webkit-search-cancel-button {
+.archived-plans-search input[type='search']::-webkit-search-cancel-button,
+.block-library-picker-filter input[type='search']::-webkit-search-cancel-button {
   -webkit-appearance: none;
   appearance: none;
   width: 0.85em;
@@ -2502,6 +2560,11 @@ body.is-datetime-scrubbing .task-form-duration input {
 .task-new-trigger.is-dragging {
   color: var(--accent);
   cursor: grabbing;
+}
+
+.task-new-trigger[aria-expanded='true'] {
+  color: var(--accent);
+  background: rgba(15, 110, 86, 0.1);
 }
 
 .block-groups {
