@@ -1580,6 +1580,11 @@ body.is-datetime-scrubbing .task-form-duration input {
   opacity: 0.55;
 }
 
+.btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .btn-primary {
   background: var(--accent);
   color: var(--accent-ink);
@@ -2028,7 +2033,8 @@ body.is-datetime-scrubbing .task-form-duration input {
   cursor: pointer;
 }
 
-.block-library-picker-item:hover {
+.block-library-picker-item:hover,
+.block-library-picker-item.is-highlighted {
   background: rgba(15, 110, 86, 0.08);
 }
 

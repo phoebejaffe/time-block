@@ -723,8 +723,13 @@ Top to bottom:
        selection order, plus an "Add N block(s)" confirm button; a filter
        field at the top narrows the list by block title — categories with no
        matching blocks are hidden, selections survive filtering, and the
-       field clears on close; an "Edit" link beside it opens the
-       Block library modal; shows an
+       field clears on close; an "Edit" link beside it (kept last in the tab
+       order, after "Add blocks") opens the
+       Block library modal; with the filter focused, Up/Down arrows move a
+       highlight through the visible blocks (wrapping), Enter toggles the
+       highlighted block's selection, and typing more clears the highlight —
+       items are skipped by Tab so it jumps input → "Add blocks" → "Edit";
+       shows an
        empty-state message pointing at the header menu → Block library if the
        library has no categories yet) and **"Custom"** opens the inline
        task editor directly for a one-off task. Clicking either trigger retains

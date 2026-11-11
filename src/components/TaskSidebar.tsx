@@ -1068,6 +1068,7 @@ export function BlockGroupPanel({
   const [libraryOpen, setLibraryOpen] = useState(false)
   const [librarySelection, setLibrarySelection] = useState<string[]>([])
   const [libraryFilter, setLibraryFilter] = useState('')
+  const [libraryHighlight, setLibraryHighlight] = useState<number | null>(null)
   const libraryFilterRef = useRef<HTMLInputElement>(null)
   const [focusNoteOnEdit, setFocusNoteOnEdit] = useState(false)
 
@@ -1287,6 +1288,7 @@ export function BlockGroupPanel({
   useEffect(() => {
     if (!libraryOpen) {
       setLibraryFilter('')
+      setLibraryHighlight(null)
       return
     }
     // Desktop gets a ready-to-type filter; on touch, autofocus would pop the
@@ -1344,6 +1346,50 @@ export function BlockGroupPanel({
         }))
         .filter((category) => category.blocks.length > 0)
     : blockLibrary.categories
+
+  const visibleLibraryBlocks = visibleLibraryCategories.flatMap((category) =>
+    category.blocks.map((block) => ({
+      key: blockLibraryKey(category.id, block.id),
+      categoryId: category.id,
+      blockId: block.id,
+    })),
+  )
+  const libraryHighlightKey =
+    libraryHighlight == null
+      ? null
+      : (visibleLibraryBlocks[libraryHighlight]?.key ?? null)
+
+  function moveLibraryHighlight(delta: 1 | -1) {
+    const len = visibleLibraryBlocks.length
+    if (len === 0) return
+    const next =
+      libraryHighlight == null
+        ? delta > 0
+          ? 0
+          : len - 1
+        : (libraryHighlight + delta + len) % len
+    setLibraryHighlight(next)
+    const el = libraryMenu.dropdownRef.current?.querySelector<HTMLElement>(
+      `[data-picker-key="${CSS.escape(visibleLibraryBlocks[next].key)}"]`,
+    )
+    el?.scrollIntoView({ block: 'nearest' })
+  }
+
+  function handleLibraryFilterKeyDown(
+    e: React.KeyboardEvent<HTMLInputElement>,
+  ) {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault()
+      moveLibraryHighlight(e.key === 'ArrowDown' ? 1 : -1)
+      return
+    }
+    if (e.key === 'Enter') {
+      if (libraryHighlight == null) return
+      e.preventDefault()
+      const target = visibleLibraryBlocks[libraryHighlight]
+      if (target) toggleLibraryBlock(target.categoryId, target.blockId)
+    }
+  }
 
   function handleAddFromLibrary() {
     const blocks = resolveSavedBlocksFromKeys(blockLibrary, librarySelection)
@@ -2513,9 +2559,11 @@ export function BlockGroupPanel({
                               ref={libraryFilterRef}
                               type="search"
                               value={libraryFilter}
-                              onChange={(e) =>
+                              onChange={(e) => {
                                 setLibraryFilter(e.target.value)
-                              }
+                                setLibraryHighlight(null)
+                              }}
+                              onKeyDown={handleLibraryFilterKeyDown}
                               placeholder="Filter blocks"
                               aria-label="Filter blocks"
                             />
@@ -2554,10 +2602,15 @@ export function BlockGroupPanel({
                                       type="button"
                                       role="option"
                                       aria-selected={selected}
+                                      tabIndex={-1}
+                                      data-picker-key={key}
                                       className={[
                                         'block-library-picker-item',
                                         selected ? 'is-selected' : '',
                                         isTaskEmpty(block) ? 'is-empty' : '',
+                                        libraryHighlightKey === key
+                                          ? 'is-highlighted'
+                                          : '',
                                       ]
                                         .filter(Boolean)
                                         .join(' ')}
