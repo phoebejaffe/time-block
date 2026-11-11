@@ -2569,7 +2569,7 @@ export function BlockGroupPanel({
                             />
                           </div>
                         )}
-                        <div className="block-library-picker-list">
+                        <div className="block-library-picker-list" tabIndex={-1}>
                           {blockLibrary.categories.length === 0 ? (
                             <p className="muted block-library-picker-empty">
                               No saved blocks yet. Add some from the menu →
