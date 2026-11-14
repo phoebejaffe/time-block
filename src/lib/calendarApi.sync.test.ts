@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
   deleteGroupFromCalendar,
+  rateLimitBackoff,
   syncGroupToCalendars,
   syncTasksToCalendar,
 } from './calendarApi'
@@ -544,18 +545,24 @@ describe('syncGroupToCalendars — multi-calendar', () => {
   })
 
   it('omits failed calendars from successfulCalendarIds', async () => {
-    mockGapiCalendar({ failInsertOn: ['cal-b'] })
-    const result = await syncGroupToCalendars(
-      ['cal-a', 'cal-b'],
-      'group-1',
-      tasks,
-      anchor,
-      [],
-    )
-    expect(result.successfulCalendarIds).toEqual(['cal-a'])
-    expect(result.created).toBe(1)
-    expect(result.failures).toHaveLength(1)
-    expect(result.failures[0]?.action).toBe('create')
+    const realSleep = rateLimitBackoff.sleep
+    rateLimitBackoff.sleep = () => Promise.resolve()
+    try {
+      mockGapiCalendar({ failInsertOn: ['cal-b'] })
+      const result = await syncGroupToCalendars(
+        ['cal-a', 'cal-b'],
+        'group-1',
+        tasks,
+        anchor,
+        [],
+      )
+      expect(result.successfulCalendarIds).toEqual(['cal-a'])
+      expect(result.created).toBe(1)
+      expect(result.failures).toHaveLength(1)
+      expect(result.failures[0]?.action).toBe('create')
+    } finally {
+      rateLimitBackoff.sleep = realSleep
+    }
   })
 
   it('reports stepped progress for each sync attempt', async () => {

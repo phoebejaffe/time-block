@@ -1320,7 +1320,11 @@ were deleted by hand on the Google side, and cleaning up if the user
 changed which calendar this group pushes to. Create/update/delete API
 calls for a calendar run concurrently (bounded pool) after the matching
 plan is computed; when syncing to multiple calendars, those calendars
-are also updated in parallel.
+are also updated in parallel. Google throttles bursts of writes to a
+single calendar (403/429 `rateLimitExceeded`) well below its published
+per-minute quotas, so rate-limited calls retry with truncated exponential
+backoff (~1s doubling, jittered, up to 4 retries) before counting as
+failures; non-quota errors (including other 403s) are not retried.
 
 1. **Calendar changed**: for any event previously tracked for this
    group+day but on a *different* calendar than the current target, delete

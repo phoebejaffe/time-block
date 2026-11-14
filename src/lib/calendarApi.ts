@@ -54,17 +54,41 @@ function darkenHex(hex: string, amount = 0.28): string {
   return `#${channel(0)}${channel(2)}${channel(4)}`
 }
 
+const RATE_LIMIT_MAX_RETRIES = 4
+const RATE_LIMIT_BASE_DELAY_MS = 1000
+
+/** Exported for tests — swap `sleep` so backoff doesn't wait real time. */
+export const rateLimitBackoff = {
+  sleep: (ms: number): Promise<void> =>
+    new Promise((resolve) => setTimeout(resolve, ms)),
+}
+
 /**
- * Run one gapi Calendar call; on an auth error, silently refresh the access
- * token and retry the call once before surfacing the error.
+ * Run one gapi Calendar call. On an auth error, silently refresh the access
+ * token and retry once; on a rate-limit error, retry with truncated
+ * exponential backoff before surfacing the error. Google throttles bursts of
+ * writes to a single calendar below the published per-minute quotas, so
+ * pushes must absorb 403/429s rather than fail the whole op.
  */
 async function withAuthRetry<T>(call: () => Promise<T>): Promise<T> {
-  try {
-    return await call()
-  } catch (err) {
-    if (!isAuthError(err)) throw err
-    if (!(await refreshAccessToken('retry'))) throw err
-    return await call()
+  let authRetried = false
+  let rateLimitRetries = 0
+  for (;;) {
+    try {
+      return await call()
+    } catch (err) {
+      if (isRateLimitError(err) && rateLimitRetries < RATE_LIMIT_MAX_RETRIES) {
+        rateLimitRetries += 1
+        const backoff = RATE_LIMIT_BASE_DELAY_MS * 2 ** (rateLimitRetries - 1)
+        await rateLimitBackoff.sleep(backoff * (1 + Math.random() * 0.5))
+        continue
+      }
+      if (isAuthError(err) && !authRetried) {
+        authRetried = true
+        if (await refreshAccessToken('retry')) continue
+      }
+      throw err
+    }
   }
 }
 
@@ -300,6 +324,78 @@ export function isAuthError(err: unknown): boolean {
     message.includes('unauthenticated') ||
     message.includes('"code": 401') ||
     message.includes('login required')
+  )
+}
+
+const RATE_LIMIT_REASONS = new Set([
+  'rateLimitExceeded',
+  'userRateLimitExceeded',
+  'quotaExceeded',
+])
+
+/**
+ * Exported for tests — gapi error shapes vary by browser/client version.
+ * Detects 403/429 quota and rate-limit failures worth backing off on; a bare
+ * 403 with no quota reason (permissions, ACLs) is not retryable.
+ */
+export function isRateLimitError(err: unknown): boolean {
+  if (err == null) return false
+
+  if (typeof err === 'string') {
+    const lower = err.toLowerCase()
+    return (
+      lower.includes('rate limit') ||
+      lower.includes('ratelimitexceeded') ||
+      lower.includes('quota exceeded') ||
+      lower.includes('"code": 429')
+    )
+  }
+
+  if (typeof err !== 'object') return false
+  const e = err as {
+    status?: number
+    statusCode?: number
+    message?: string
+    body?: string
+    error?: {
+      code?: number
+      message?: string
+      errors?: Array<{ reason?: string }>
+    }
+    result?: {
+      error?: {
+        code?: number
+        message?: string
+        errors?: Array<{ reason?: string }>
+      }
+    }
+  }
+
+  const reasons = [
+    ...(e.result?.error?.errors ?? []),
+    ...(e.error?.errors ?? []),
+  ]
+  if (reasons.some((r) => r.reason && RATE_LIMIT_REASONS.has(r.reason))) {
+    return true
+  }
+
+  const code =
+    e.status ?? e.statusCode ?? e.result?.error?.code ?? e.error?.code
+  if (code === 429) return true
+
+  const message = [
+    e.message,
+    e.result?.error?.message,
+    e.error?.message,
+    e.body,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+  return (
+    message.includes('rate limit') ||
+    message.includes('ratelimitexceeded') ||
+    message.includes('quota exceeded')
   )
 }
 
